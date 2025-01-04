@@ -2,6 +2,7 @@ import argparse
 import PIL.Image
 import drawing
 from epdiy import draw
+import math
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -41,16 +42,63 @@ class Coordinates(NamedTuple):
 class Device(NamedTuple):
     host: str
     screen_type: ScreenType
-    rotation: int
     coordinates: Coordinates
 
 
 class DeviceCollection(NamedTuple):
     devices: list[Device]
 
+from PIL import Image, ImageDraw, ImageFont
+
 class Config(NamedTuple):
     screen_types: dict[str, ScreenType]
     devices: list[Device]
+
+    def to_rectangles(self):
+        device_rectangles = {}
+        for device in self.devices:
+            start = drawing.Point(x=device.coordinates.x,y=device.coordinates.y)
+            dimensions=drawing.Dimensions(
+                width=device.screen_type.total_dimensions().width,
+                height=device.screen_type.total_dimensions().height,
+            )
+            device_rectangles[device] = drawing.Rectangle(
+                start=start,
+                dimensions=dimensions,
+            )
+        return device_rectangles
+
+    def draw_rectangles(self, filename):
+        device_rectangles = self.to_rectangles()
+        bounding_rectangle = drawing.Rectangle.bounding_rectangle(device_rectangles.values())
+        background_image = Image.new('RGB', (int(bounding_rectangle.dimensions.width), int(bounding_rectangle.dimensions.height)), (0,0,0))
+        for device, rectangle in device_rectangles.items():
+            # Create a blank image with the specified size
+            width, height = int(rectangle.dimensions.width), int(rectangle.dimensions.height)
+            print("aaaa", width, height)
+            foreground_image = Image.new('RGB', (width, height), (255, 255, 255))
+            # Set the font size and style
+            font_size = 16
+            font_style = 'Roboto-Black'
+            font = ImageFont.truetype(font_style, font_size)
+
+            text = device.host
+            draw = ImageDraw.Draw(foreground_image)
+            text_width = draw.textlength(text, font=font)
+            text_height = font_size
+            text_x = (width - text_width) / 2
+            text_y = (height - text_height) / 2
+            draw.text((text_x, text_y), text, font=font, fill=(0, 0, 0))
+
+
+            x = int(rectangle.start.x)
+            y = int(rectangle.start.y)
+            
+            print("bbbb", x,y)
+            background_image.paste(foreground_image, (x, y))
+        background_image.save(filename)
+            
+
 
 def load_config(devices_file):
     with open(devices_file, "r") as f:
@@ -76,7 +124,6 @@ def load_config(devices_file):
         devices.append(Device(
             host=d['host'],
             screen_type=screen_types[d['screen_type']],
-            rotation=d['rotation'],
             coordinates = Coordinates(
                 x=d['coordinates']['x'],
                 y=d['coordinates']['y'],
@@ -100,16 +147,18 @@ def main():
             width=device.screen_type.total_dimensions().width,
             height=device.screen_type.total_dimensions().height,
         )
-        rotation_deg=device.rotation
         device_rectangles[device] = drawing.Rectangle(
             start=start,
             dimensions=dimensions,
-            rotation_deg=rotation_deg,
         )
     # refit image to complete rectangle
     bounding_rectangle = drawing.Rectangle.bounding_rectangle(device_rectangles.values())
-    refit_image = drawing.image_refit(big_image, bounding_rectangle.dimensions)
+    refit_image, px_in_unit = drawing.image_refit(big_image, bounding_rectangle.dimensions)
     # for each device, cut the proper rectangle from the image
+    print(bounding_rectangle)
+    for d,r in ({device.host: rectangle.ratioed(px_in_unit) for device,rectangle in device_rectangles.items()}).items():
+        print(d,r)
+    config.draw_rectangles("/tmp/blu/ff.png")
     for device, rectangle in device_rectangles.items():
         cut_image = drawing.image_crop(refit_image, rectangle)
         # send the image to the device

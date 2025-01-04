@@ -19,30 +19,14 @@ class Point(NamedTuple):
 class Rectangle(NamedTuple):
     start: Point
     dimensions: Dimensions
-    rotation_deg: int
 
     def get_corners(self) -> list[Point]:
         ret = []
-        rotation_rad_width = math.radians(self.rotation_deg)
-        # Y is upside down because top-left is 0,0
-        delta_width = Dimensions(
-            width=int(self.dimensions.width * math.cos(rotation_rad_width)),
-            height=0 - int(self.dimensions.height * math.sin(rotation_rad_width)),
-        )
-        rotation_rad_height = math.radians(self.rotation_deg - 90)
-        delta_height = Dimensions(
-            width=int(self.dimensions.width * math.cos(rotation_rad_height)),
-            height=0 - int(self.dimensions.height * math.sin(rotation_rad_height)),
-        )
+        x = self.start.x
+        y = self.start.y
         return [
-            # left top
             self.start,
-            # right top
-            self.start + delta_width,
-            # left bottom
-            self.start + delta_height,
-            # right bottom
-            self.start + delta_width + delta_height
+            self.start+self.dimensions,
         ]
 
     @staticmethod
@@ -61,12 +45,27 @@ class Rectangle(NamedTuple):
                 width=(max(all_x) - min(all_x)),
                 height=(max(all_y) - min(all_y)),
             ),
-            rotation_deg=0,
+        )
+    
+    def ratioed(self, ratio: int) -> 'Rectangle':
+        return Rectangle(
+            start=Point(
+                x=self.start.x*ratio,
+                y=self.start.y*ratio,
+            ),
+            dimensions=Dimensions(
+                width=self.dimensions.width*ratio,
+                height=self.dimensions.height*ratio,
+            ),
         )
 
 # Image functions
 
-def image_refit(image: PIL.Image, bounder: Dimensions) -> PIL.Image:
+class ResizeResult(NamedTuple):
+    image: PIL.Image
+    px_in_unit: int
+
+def image_refit(image: PIL.Image, bounder: Dimensions) -> ResizeResult:
     bounder_ratio = bounder.width / bounder.height
     image_width, image_height = image.size
 
@@ -76,7 +75,8 @@ def image_refit(image: PIL.Image, bounder: Dimensions) -> PIL.Image:
         new_dimensions = Dimensions(image_width_by_height, image_height)
     else:
         new_dimensions = Dimensions(image_width, image_height_by_width)
-    return PIL.ImageOps.fit(image, new_dimensions)
+    px_in_unit = int(new_dimensions.width / bounder.width)
+    return ResizeResult(PIL.ImageOps.fit(image, new_dimensions), px_in_unit)
 
 def image_crop(image: PIL.Image, rectangle: Rectangle) -> PIL.Image:
     # image.save('/tmp/blu/1.png')
@@ -95,7 +95,6 @@ def image_crop(image: PIL.Image, rectangle: Rectangle) -> PIL.Image:
             width=rectangle.dimensions.width,
             height=rectangle.dimensions.height,
         ),
-        rotation_deg=rectangle.rotation_deg,
     )
     rectangle=new_rectangle
     new_image.paste(
@@ -104,11 +103,6 @@ def image_crop(image: PIL.Image, rectangle: Rectangle) -> PIL.Image:
     )
     image = new_image
     # image.save('/tmp/blu/2.png')
-    image = image.rotate(
-        rectangle.rotation_deg,
-        center=(rectangle.start),
-    )
-    # image.save('/tmp/blu/3.png')
     image = image.crop(
         (
             rectangle.start.x,
