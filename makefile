@@ -1,3 +1,3 @@
 run:
-	python send_image.py '/home/nitz/Pictures/Wallpapers/keepers/35S_3x7NBOHQTO75sWe9tSI-L1Ded2LIIfdUFzi3v5A.png'
+	python send_image.py '/home/nitz/Pictures/Wallpapers/keepers/Oculus_Wallpaper_2560x1600.png'
 

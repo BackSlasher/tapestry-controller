@@ -154,15 +154,16 @@ def main():
     # refit image to complete rectangle
     bounding_rectangle = drawing.Rectangle.bounding_rectangle(device_rectangles.values())
     refit_image, px_in_unit = drawing.image_refit(big_image, bounding_rectangle.dimensions)
+    refit_image.save("/tmp/blu/a.png")
     # for each device, cut the proper rectangle from the image
-    print(bounding_rectangle)
-    for d,r in ({device.host: rectangle.ratioed(px_in_unit) for device,rectangle in device_rectangles.items()}).items():
-        print(d,r)
+    print(bounding_rectangle, px_in_unit)
     config.draw_rectangles("/tmp/blu/ff.png")
-    for device, rectangle in device_rectangles.items():
-        cut_image = drawing.image_crop(refit_image, rectangle)
+    for d,r in device_rectangles.items():
+        r = r.ratioed(px_in_unit)
+        print(d.host,r)
+        cut_image = drawing.image_crop(refit_image, r)
         # send the image to the device
-        draw(device.host, cut_image, True)
+        draw(d.host, cut_image, True)
         
 
 
