@@ -3,6 +3,7 @@ import PIL.Image
 import drawing
 from epdiy import draw
 import math
+import threading
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -158,12 +159,18 @@ def main():
     # for each device, cut the proper rectangle from the image
     print(bounding_rectangle, px_in_unit)
     config.draw_rectangles("/tmp/blu/ff.png")
+    threads = []
     for d,r in device_rectangles.items():
         r = r.ratioed(px_in_unit)
         print(d.host,r)
         cut_image = drawing.image_crop(refit_image, r)
         # send the image to the device
-        draw(d.host, cut_image, True)
+        t = threading.Thread(target=draw,args=(d.host, cut_image, True))
+        t.daemon = True
+        t.start()
+        threads.append(t)
+    for t in threads:
+        t.join()
         
 
 
