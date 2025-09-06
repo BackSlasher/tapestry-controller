@@ -1,29 +1,29 @@
 devices:
-  - host: 192.168.2.159
-    screen_type: ED097TC2
-    coordinates:
-      x: 0
-      y: 45
-  - host: 192.168.2.176
-    screen_type: ED060XC3
-    coordinates:
-      x: 200
-      y: 105
-  - host: 192.168.2.103
-    screen_type: ED060XC3
-    coordinates:
-      x: 200
-      y: 0
+#  - host: 192.168.2.159
+#    screen_type: ED097TC2
+#    coordinates:
+#      x: 0
+#      y: 45
+#  - host: 192.168.2.176
+#    screen_type: ED060XC3
+#    coordinates:
+#      x: 200
+#      y: 105
+#  - host: 192.168.2.103
+#    screen_type: ED060XC3
+#    coordinates:
+#      x: 200
+#      y: 0
   - host: 192.168.2.179
     screen_type: ED097TC2
     coordinates:
-      x: 215
-      y: 200
-  - host: 192.168.2.167
-    screen_type: ED097TC2
-    coordinates:
       x: 0
-      y: 200
+      y: 0
+#  - host: 192.168.2.167
+#    screen_type: ED097TC2
+#    coordinates:
+#      x: 0
+#      y: 200
     
 screen_types:
   # https://www.panelook.com/ED060XC3_E_Ink_6.0_EPD_parameter_21976.html
