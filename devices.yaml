@@ -1,10 +1,10 @@
 devices:
-  - host: 10.42.0.154
+  - host: 10.42.0.98
     screen_type: ED097TC2
     coordinates:
       x: 0
       y: 0
-  - host: 10.42.0.98
+  - host: 10.42.0.154
     screen_type: ED097TC2
     coordinates:
       x: 0
