@@ -33,19 +33,24 @@ class Config(NamedTuple):
             )
         return device_rectangles
 
-    def draw_rectangles(self, filename):
+    def _generate_layout_image(self):
+        """Generate the layout visualization image."""
         device_rectangles = self.to_rectangles()
         bounding_rectangle = Rectangle.bounding_rectangle(device_rectangles.values())
         background_image = Image.new('RGB', (int(bounding_rectangle.dimensions.width), int(bounding_rectangle.dimensions.height)), (0,0,0))
+        
         for device, rectangle in device_rectangles.items():
             # Create a blank image with the specified size
             width, height = int(rectangle.dimensions.width), int(rectangle.dimensions.height)
-            print("aaaa", width, height)
             foreground_image = Image.new('RGB', (width, height), (255, 255, 255))
+            
             # Set the font size and style
             font_size = 16
-            font_style = 'Roboto-Black'
-            font = ImageFont.truetype(font_style, font_size)
+            try:
+                font = ImageFont.truetype('Roboto-Black', font_size)
+            except (OSError, IOError):
+                # Fallback to default font if Roboto-Black not available
+                font = ImageFont.load_default()
 
             text = device.host
             draw = ImageDraw.Draw(foreground_image)
@@ -58,9 +63,19 @@ class Config(NamedTuple):
             x = int(rectangle.start.x)
             y = int(rectangle.start.y)
             
-            print("bbbb", x,y)
             background_image.paste(foreground_image, (x, y))
-        background_image.save(filename)
+        
+        return background_image
+
+    def draw_rectangles(self, filename):
+        """Save layout visualization to a file."""
+        image = self._generate_layout_image()
+        image.save(filename)
+
+    def draw_rectangles_to_buffer(self, buffer):
+        """Save layout visualization to a buffer."""
+        image = self._generate_layout_image()
+        image.save(buffer, format='PNG')
 
 
 def load_config(devices_file):

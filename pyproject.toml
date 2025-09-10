@@ -42,6 +42,7 @@ webui = [
 
 [project.scripts]
 digink = "digink.cli:main"
+digink-webui = "digink.webui.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

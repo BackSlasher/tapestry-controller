@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Screen Layout</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center">
+                    <img id="layout-image" src="{{ url_for('layout') }}" class="img-fluid border" alt="Device Layout">
+                    <div class="mt-2">
+                        <small class="text-muted">Current layout with {{ device_count }} device(s)</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Device Information</h5>
+            </div>
+            <div class="card-body">
+                <div id="device-info">
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Send Image</h5>
+            </div>
+            <div class="card-body">
+                <form id="upload-form" action="{{ url_for('upload_image') }}" method="post" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="image-input" class="form-label">Select Image</label>
+                        <input type="file" class="form-control" id="image-input" name="image" accept="image/*" required>
+                        <div class="form-text">
+                            Supported formats: PNG, JPG, GIF, BMP, TIFF<br>
+                            Max size: 16MB
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div id="image-preview" class="text-center" style="display: none;">
+                            <img id="preview-img" class="img-thumbnail" style="max-height: 200px;" alt="Preview">
+                            <div class="mt-2">
+                                <small class="text-muted">Preview</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary" id="upload-btn">
+                            <span class="spinner-border spinner-border-sm" style="display: none;" id="upload-spinner"></span>
+                            Send to Displays
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-outline-secondary" id="refresh-layout">
+                        Refresh Layout
+                    </button>
+                    <button type="button" class="btn btn-outline-info" id="refresh-devices">
+                        Refresh Device Info
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
