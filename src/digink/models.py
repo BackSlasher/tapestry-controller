@@ -1,30 +1,20 @@
-import argparse
-import PIL.Image
-import drawing
-from epdiy import draw
-import math
-import threading
-
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("filename", help="Image to print")
-    parser.add_argument("--devices-file", default="devices.yaml")
-    return parser.parse_args()
-
-
-import yaml
 from typing import NamedTuple
+import yaml
+from PIL import Image, ImageDraw, ImageFont
+from .geometry import Point, Dimensions, Rectangle
 
 
 class AreaDimensions(NamedTuple):
     height: float
     width: float
 
+
 class FullDimensions(NamedTuple):
     top: float
     bottom: float
     left: float
     right: float
+
 
 class ScreenType(NamedTuple):
     active_area: AreaDimensions
@@ -36,20 +26,17 @@ class ScreenType(NamedTuple):
             width=self.bezel.left+self.active_area.width+self.bezel.right,
         )
 
+
 class Coordinates(NamedTuple):
     x: int
     y: int
+
 
 class Device(NamedTuple):
     host: str
     screen_type: ScreenType
     coordinates: Coordinates
 
-
-class DeviceCollection(NamedTuple):
-    devices: list[Device]
-
-from PIL import Image, ImageDraw, ImageFont
 
 class Config(NamedTuple):
     screen_types: dict[str, ScreenType]
@@ -58,12 +45,12 @@ class Config(NamedTuple):
     def to_rectangles(self):
         device_rectangles = {}
         for device in self.devices:
-            start = drawing.Point(x=device.coordinates.x,y=device.coordinates.y)
-            dimensions=drawing.Dimensions(
+            start = Point(x=device.coordinates.x,y=device.coordinates.y)
+            dimensions=Dimensions(
                 width=device.screen_type.total_dimensions().width,
                 height=device.screen_type.total_dimensions().height,
             )
-            device_rectangles[device] = drawing.Rectangle(
+            device_rectangles[device] = Rectangle(
                 start=start,
                 dimensions=dimensions,
             )
@@ -71,7 +58,7 @@ class Config(NamedTuple):
 
     def draw_rectangles(self, filename):
         device_rectangles = self.to_rectangles()
-        bounding_rectangle = drawing.Rectangle.bounding_rectangle(device_rectangles.values())
+        bounding_rectangle = Rectangle.bounding_rectangle(device_rectangles.values())
         background_image = Image.new('RGB', (int(bounding_rectangle.dimensions.width), int(bounding_rectangle.dimensions.height)), (0,0,0))
         for device, rectangle in device_rectangles.items():
             # Create a blank image with the specified size
@@ -91,14 +78,12 @@ class Config(NamedTuple):
             text_y = (height - text_height) / 2
             draw.text((text_x, text_y), text, font=font, fill=(0, 0, 0))
 
-
             x = int(rectangle.start.x)
             y = int(rectangle.start.y)
             
             print("bbbb", x,y)
             background_image.paste(foreground_image, (x, y))
         background_image.save(filename)
-            
 
 
 def load_config(devices_file):
@@ -134,47 +119,3 @@ def load_config(devices_file):
         screen_types=screen_types,
         devices=devices,
     )
-
-def main():
-    args = parse_args()
-    config = load_config(args.devices_file)
-
-    big_image = PIL.Image.open(args.filename)
-    # get complete rectangle
-    device_rectangles = {}
-    for device in config.devices:
-        start = drawing.Point(x=device.coordinates.x,y=device.coordinates.y)
-        dimensions=drawing.Dimensions(
-            width=device.screen_type.total_dimensions().width,
-            height=device.screen_type.total_dimensions().height,
-        )
-        device_rectangles[device] = drawing.Rectangle(
-            start=start,
-            dimensions=dimensions,
-        )
-    # refit image to complete rectangle
-    bounding_rectangle = drawing.Rectangle.bounding_rectangle(device_rectangles.values())
-    refit_image, px_in_unit = drawing.image_refit(big_image, bounding_rectangle.dimensions)
-    refit_image.save("/tmp/blu/a.png")
-    # for each device, cut the proper rectangle from the image
-    print(bounding_rectangle, px_in_unit)
-    config.draw_rectangles("/tmp/blu/ff.png")
-    threads = []
-    for d,r in device_rectangles.items():
-        r = r.ratioed(px_in_unit)
-        print(d.host,r)
-        cut_image = drawing.image_crop(refit_image, r)
-        # send the image to the device
-        t = threading.Thread(target=draw,args=(d.host, cut_image, True))
-        t.daemon = True
-        t.start()
-        threads.append(t)
-    for t in threads:
-        t.join()
-        
-
-
-
-if __name__ == "__main__":
-    main()
-

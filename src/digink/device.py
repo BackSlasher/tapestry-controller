@@ -4,6 +4,8 @@ import requests
 from typing import NamedTuple
 import PIL
 import PIL.Image
+import PIL.ImageOps
+from .geometry import Dimensions
 
 
 def parse_args():
@@ -35,11 +37,6 @@ class EpdInfo(NamedTuple):
             height=int(resp.headers["height"]),
             temperature=int(resp.headers["temperature"]),
         )
-
-
-class Dimensions(NamedTuple):
-    width: int
-    height: int
 
 
 def info(hostname):
@@ -105,4 +102,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
