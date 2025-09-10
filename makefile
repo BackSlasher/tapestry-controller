@@ -4,8 +4,6 @@ install:
 install-dev:
 	pip install -e ".[dev]"
 
-install-webui:
-	pip install -e ".[webui]"
 
 run:
 	digink '/home/nitz/Pictures/Wallpapers/keepers/Oculus_Wallpaper_2560x1600.png'

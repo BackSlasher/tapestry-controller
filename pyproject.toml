@@ -26,6 +26,7 @@ dependencies = [
     "Pillow>=9.0.0",
     "requests>=2.25.0",
     "PyYAML>=6.0",
+    "flask>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -34,10 +35,6 @@ dev = [
     "black>=22.0",
     "flake8>=4.0",
     "mypy>=0.950",
-]
-webui = [
-    "flask>=2.0.0",
-    "flask-cors>=3.0.0",
 ]
 
 [project.scripts]
