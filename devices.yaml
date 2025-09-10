@@ -24,25 +24,3 @@ devices:
 #    coordinates:
 #      x: 0
 #      y: 200
-    
-screen_types:
-  # https://www.panelook.com/ED060XC3_E_Ink_6.0_EPD_parameter_21976.html
-  ED060XC3:
-    active_area:
-      height: 90.58
-      width: 122.37
-    bezel:
-      left: 0.2
-      right: 1.4
-      top: 0.5
-      bottom: 0.5
-  ED097TC2:
-    active_area:
-      height: 139.425
-      width: 202.8
-    # Approximated
-    bezel:
-      top: 4.0
-      bottom: 12.0
-      left: 4.0
-      right: 12.0

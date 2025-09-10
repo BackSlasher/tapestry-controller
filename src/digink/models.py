@@ -2,29 +2,7 @@ from typing import NamedTuple
 import yaml
 from PIL import Image, ImageDraw, ImageFont
 from .geometry import Point, Dimensions, Rectangle
-
-
-class AreaDimensions(NamedTuple):
-    height: float
-    width: float
-
-
-class FullDimensions(NamedTuple):
-    top: float
-    bottom: float
-    left: float
-    right: float
-
-
-class ScreenType(NamedTuple):
-    active_area: AreaDimensions
-    bezel: FullDimensions
-
-    def total_dimensions(self) -> AreaDimensions:
-        return AreaDimensions(
-            height=self.bezel.top+self.active_area.height+self.bezel.bottom,
-            width=self.bezel.left+self.active_area.width+self.bezel.right,
-        )
+from .screen_types import ScreenType, SCREEN_TYPES
 
 
 class Coordinates(NamedTuple):
@@ -39,7 +17,6 @@ class Device(NamedTuple):
 
 
 class Config(NamedTuple):
-    screen_types: dict[str, ScreenType]
     devices: list[Device]
 
     def to_rectangles(self):
@@ -89,33 +66,20 @@ class Config(NamedTuple):
 def load_config(devices_file):
     with open(devices_file, "r") as f:
         y = yaml.safe_load(f)
-    screen_types = {}
-    for s_name, s in y['screen_types'].items():
-        active_area = AreaDimensions(
-            height=s['active_area']['height'],
-            width=s['active_area']['width'],
-        )
-        bezel = FullDimensions(
-            top=s['bezel']['top'],
-            bottom=s['bezel']['bottom'],
-            left=s['bezel']['left'],
-            right=s['bezel']['right'],
-        )
-        screen_types[s_name] = ScreenType(
-            active_area=active_area,
-            bezel=bezel,
-        )
-    devices=[]
+    
+    devices = []
     for d in y['devices']:
+        screen_type_name = d['screen_type']
+        if screen_type_name not in SCREEN_TYPES:
+            raise ValueError(f"Unknown screen type: {screen_type_name}")
+        
         devices.append(Device(
             host=d['host'],
-            screen_type=screen_types[d['screen_type']],
-            coordinates = Coordinates(
+            screen_type=SCREEN_TYPES[screen_type_name],
+            coordinates=Coordinates(
                 x=d['coordinates']['x'],
                 y=d['coordinates']['y'],
             )
         ))
-    return Config(
-        screen_types=screen_types,
-        devices=devices,
-    )
+    
+    return Config(devices=devices)
