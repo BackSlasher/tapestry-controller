@@ -4,6 +4,9 @@ from PIL import Image, ImageDraw, ImageFont
 from .geometry import Point, Dimensions, Rectangle
 from .screen_types import ScreenType, SCREEN_TYPES
 
+# Import PIL modules unconditionally to fail early if missing dependencies
+from PIL import _imagingft  # This will fail immediately if FreeType support is missing
+
 
 class Coordinates(NamedTuple):
     x: int
@@ -49,8 +52,15 @@ class Config(NamedTuple):
             try:
                 font = ImageFont.truetype('Roboto-Black', font_size)
             except (OSError, IOError):
-                # Fallback to default font if Roboto-Black not available
-                font = ImageFont.load_default()
+                try:
+                    # Try other common fonts
+                    font = ImageFont.truetype('/System/Library/Fonts/Arial.ttf', font_size)
+                except (OSError, IOError):
+                    try:
+                        font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', font_size)
+                    except (OSError, IOError):
+                        # Fallback to default font
+                        font = ImageFont.load_default()
 
             text = device.host
             draw = ImageDraw.Draw(foreground_image)

@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Refresh buttons
     const refreshLayoutBtn = document.getElementById('refresh-layout');
     const refreshDevicesBtn = document.getElementById('refresh-devices');
+    const clearScreensBtn = document.getElementById('clear-screens');
     
     if (refreshLayoutBtn) {
         refreshLayoutBtn.addEventListener('click', function() {
@@ -52,6 +53,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (refreshDevicesBtn) {
         refreshDevicesBtn.addEventListener('click', function() {
             loadDeviceInfo();
+        });
+    }
+    
+    if (clearScreensBtn) {
+        clearScreensBtn.addEventListener('click', function() {
+            clearAllScreens();
         });
     }
 });
@@ -110,6 +117,67 @@ function refreshLayout() {
         const timestamp = new Date().getTime();
         layoutImg.src = `/layout?t=${timestamp}`;
     }
+}
+
+function clearAllScreens() {
+    const clearBtn = document.getElementById('clear-screens');
+    if (!clearBtn) return;
+    
+    // Show confirmation dialog
+    if (!confirm('Are you sure you want to clear all screens?')) {
+        return;
+    }
+    
+    // Show loading state
+    const originalText = clearBtn.innerHTML;
+    clearBtn.disabled = true;
+    clearBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Clearing...';
+    
+    fetch('/clear', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message
+            showAlert(data.message, 'success');
+        } else {
+            showAlert(data.error || 'Failed to clear screens', 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error clearing screens:', error);
+        showAlert('Failed to clear screens', 'danger');
+    })
+    .finally(() => {
+        // Restore button state
+        clearBtn.disabled = false;
+        clearBtn.innerHTML = originalText;
+    });
+}
+
+function showAlert(message, type = 'info') {
+    // Create alert element
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    // Insert at top of container
+    const container = document.querySelector('.container');
+    const firstChild = container.firstElementChild;
+    container.insertBefore(alertDiv, firstChild);
+    
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        const bsAlert = new bootstrap.Alert(alertDiv);
+        bsAlert.close();
+    }, 5000);
 }
 
 // Auto-dismiss alerts after 5 seconds

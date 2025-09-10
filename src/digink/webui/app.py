@@ -94,6 +94,23 @@ def devices_info():
     
     return jsonify({'devices': devices})
 
+@app.route('/clear', methods=['POST'])
+def clear_screens():
+    """Clear all device screens."""
+    if not controller:
+        return jsonify({'error': 'Controller not initialized'}), 500
+    
+    try:
+        controller.clear_devices()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Cleared {len(controller.config.devices)} devices'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to clear screens: {str(e)}'}), 500
+
 def create_app(devices_file='devices.yaml'):
     """Create Flask app with configuration."""
     global controller
@@ -109,8 +126,8 @@ def parse_args():
     )
     parser.add_argument(
         '--host',
-        default='127.0.0.1',
-        help='Host to bind to (default: 127.0.0.1)'
+        default='0.0.0.0',
+        help='Host to bind to (default: 0.0.0.0)'
     )
     parser.add_argument(
         '--port',

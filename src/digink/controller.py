@@ -3,7 +3,7 @@ import threading
 from .models import Config, load_config
 from .geometry import Point, Dimensions, Rectangle
 from .image_utils import image_refit, image_crop
-from .device import draw
+from .device import draw, clear
 
 
 class DiginkController:
@@ -40,6 +40,19 @@ class DiginkController:
             cut_image = image_crop(refit_image, r)
             
             t = threading.Thread(target=draw, args=(device.host, cut_image, True))
+            t.daemon = True
+            t.start()
+            threads.append(t)
+        
+        # Wait for all threads to complete
+        for t in threads:
+            t.join()
+
+    def clear_devices(self):
+        """Clear all device screens."""
+        threads = []
+        for device in self.config.devices:
+            t = threading.Thread(target=clear, args=(device.host,))
             t.daemon = True
             t.start()
             threads.append(t)
