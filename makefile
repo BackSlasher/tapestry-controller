@@ -24,3 +24,6 @@ lint:
 type-check:
 	mypy src/
 
+deploy:
+	rsync -avz --delete --exclude='__pycache__' --exclude='*.pyc' --exclude='.git' --exclude='.sl' --exclude='debug/' --exclude='build/' --exclude='dist/' --exclude='src/*.egg-info/' . digink:./controller/
+
