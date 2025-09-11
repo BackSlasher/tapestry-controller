@@ -100,15 +100,13 @@ def start_qr_positioning():
         
         for device in controller.config.devices:
             try:
-                # Generate QR image for this device
-                screen_type_name = None
-                for name, screen_type in SCREEN_TYPES.items():
-                    if screen_type == device.screen_type:
-                        screen_type_name = name
-                        break
+                # Get device info to determine actual screen type
+                from ..device import info
+                device_info = info(device.host)
+                screen_type_name = device_info.screen_model
                 
-                if not screen_type_name:
-                    errors.append(f"Unknown screen type for device {device.host}")
+                if screen_type_name not in SCREEN_TYPES:
+                    errors.append(f"Unknown screen model '{screen_type_name}' for device {device.host}")
                     continue
                 
                 qr_image = generate_positioning_qr_image(device.host, screen_type_name)

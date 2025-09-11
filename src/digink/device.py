@@ -29,14 +29,20 @@ class EpdInfo(NamedTuple):
     width: int
     height: int
     temperature: int
+    screen_model: str
 
     @classmethod
     def from_response(cls, resp):
-        return cls(
-            width=int(resp.headers["width"]),
-            height=int(resp.headers["height"]),
-            temperature=int(resp.headers["temperature"]),
-        )
+        try:
+            data = resp.json()
+            return cls(
+                width=int(data["width"]),
+                height=int(data["height"]),
+                temperature=int(data["temperature"]),
+                screen_model=data["screen_model"],
+            )
+        except (KeyError, ValueError) as e:
+            raise ValueError(f"Device response missing required field or invalid JSON: {e}. Response: {resp.text}")
 
 
 def info(hostname):
@@ -69,23 +75,27 @@ def convert_8bit_to_4bit(bytestring):
 
 
 def draw(hostname, img: PIL.Image, clear: bool):
-    inf = info(hostname)
-    img = image_refit(img, Dimensions(width=inf.width, height=inf.height))
-    img = img.resize((inf.width, inf.height))
-    img = img.convert("L")
-    img = img.rotate(180)
-    img_bytes = convert_8bit_to_4bit(img.tobytes())
-    requests.post(
-        f"http://{hostname}/draw",
-        headers={
-            "width": str(inf.width),
-            "height": str(inf.height),
-            "x": "0",
-            "y": "0",
-            "clear": "1" if clear else "0",
-        },
-        data=img_bytes,
-    )
+    try:
+        inf = info(hostname)
+        img = image_refit(img, Dimensions(width=inf.width, height=inf.height))
+        img = img.resize((inf.width, inf.height))
+        img = img.convert("L")
+        img = img.rotate(180)
+        img_bytes = convert_8bit_to_4bit(img.tobytes())
+        requests.post(
+            f"http://{hostname}/draw",
+            headers={
+                "width": str(inf.width),
+                "height": str(inf.height),
+                "x": "0",
+                "y": "0",
+                "clear": "1" if clear else "0",
+            },
+            data=img_bytes,
+        )
+    except Exception as e:
+        print(f"Error drawing to {hostname}: {e}")
+        raise
 
 
 def main():

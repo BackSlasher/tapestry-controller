@@ -261,9 +261,19 @@ def generate_updated_config(original_config: Config, positions: Dict[str, Dict])
     for device in original_config.devices:
         if device.host in positions:
             pos = positions[device.host]
+            
+            # Try to get actual screen type from device
+            try:
+                from .device import info
+                device_info = info(device.host)
+                actual_screen_type = device_info.screen_model
+            except:
+                # Fall back to configured screen type
+                actual_screen_type = device.screen_type.__class__.__name__.replace('ScreenType', '')
+            
             device_yaml = {
                 'host': device.host,
-                'screen_type': device.screen_type.__class__.__name__.replace('ScreenType', ''),
+                'screen_type': actual_screen_type,
                 'coordinates': {
                     'x': pos['x'],
                     'y': pos['y']
@@ -274,9 +284,16 @@ def generate_updated_config(original_config: Config, positions: Dict[str, Dict])
                 device_yaml['rotation'] = int(pos['rotation'])
         else:
             # Keep original coordinates if not detected
+            try:
+                from .device import info
+                device_info = info(device.host)
+                actual_screen_type = device_info.screen_model
+            except:
+                actual_screen_type = device.screen_type.__class__.__name__.replace('ScreenType', '')
+            
             device_yaml = {
                 'host': device.host,
-                'screen_type': device.screen_type.__class__.__name__.replace('ScreenType', ''),
+                'screen_type': actual_screen_type,
                 'coordinates': {
                     'x': device.coordinates.x,
                     'y': device.coordinates.y
