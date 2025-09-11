@@ -307,9 +307,23 @@ def apply_positioning_config():
         new_config = load_config(devices_file)
         controller.config = new_config
         
+        # Restore saved image if available
+        restored_image = False
+        if last_image_state['image'] is not None:
+            try:
+                controller.send_image(last_image_state['image'])
+                restored_image = True
+                print("Restored saved image after applying positioning configuration")
+            except Exception as e:
+                print(f"Warning: Could not restore saved image: {e}")
+        
+        message = f'Configuration updated with {len(updated_config["devices"])} devices'
+        if restored_image:
+            message += '. Previous image restored to displays.'
+        
         return jsonify({
             'success': True,
-            'message': f'Configuration updated with {len(updated_config["devices"])} devices'
+            'message': message
         })
         
     except Exception as e:
