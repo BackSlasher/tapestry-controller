@@ -175,6 +175,7 @@ def get_wallpaper_images():
 def screensaver_worker():
     """Background worker that cycles through wallpaper images."""
     stop_event = screensaver_state['stop_event']
+    first_iteration = True
     
     while not stop_event.is_set():
         try:
@@ -202,7 +203,10 @@ def screensaver_worker():
             print(f"Screensaver error: {e}")
         
         # Wait for next cycle or stop signal
-        stop_event.wait(screensaver_state['interval'])
+        # For first iteration, don't wait - show image immediately
+        if not first_iteration:
+            stop_event.wait(screensaver_state['interval'])
+        first_iteration = False
 
 @app.route('/screensaver/start', methods=['POST'])
 def start_screensaver():
