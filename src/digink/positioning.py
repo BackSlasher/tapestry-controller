@@ -161,8 +161,8 @@ def detect_qr_positions(pil_image: Image.Image) -> List[QRPositionData]:
             center_x = sum(corner[0] for corner in corners) / len(corners)
             center_y = sum(corner[1] for corner in corners) / len(corners)
             
-            # Calculate rotation from QR code orientation
-            rotation = calculate_qr_rotation(corners)
+            # Calculate rotation using reference square
+            rotation = calculate_qr_rotation(corners, gray)
             
             # Find reference element size for scale calculation
             ref_size = detect_reference_element_size(gray, (center_x, center_y))
@@ -182,25 +182,93 @@ def detect_qr_positions(pil_image: Image.Image) -> List[QRPositionData]:
     return position_data
 
 
-def calculate_qr_rotation(corners: List[Tuple[float, float]]) -> float:
-    """Calculate rotation angle from QR code corners."""
+def detect_reference_square(gray_image: np.ndarray, qr_center: Tuple[float, float], qr_corners: List[Tuple[float, float]]) -> Optional[Tuple[float, float]]:
+    """Detect the black reference square near the QR code."""
+    # Search area around QR code (expand by 50% in each direction)
+    qr_x_coords = [c[0] for c in qr_corners]
+    qr_y_coords = [c[1] for c in qr_corners]
+    
+    qr_left = min(qr_x_coords)
+    qr_right = max(qr_x_coords)
+    qr_top = min(qr_y_coords)
+    qr_bottom = max(qr_y_coords)
+    
+    qr_width = qr_right - qr_left
+    qr_height = qr_bottom - qr_top
+    
+    # Search area (expand by 100% to catch reference square)
+    search_left = max(0, int(qr_left - qr_width))
+    search_right = min(gray_image.shape[1], int(qr_right + qr_width))
+    search_top = max(0, int(qr_top - qr_height))
+    search_bottom = min(gray_image.shape[0], int(qr_bottom + qr_height))
+    
+    search_region = gray_image[search_top:search_bottom, search_left:search_right]
+    
+    # Find contours (black squares)
+    _, thresh = cv2.threshold(search_region, 127, 255, cv2.THRESH_BINARY)
+    thresh = cv2.bitwise_not(thresh)  # Invert to find black areas
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # Look for square-like contours
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if area < 100 or area > 10000:  # Filter by reasonable size
+            continue
+            
+        # Check if contour is roughly square
+        approx = cv2.approxPolyDP(contour, 0.02 * cv2.arcLength(contour, True), True)
+        if len(approx) >= 4:  # Roughly rectangular
+            # Get bounding box
+            x, y, w, h = cv2.boundingRect(contour)
+            aspect_ratio = float(w) / h
+            
+            if 0.7 <= aspect_ratio <= 1.3:  # Roughly square
+                # Convert back to full image coordinates
+                ref_center_x = search_left + x + w // 2
+                ref_center_y = search_top + y + h // 2
+                
+                # Check if it's not the QR code itself (should be smaller and separate)
+                distance = math.sqrt((ref_center_x - qr_center[0])**2 + (ref_center_y - qr_center[1])**2)
+                if distance > min(qr_width, qr_height) * 0.3:  # At least 30% of QR size away
+                    return (ref_center_x, ref_center_y)
+    
+    return None
+
+
+def calculate_qr_rotation(corners: List[Tuple[float, float]], gray_image: np.ndarray) -> float:
+    """Calculate rotation angle using reference square position."""
     if len(corners) < 4:
         return 0.0
     
-    # QR codes have a specific corner pattern
-    # Use the top edge to determine rotation
-    # Sort corners by y-coordinate to find top edge
-    sorted_corners = sorted(corners, key=lambda p: p[1])
-    top_corners = sorted_corners[:2]  # Two topmost corners
+    # Find QR center
+    center_x = sum(c[0] for c in corners) / len(corners)
+    center_y = sum(c[1] for c in corners) / len(corners)
+    qr_center = (center_x, center_y)
     
-    # Calculate angle of top edge
-    if len(top_corners) == 2:
-        dx = top_corners[1][0] - top_corners[0][0]
-        dy = top_corners[1][1] - top_corners[0][1]
-        angle = math.degrees(math.atan2(dy, dx))
-        return angle
+    # Try to find the reference square
+    ref_pos = detect_reference_square(gray_image, qr_center, corners)
     
-    return 0.0
+    if ref_pos:
+        # Calculate angle from QR center to reference square
+        dx = ref_pos[0] - center_x
+        dy = ref_pos[1] - center_y
+        
+        # Angle from QR center to reference square
+        ref_angle = math.degrees(math.atan2(dy, dx))
+        
+        # In original image, reference square is at "top center" (270° or -90°)
+        # Calculate rotation by comparing to expected position
+        rotation = ref_angle - (-90)  # Adjust for expected "top" position
+        
+        # Normalize to -180 to 180 range
+        rotation = ((rotation + 180) % 360) - 180
+        
+        print(f"QR rotation debug: center=({center_x:.1f},{center_y:.1f}), ref=({ref_pos[0]:.1f},{ref_pos[1]:.1f}), ref_angle={ref_angle:.1f}°, rotation={rotation:.1f}°")
+        
+        return rotation
+    else:
+        print(f"QR rotation debug: No reference square found near ({center_x:.1f},{center_y:.1f})")
+        return 0.0
 
 
 def detect_reference_element_size(gray_image: np.ndarray, qr_center: Tuple[float, float]) -> float:
