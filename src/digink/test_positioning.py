@@ -106,19 +106,19 @@ class SyntheticPhotoGenerator:
 class PositioningTestParser:
     """Utility to parse photos and extract layout information."""
     
-    def parse_photo_layout(self, photo_path: str) -> Dict[str, Dict]:
+    def parse_photo_layout(self, pil_image: Image.Image) -> Dict[str, Dict]:
         """
-        Parse a photo and extract device layout information.
+        Parse a PIL image and extract device layout information.
         
         Args:
-            photo_path: Path to photo to analyze
+            pil_image: PIL Image to analyze
             
         Returns:
             Layout dictionary with hostnames as keys and position info as values
         """
         try:
             # Use existing positioning detection
-            position_data = detect_qr_positions(photo_path)
+            position_data = detect_qr_positions(pil_image)
             
             if not position_data:
                 return {}
@@ -203,8 +203,10 @@ def run_round_trip_test(test_name: str, layout: Dict[str, Dict], tolerance_px: i
         parser = PositioningTestParser()
         
         try:
-            parsed_layout = parser.parse_photo_layout(photo_path)
-            print(f"✓ Parsed {len(parsed_layout)} devices from photo")
+            # Load the generated photo as PIL Image
+            with Image.open(photo_path) as photo_image:
+                parsed_layout = parser.parse_photo_layout(photo_image)
+                print(f"✓ Parsed {len(parsed_layout)} devices from photo")
         except Exception as e:
             print(f"✗ Failed to parse photo: {e}")
             return False

@@ -11,6 +11,7 @@ import queue
 from flask import Flask, render_template, request, jsonify, send_file, flash, redirect, url_for, Response
 from werkzeug.utils import secure_filename
 import PIL.Image
+from PIL.ExifTags import ORIENTATION
 from ..controller import DiginkController
 from ..models import load_config
 from ..screen_types import SCREEN_TYPES
@@ -42,6 +43,48 @@ def allowed_file(filename):
     """Check if uploaded file has allowed extension."""
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff'}
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def fix_image_orientation(image):
+    """Fix image orientation based on EXIF data and return corrected PIL Image."""
+    try:
+        # Get EXIF data
+        exif = image._getexif()
+        
+        if exif is not None:
+            # Look for orientation tag
+            orientation = exif.get(ORIENTATION, 1)
+            
+            # Apply rotation based on EXIF orientation
+            if orientation == 2:
+                # Horizontal flip
+                image = image.transpose(PIL.Image.FLIP_LEFT_RIGHT)
+            elif orientation == 3:
+                # 180 degree rotation
+                image = image.rotate(180, expand=True)
+            elif orientation == 4:
+                # Vertical flip
+                image = image.transpose(PIL.Image.FLIP_TOP_BOTTOM)
+            elif orientation == 5:
+                # Horizontal flip + 90 degree rotation
+                image = image.transpose(PIL.Image.FLIP_LEFT_RIGHT)
+                image = image.rotate(-90, expand=True)
+            elif orientation == 6:
+                # 90 degree rotation
+                image = image.rotate(-90, expand=True)
+            elif orientation == 7:
+                # Horizontal flip + 270 degree rotation  
+                image = image.transpose(PIL.Image.FLIP_LEFT_RIGHT)
+                image = image.rotate(90, expand=True)
+            elif orientation == 8:
+                # 270 degree rotation
+                image = image.rotate(90, expand=True)
+                
+    except Exception as e:
+        print(f"Warning: Could not fix image orientation: {e}")
+        # Return original image if EXIF processing fails
+        pass
+    
+    return image
 
 def save_last_image(image):
     """Save the last sent image for layout overlay."""
@@ -157,19 +200,15 @@ def analyze_positioning_photo():
         return jsonify({'error': 'Invalid file type. Please upload an image file.'}), 400
     
     try:
-        # Save uploaded photo temporarily
-        import tempfile
-        import os
-        
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
-            file.save(temp_file.name)
-            temp_path = temp_file.name
-        
         try:
             from ..positioning import detect_qr_positions, calculate_physical_positions, generate_updated_config
             
-            # Detect QR codes in the photo
-            position_data = detect_qr_positions(temp_path)
+            # Open image and fix EXIF orientation
+            image = PIL.Image.open(file.stream)
+            corrected_image = fix_image_orientation(image)
+            
+            # Detect QR codes directly from PIL image
+            position_data = detect_qr_positions(corrected_image)
             
             if not position_data:
                 return jsonify({'error': 'No QR codes detected in the photo'}), 400
@@ -195,11 +234,6 @@ def analyze_positioning_photo():
                 'config': updated_config,
                 'yaml_preview': yaml_preview
             })
-            
-        finally:
-            # Clean up temporary file
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
             
     except Exception as e:
         return jsonify({'error': f'Failed to analyze photo: {str(e)}'}), 500
@@ -286,8 +320,9 @@ def upload_image():
         return redirect(url_for('index'))
     
     try:
-        # Open and process the image
+        # Open and fix EXIF orientation
         image = PIL.Image.open(file.stream)
+        image = fix_image_orientation(image)
         
         # Send to devices first
         controller.send_image(image)

@@ -124,10 +124,15 @@ def add_reference_elements(draw: ImageDraw.Draw, width: int, height: int, screen
     draw.line([ref_x + ref_size_px + 5, ref_y - line_extend, ref_x + ref_size_px + 5, ref_y + ref_size_px + line_extend], fill=0, width=1)
 
 
-def detect_qr_positions(photo_path: str) -> List[QRPositionData]:
-    """Detect QR codes and extract positioning information from photo."""
-    # Load image
-    image = cv2.imread(photo_path)
+def detect_qr_positions(pil_image: Image.Image) -> List[QRPositionData]:
+    """Detect QR codes and extract positioning information from PIL image."""
+    import numpy as np
+    
+    # Convert PIL to RGB if needed, then to BGR for OpenCV
+    if pil_image.mode != 'RGB':
+        pil_image = pil_image.convert('RGB')
+    image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+    
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     
     # Detect QR codes
