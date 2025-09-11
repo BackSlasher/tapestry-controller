@@ -157,8 +157,17 @@ class Config(NamedTuple):
 
 
 def load_config(devices_file):
-    with open(devices_file, "r") as f:
-        y = yaml.safe_load(f)
+    try:
+        with open(devices_file, "r") as f:
+            y = yaml.safe_load(f)
+    except FileNotFoundError:
+        # If devices.yaml doesn't exist, treat as empty configuration
+        print(f"No {devices_file} found, starting with empty configuration")
+        return Config(devices=[])
+    
+    # Handle empty or null YAML file
+    if not y or 'devices' not in y or not y['devices']:
+        return Config(devices=[])
     
     devices = []
     for d in y['devices']:
