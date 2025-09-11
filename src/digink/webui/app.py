@@ -767,7 +767,14 @@ def main():
     def load_image_async():
         """Load persisted image in background thread."""
         time.sleep(1)  # Give server a moment to start
-        load_persisted_image()
+        if load_persisted_image():
+            # If image was loaded successfully, also send it to devices
+            if last_image_state['image'] is not None:
+                try:
+                    controller.send_image(last_image_state['image'])
+                    print("Successfully sent restored image to devices")
+                except Exception as e:
+                    print(f"Warning: Could not send restored image to devices: {e}")
     
     loading_thread = threading.Thread(target=load_image_async, daemon=True)
     loading_thread.start()
