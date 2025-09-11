@@ -453,7 +453,10 @@ def flash_output_stream(process_id):
                 else:
                     yield "data: \n\n"  # Heartbeat
     
-    return Response(generate(), mimetype='text/plain')
+    return Response(generate(), 
+                   mimetype='text/event-stream',
+                   headers={'Cache-Control': 'no-cache', 
+                           'Connection': 'keep-alive'})
 
 @app.route('/flash/stop/<process_id>', methods=['POST'])
 def stop_flash(process_id):
