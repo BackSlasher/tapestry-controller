@@ -80,7 +80,6 @@ def draw(hostname, img: PIL.Image, clear: bool):
         img = image_refit(img, Dimensions(width=inf.width, height=inf.height))
         img = img.resize((inf.width, inf.height))
         img = img.convert("L")
-        img = img.rotate(180)
         img_bytes = convert_8bit_to_4bit(img.tobytes())
         requests.post(
             f"http://{hostname}/draw",
