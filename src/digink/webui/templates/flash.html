@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Flash Firmware - Digink Controller{% endblock %}
+
+{% block content %}
+<script src="{{ url_for('static', filename='flash.js') }}"></script>
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Flash Firmware</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Select a screen type to flash the firmware using the setup script.</p>
+                
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="screen-type-select" class="form-label">Screen Type</label>
+                            <select class="form-select" id="screen-type-select">
+                                <option value="">Select screen type...</option>
+                                <option value="ED060XC3">ED060XC3 (6.0" E-Paper Display)</option>
+                                <option value="ED097TC2">ED097TC2 (9.7" E-Paper Display)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-primary" id="flash-btn" disabled>
+                                <i class="bi bi-lightning-charge"></i> Flash Firmware
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="stop-btn" style="display: none;">
+                                <i class="bi bi-stop-fill"></i> Stop
+                            </button>
+                        </div>
+                        
+                        <div id="flash-status" class="mb-3" style="display: none;">
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i>
+                                <strong>Status:</strong> <span id="status-text">Ready</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-12">
+                        <div class="mb-3">
+                            <label for="output-textarea" class="form-label">Output</label>
+                            <textarea class="form-control font-monospace" id="output-textarea" rows="20" readonly placeholder="Script output will appear here..."></textarea>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="clear-output">
+                                <i class="bi bi-trash"></i> Clear Output
+                            </button>
+                            <button type="button" class="btn btn-outline-primary btn-sm" id="copy-output">
+                                <i class="bi bi-clipboard"></i> Copy Output
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

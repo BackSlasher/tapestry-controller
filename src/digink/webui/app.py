@@ -6,11 +6,14 @@ import time
 import random
 import glob
 import threading
-from flask import Flask, render_template, request, jsonify, send_file, flash, redirect, url_for
+import subprocess
+import queue
+from flask import Flask, render_template, request, jsonify, send_file, flash, redirect, url_for, Response
 from werkzeug.utils import secure_filename
 import PIL.Image
 from ..controller import DiginkController
 from ..models import load_config
+from ..screen_types import SCREEN_TYPES
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'digink-webui-secret-key'
@@ -72,6 +75,11 @@ def index():
     """Main page showing layout and upload form."""
     device_count = len(controller.config.devices) if controller else 0
     return render_template('index.html', device_count=device_count)
+
+@app.route('/flash')
+def flash_firmware():
+    """Flash firmware page."""
+    return render_template('flash.html')
 
 @app.route('/layout')
 def layout():
@@ -329,6 +337,154 @@ def update_screensaver_config():
             return jsonify({'error': 'Invalid interval value'}), 400
     
     return jsonify({'error': 'No valid configuration provided'}), 400
+
+# Global state for flash process
+flash_processes = {}
+
+def stream_subprocess_output(process, process_id):
+    """Stream subprocess output line by line."""
+    try:
+        while True:
+            output = process.stdout.readline()
+            if output == '' and process.poll() is not None:
+                break
+            if output:
+                # Store output in process queue
+                if process_id in flash_processes:
+                    flash_processes[process_id]['output'].put(output.strip())
+        
+        # Process finished
+        if process_id in flash_processes:
+            return_code = process.poll()
+            flash_processes[process_id]['finished'] = True
+            flash_processes[process_id]['return_code'] = return_code
+            flash_processes[process_id]['output'].put(f"Process finished with exit code: {return_code}")
+    except Exception as e:
+        if process_id in flash_processes:
+            flash_processes[process_id]['output'].put(f"Error streaming output: {e}")
+
+@app.route('/flash/start', methods=['POST'])
+def start_flash():
+    """Start the firmware flashing process."""
+    data = request.get_json()
+    if not data or 'screen_type' not in data:
+        return jsonify({'error': 'Screen type is required'}), 400
+    
+    screen_type = data['screen_type']
+    if screen_type not in SCREEN_TYPES:
+        return jsonify({'error': f'Invalid screen type: {screen_type}'}), 400
+    
+    # Check if setup.sh exists
+    setup_script = os.path.expanduser('~/node/setup.sh')
+    if not os.path.exists(setup_script):
+        return jsonify({'error': f'Setup script not found at {setup_script}'}), 404
+    
+    if not os.access(setup_script, os.X_OK):
+        return jsonify({'error': f'Setup script is not executable: {setup_script}'}), 403
+    
+    try:
+        # Generate unique process ID
+        import uuid
+        process_id = str(uuid.uuid4())
+        
+        # Start the subprocess
+        process = subprocess.Popen(
+            [setup_script, screen_type],
+            cwd=os.path.expanduser('~/node'),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            bufsize=1
+        )
+        
+        # Initialize process tracking
+        output_queue = queue.Queue()
+        flash_processes[process_id] = {
+            'process': process,
+            'output': output_queue,
+            'finished': False,
+            'return_code': None,
+            'screen_type': screen_type
+        }
+        
+        # Start output streaming thread
+        output_thread = threading.Thread(
+            target=stream_subprocess_output, 
+            args=(process, process_id)
+        )
+        output_thread.daemon = True
+        output_thread.start()
+        
+        return jsonify({
+            'success': True,
+            'process_id': process_id,
+            'message': f'Started flashing {screen_type} firmware'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to start flash process: {str(e)}'}), 500
+
+@app.route('/flash/output/<process_id>')
+def flash_output_stream(process_id):
+    """Stream the output of a flash process."""
+    if process_id not in flash_processes:
+        return jsonify({'error': 'Process not found'}), 404
+    
+    def generate():
+        process_info = flash_processes[process_id]
+        output_queue = process_info['output']
+        
+        while True:
+            try:
+                # Get output with timeout
+                line = output_queue.get(timeout=1.0)
+                yield f"data: {line}\n\n"
+                
+                # Check if process finished
+                if process_info['finished'] and output_queue.empty():
+                    yield f"event: finished\ndata: {process_info['return_code']}\n\n"
+                    break
+                    
+            except queue.Empty:
+                # Send heartbeat to keep connection alive
+                if process_info['finished']:
+                    yield f"event: finished\ndata: {process_info['return_code']}\n\n"
+                    break
+                else:
+                    yield "data: \n\n"  # Heartbeat
+    
+    return Response(generate(), mimetype='text/plain')
+
+@app.route('/flash/stop/<process_id>', methods=['POST'])
+def stop_flash(process_id):
+    """Stop a running flash process."""
+    if process_id not in flash_processes:
+        return jsonify({'error': 'Process not found'}), 404
+    
+    try:
+        process_info = flash_processes[process_id]
+        process = process_info['process']
+        
+        if process.poll() is None:  # Process is still running
+            process.terminate()
+            # Wait a bit for graceful termination
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()  # Force kill if it doesn't terminate
+        
+        # Mark as finished
+        process_info['finished'] = True
+        process_info['return_code'] = process.returncode
+        process_info['output'].put("Process terminated by user")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Flash process stopped'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to stop process: {str(e)}'}), 500
 
 def create_app(devices_file='devices.yaml'):
     """Create Flask app with configuration."""
