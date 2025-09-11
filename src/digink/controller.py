@@ -39,7 +39,7 @@ class DiginkController:
             r = rectangle.ratioed(px_in_unit)
             cut_image = image_crop(refit_image, r)
             
-            t = threading.Thread(target=draw, args=(device.host, cut_image, True))
+            t = threading.Thread(target=draw, args=(device.host, cut_image, True, device.rotation))
             t.daemon = True
             t.start()
             threads.append(t)

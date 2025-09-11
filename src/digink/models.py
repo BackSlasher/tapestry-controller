@@ -17,6 +17,7 @@ class Device(NamedTuple):
     host: str
     screen_type: ScreenType
     coordinates: Coordinates
+    rotation: int = 0  # rotation in degrees
 
 
 class Config(NamedTuple):
@@ -25,11 +26,26 @@ class Config(NamedTuple):
     def to_rectangles(self):
         device_rectangles = {}
         for device in self.devices:
-            start = Point(x=device.coordinates.x,y=device.coordinates.y)
-            dimensions=Dimensions(
-                width=device.screen_type.total_dimensions().width,
-                height=device.screen_type.total_dimensions().height,
+            start = Point(x=device.coordinates.x, y=device.coordinates.y)
+            base_dimensions = device.screen_type.total_dimensions()
+            
+            # Calculate bounding box for rotated rectangle
+            import math
+            angle_rad = math.radians(abs(device.rotation))
+            w, h = base_dimensions.width, base_dimensions.height
+            
+            # Bounding box calculation works for all rotation angles
+            cos_a = abs(math.cos(angle_rad))
+            sin_a = abs(math.sin(angle_rad))
+            
+            new_width = w * cos_a + h * sin_a
+            new_height = w * sin_a + h * cos_a
+            
+            dimensions = Dimensions(
+                width=int(new_width),
+                height=int(new_height),
             )
+            
             device_rectangles[device] = Rectangle(
                 start=start,
                 dimensions=dimensions,
@@ -156,7 +172,8 @@ def load_config(devices_file):
             coordinates=Coordinates(
                 x=d['coordinates']['x'],
                 y=d['coordinates']['y'],
-            )
+            ),
+            rotation=d.get('rotation', 0)  # default to 0 if not specified
         ))
     
     return Config(devices=devices)

@@ -74,12 +74,17 @@ def convert_8bit_to_4bit(bytestring):
     return fourbit
 
 
-def draw(hostname, img: PIL.Image, clear: bool):
+def draw(hostname, img: PIL.Image, clear: bool, rotation: int = 0):
     try:
         inf = info(hostname)
         img = image_refit(img, Dimensions(width=inf.width, height=inf.height))
         img = img.resize((inf.width, inf.height))
         img = img.convert("L")
+        
+        # Apply device-specific rotation (in addition to any base rotation)
+        if rotation != 0:
+            img = img.rotate(-rotation, expand=False, fillcolor=255)  # negative for clockwise rotation
+        
         img_bytes = convert_8bit_to_4bit(img.tobytes())
         requests.post(
             f"http://{hostname}/draw",
