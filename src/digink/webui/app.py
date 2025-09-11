@@ -206,11 +206,6 @@ def analyze_positioning_photo():
         image = PIL.Image.open(file.stream)
         corrected_image = fix_image_orientation(image)
         
-        # Save debug image for analysis
-        import datetime
-        debug_filename = f"/tmp/qr_analysis_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-        corrected_image.save(debug_filename, quality=95)
-        print(f"Debug: Saved QR analysis image to {debug_filename}")
         
         # Detect QR codes from EXIF-corrected PIL image
         position_data = detect_qr_positions(corrected_image)
