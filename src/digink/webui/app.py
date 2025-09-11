@@ -86,6 +86,24 @@ def fix_image_orientation(image):
     
     return image
 
+def load_persisted_image():
+    """Load the last image from disk if it exists."""
+    try:
+        import os
+        persist_dir = os.path.expanduser("~/.digink")
+        persist_path = os.path.join(persist_dir, "last_image.png")
+        
+        if os.path.exists(persist_path):
+            image = PIL.Image.open(persist_path)
+            save_last_image(image)  # This will recalculate layout and save to memory
+            print(f"Restored last image from {persist_path}")
+            return True
+    except Exception as e:
+        print(f"Warning: Could not load persisted image: {e}")
+    
+    return False
+
+
 def save_last_image(image):
     """Save the last sent image for layout overlay."""
     from ..geometry import Point, Dimensions, Rectangle
@@ -112,6 +130,16 @@ def save_last_image(image):
     last_image_state['image'] = image.copy()
     last_image_state['refit_image'] = refit_result.image.copy()
     last_image_state['px_in_unit'] = refit_result.px_in_unit
+    
+    # Persist to disk for restart recovery
+    try:
+        import os
+        persist_dir = os.path.expanduser("~/.digink")
+        os.makedirs(persist_dir, exist_ok=True)
+        persist_path = os.path.join(persist_dir, "last_image.png")
+        image.save(persist_path, "PNG")
+    except Exception as e:
+        print(f"Warning: Could not persist image: {e}")
 
 @app.route('/')
 def index():
@@ -729,6 +757,9 @@ def main():
     # Initialize controller
     global controller
     controller = DiginkController.from_config_file(args.devices_file)
+    
+    # Load persisted image from previous session
+    load_persisted_image()
     
     print(f"Starting Digink Web UI with {len(controller.config.devices)} devices")
     print(f"Access at http://{args.host}:{args.port}")
