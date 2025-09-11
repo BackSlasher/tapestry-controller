@@ -11,7 +11,7 @@ import queue
 from flask import Flask, render_template, request, jsonify, send_file, flash, redirect, url_for, Response
 from werkzeug.utils import secure_filename
 import PIL.Image
-from PIL.ExifTags import ORIENTATION
+from PIL import ExifTags
 from ..controller import DiginkController
 from ..models import load_config
 from ..screen_types import SCREEN_TYPES
@@ -51,8 +51,8 @@ def fix_image_orientation(image):
         exif = image._getexif()
         
         if exif is not None:
-            # Look for orientation tag
-            orientation = exif.get(ORIENTATION, 1)
+            # Look for orientation tag (274 is the EXIF orientation tag)
+            orientation = exif.get(274, 1)  # 274 is ExifTags.ORIENTATION
             
             # Apply rotation based on EXIF orientation
             if orientation == 2:
@@ -200,41 +200,40 @@ def analyze_positioning_photo():
         return jsonify({'error': 'Invalid file type. Please upload an image file.'}), 400
     
     try:
-        try:
-            from ..positioning import detect_qr_positions, calculate_physical_positions, generate_updated_config
-            
-            # Open image and fix EXIF orientation
-            image = PIL.Image.open(file.stream)
-            corrected_image = fix_image_orientation(image)
-            
-            # Detect QR codes directly from PIL image
-            position_data = detect_qr_positions(corrected_image)
-            
-            if not position_data:
-                return jsonify({'error': 'No QR codes detected in the photo'}), 400
-            
-            # Calculate physical positions
-            physical_positions = calculate_physical_positions(position_data, controller.config)
-            
-            if not physical_positions:
-                return jsonify({'error': 'Could not calculate physical positions'}), 400
-            
-            # Generate updated configuration
-            updated_config = generate_updated_config(controller.config, physical_positions)
-            
-            # Convert config to YAML for preview
-            import yaml
-            yaml_preview = yaml.dump(updated_config, default_flow_style=False, indent=2)
-            
-            return jsonify({
-                'success': True,
-                'message': f'Detected {len(position_data)} screens',
-                'detected_devices': list(physical_positions.keys()),
-                'positions': physical_positions,
-                'config': updated_config,
-                'yaml_preview': yaml_preview
-            })
-            
+        from ..positioning import detect_qr_positions, calculate_physical_positions, generate_updated_config
+        
+        # Open image and fix EXIF orientation
+        image = PIL.Image.open(file.stream)
+        corrected_image = fix_image_orientation(image)
+        
+        # Detect QR codes directly from PIL image
+        position_data = detect_qr_positions(corrected_image)
+        
+        if not position_data:
+            return jsonify({'error': 'No QR codes detected in the photo'}), 400
+        
+        # Calculate physical positions
+        physical_positions = calculate_physical_positions(position_data, controller.config)
+        
+        if not physical_positions:
+            return jsonify({'error': 'Could not calculate physical positions'}), 400
+        
+        # Generate updated configuration
+        updated_config = generate_updated_config(controller.config, physical_positions)
+        
+        # Convert config to YAML for preview
+        import yaml
+        yaml_preview = yaml.dump(updated_config, default_flow_style=False, indent=2)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Detected {len(position_data)} screens',
+            'detected_devices': list(physical_positions.keys()),
+            'positions': physical_positions,
+            'config': updated_config,
+            'yaml_preview': yaml_preview
+        })
+        
     except Exception as e:
         return jsonify({'error': f'Failed to analyze photo: {str(e)}'}), 500
 
