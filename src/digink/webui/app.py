@@ -81,6 +81,170 @@ def flash_firmware():
     """Flash firmware page."""
     return render_template('flash.html')
 
+@app.route('/positioning')
+def positioning():
+    """QR-based positioning page."""
+    return render_template('positioning.html')
+
+@app.route('/positioning/qr-mode', methods=['POST'])
+def start_qr_positioning():
+    """Start QR positioning mode - display QR codes on all screens."""
+    if not controller:
+        return jsonify({'error': 'Controller not initialized'}), 500
+    
+    try:
+        from ..positioning import generate_positioning_qr_image
+        
+        threads = []
+        errors = []
+        
+        for device in controller.config.devices:
+            try:
+                # Generate QR image for this device
+                screen_type_name = None
+                for name, screen_type in SCREEN_TYPES.items():
+                    if screen_type == device.screen_type:
+                        screen_type_name = name
+                        break
+                
+                if not screen_type_name:
+                    errors.append(f"Unknown screen type for device {device.host}")
+                    continue
+                
+                qr_image = generate_positioning_qr_image(device.host, screen_type_name)
+                
+                # Send QR image to device
+                from ..device import draw
+                t = threading.Thread(target=draw, args=(device.host, qr_image, True))
+                t.daemon = True
+                t.start()
+                threads.append(t)
+                
+            except Exception as e:
+                errors.append(f"Error generating QR for {device.host}: {str(e)}")
+        
+        # Wait for all images to be sent
+        for t in threads:
+            t.join()
+        
+        if errors:
+            return jsonify({
+                'success': True,
+                'message': f'QR codes sent to {len(threads)} devices',
+                'warnings': errors
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'message': f'QR codes sent to {len(threads)} devices'
+            })
+            
+    except Exception as e:
+        return jsonify({'error': f'Failed to start QR positioning: {str(e)}'}), 500
+
+@app.route('/positioning/analyze', methods=['POST'])
+def analyze_positioning_photo():
+    """Analyze uploaded photo to determine screen positions."""
+    if not controller:
+        return jsonify({'error': 'Controller not initialized'}), 500
+    
+    if 'photo' not in request.files:
+        return jsonify({'error': 'No photo uploaded'}), 400
+    
+    file = request.files['photo']
+    if file.filename == '':
+        return jsonify({'error': 'No photo selected'}), 400
+    
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'Invalid file type. Please upload an image file.'}), 400
+    
+    try:
+        # Save uploaded photo temporarily
+        import tempfile
+        import os
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
+            file.save(temp_file.name)
+            temp_path = temp_file.name
+        
+        try:
+            from ..positioning import detect_qr_positions, calculate_physical_positions, generate_updated_config
+            
+            # Detect QR codes in the photo
+            position_data = detect_qr_positions(temp_path)
+            
+            if not position_data:
+                return jsonify({'error': 'No QR codes detected in the photo'}), 400
+            
+            # Calculate physical positions
+            physical_positions = calculate_physical_positions(position_data, controller.config)
+            
+            if not physical_positions:
+                return jsonify({'error': 'Could not calculate physical positions'}), 400
+            
+            # Generate updated configuration
+            updated_config = generate_updated_config(controller.config, physical_positions)
+            
+            return jsonify({
+                'success': True,
+                'message': f'Detected {len(position_data)} screens',
+                'detected_devices': list(physical_positions.keys()),
+                'positions': physical_positions,
+                'updated_config': updated_config
+            })
+            
+        finally:
+            # Clean up temporary file
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+            
+    except Exception as e:
+        return jsonify({'error': f'Failed to analyze photo: {str(e)}'}), 500
+
+@app.route('/positioning/apply', methods=['POST'])
+def apply_positioning_config():
+    """Apply the detected positioning configuration."""
+    data = request.get_json()
+    if not data or 'config' not in data:
+        return jsonify({'error': 'No configuration provided'}), 400
+    
+    try:
+        # Write updated configuration to devices.yaml
+        import yaml
+        
+        # Get the devices file path (assuming it's in the working directory)
+        devices_file = 'devices.yaml'
+        
+        # Read existing config to preserve screen_types if they exist
+        try:
+            with open(devices_file, 'r') as f:
+                existing_config = yaml.safe_load(f)
+        except FileNotFoundError:
+            existing_config = {}
+        
+        # Update with new device positions
+        updated_config = data['config']
+        if 'screen_types' in existing_config:
+            updated_config['screen_types'] = existing_config['screen_types']
+        
+        # Write updated configuration
+        with open(devices_file, 'w') as f:
+            yaml.dump(updated_config, f, default_flow_style=False, indent=2)
+        
+        # Reload controller with new configuration
+        global controller
+        from ..models import load_config
+        new_config = load_config(devices_file)
+        controller.config = new_config
+        
+        return jsonify({
+            'success': True,
+            'message': f'Configuration updated with {len(updated_config["devices"])} devices'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to apply configuration: {str(e)}'}), 500
+
 @app.route('/layout')
 def layout():
     """Generate and return the device layout visualization."""

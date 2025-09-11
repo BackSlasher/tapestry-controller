@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}QR Positioning - Digink Controller{% endblock %}
+
+{% block content %}
+<script src="{{ url_for('static', filename='positioning.js') }}"></script>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Automatic Screen Positioning</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">
+                    Use QR codes to automatically detect screen positions and orientations. 
+                    This will update your device configuration based on the physical layout.
+                </p>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Step 1: Display QR Codes</h6>
+                        <p class="small text-muted">
+                            Display unique QR codes with reference elements on each screen for positioning analysis.
+                        </p>
+                        
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-primary" id="start-qr-mode">
+                                <i class="bi bi-qr-code"></i> Show QR Codes on Screens
+                            </button>
+                        </div>
+                        
+                        <div id="qr-status" class="mb-3" style="display: none;">
+                            <div class="alert alert-success">
+                                <i class="bi bi-check-circle"></i>
+                                <strong>QR codes displayed!</strong> Take a photo of your screen layout.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6>Step 2: Analyze Photo</h6>
+                        <p class="small text-muted">
+                            Upload a photo showing all screens with their QR codes for automatic position detection.
+                        </p>
+                        
+                        <div class="mb-3">
+                            <label for="photo-input" class="form-label">Upload Photo</label>
+                            <input type="file" class="form-control" id="photo-input" accept="image/*">
+                            <div class="form-text">
+                                Take a photo showing all screens with QR codes visible.<br>
+                                Supported formats: PNG, JPG, GIF, BMP, TIFF
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-success" id="analyze-btn" disabled>
+                                <i class="bi bi-search"></i> Analyze Positions
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4" id="results-section" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Detection Results</h5>
+            </div>
+            <div class="card-body">
+                <div id="detection-results">
+                    <!-- Results will be populated here -->
+                </div>
+                
+                <div class="mt-4" id="config-preview" style="display: none;">
+                    <h6>Updated Configuration Preview</h6>
+                    <pre id="config-yaml" class="bg-light p-3 rounded"></pre>
+                    
+                    <div class="mt-3">
+                        <button type="button" class="btn btn-warning" id="apply-config">
+                            <i class="bi bi-check2-all"></i> Apply Configuration
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="download-config">
+                            <i class="bi bi-download"></i> Download Configuration
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Tips for Best Results</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <ul class="list-unstyled">
+                            <li><i class="bi bi-check text-success"></i> Take photo from directly above the screens if possible</li>
+                            <li><i class="bi bi-check text-success"></i> Ensure all QR codes are clearly visible</li>
+                            <li><i class="bi bi-check text-success"></i> Use good lighting to avoid shadows</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <ul class="list-unstyled">
+                            <li><i class="bi bi-check text-success"></i> Include reference elements (corners and scale markers)</li>
+                            <li><i class="bi bi-check text-success"></i> Keep the camera steady to avoid blur</li>
+                            <li><i class="bi bi-check text-success"></i> Frame all screens in a single photo</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
