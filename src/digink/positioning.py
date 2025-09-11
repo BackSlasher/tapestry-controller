@@ -9,6 +9,9 @@ from PIL import Image, ImageDraw, ImageFont
 import cv2
 from pyzbar import pyzbar
 import math
+import subprocess
+import requests
+import json
 from typing import Dict, List, Tuple, NamedTuple, Optional
 from .models import Device, Config
 from .screen_types import SCREEN_TYPES
@@ -29,7 +32,91 @@ class ReferenceElement(NamedTuple):
     pixel_size: float  # measured size in pixels from photo
 
 
-def generate_positioning_qr_image(hostname: str, screen_type_name: str) -> Image.Image:
+class DiscoveredDevice(NamedTuple):
+    """Device discovered from DHCP leases."""
+    ip: str
+    screen_type: str
+
+
+def discover_devices_from_dhcp() -> List[DiscoveredDevice]:
+    """Discover devices from DHCP leases and query their screen types."""
+    devices = []
+    
+    try:
+        # Read DHCP leases file
+        result = subprocess.run(
+            ['sudo', 'cat', '/var/lib/NetworkManager/dnsmasq-wlan0.leases'],
+            capture_output=True, text=True, check=True
+        )
+        
+        for line in result.stdout.strip().split('\n'):
+            if not line.strip():
+                continue
+                
+            parts = line.split()
+            if len(parts) >= 3:
+                ip = parts[2]
+                
+                # Query device for screen type
+                screen_type = get_device_screen_type(ip)
+                if screen_type:
+                    devices.append(DiscoveredDevice(ip, screen_type))
+                    print(f"Discovered device: {ip} - {screen_type}")
+    
+    except subprocess.CalledProcessError as e:
+        print(f"Error reading DHCP leases: {e}")
+    except Exception as e:
+        print(f"Error discovering devices: {e}")
+    
+    return devices
+
+
+def get_device_screen_type(ip: str, timeout: int = 5) -> Optional[str]:
+    """Query device HTTP endpoint to get screen type."""
+    try:
+        response = requests.get(f'http://{ip}/', timeout=timeout)
+        if response.status_code == 200:
+            data = response.json()
+            return data.get('screen_model', 'Unknown')
+    except requests.exceptions.RequestException:
+        # Device might not be responding or not a digink device
+        pass
+    except json.JSONDecodeError:
+        # Response is not JSON
+        pass
+    except Exception as e:
+        print(f"Error querying device {ip}: {e}")
+    
+    return None
+
+
+def generate_all_positioning_qr_images() -> Dict[str, Image.Image]:
+    """Generate QR positioning images for all discovered devices."""
+    qr_images = {}
+    
+    print("Discovering devices from DHCP leases...")
+    devices = discover_devices_from_dhcp()
+    
+    if not devices:
+        print("No devices discovered from DHCP leases")
+        return qr_images
+    
+    print(f"Found {len(devices)} devices, generating QR codes...")
+    
+    for device in devices:
+        try:
+            qr_img = generate_positioning_qr_image(device.ip, device.screen_type)
+            qr_images[device.ip] = qr_img
+            print(f"Generated QR for {device.ip} ({device.screen_type})")
+        except KeyError as e:
+            print(f"Unknown screen type '{device.screen_type}' for device {device.ip}: {e}")
+        except Exception as e:
+            print(f"Error generating QR for {device.ip}: {e}")
+    
+    return qr_images
+
+
+def generate_positioning_qr_image(ip: str, screen_type_name: str) -> Image.Image:
     """Generate QR code with reference elements for positioning."""
     screen_type = SCREEN_TYPES[screen_type_name]
     
@@ -43,8 +130,8 @@ def generate_positioning_qr_image(hostname: str, screen_type_name: str) -> Image
     img = Image.new('L', (width_px, height_px), 255)  # White background
     draw = ImageDraw.Draw(img)
     
-    # Generate QR code with positioning data
-    qr_data = f"DIGINK:{hostname}:{screen_type_name}"
+    # Generate QR code with positioning data (use IP instead of hostname)
+    qr_data = f"DIGINK:{ip}:{screen_type_name}"
     qr = qrcode.QRCode(
         version=3,  # Size 3 should be readable but not too large
         error_correction=qrcode.constants.ERROR_CORRECT_H,  # High error correction
@@ -73,7 +160,7 @@ def generate_positioning_qr_image(hostname: str, screen_type_name: str) -> Image
     except:
         font = None
     
-    text = f"{hostname} ({screen_type_name})"
+    text = f"{ip} ({screen_type_name})"
     if font:
         bbox = draw.textbbox((0, 0), text, font=font)
         text_width = bbox[2] - bbox[0]
@@ -151,7 +238,7 @@ def detect_qr_positions(pil_image: Image.Image) -> List[QRPositionData]:
             if len(parts) != 3:
                 continue
                 
-            hostname = parts[1]
+            ip = parts[1]  # Now using IP instead of hostname
             screen_type = parts[2]
             
             # Get QR code position and orientation
@@ -168,7 +255,7 @@ def detect_qr_positions(pil_image: Image.Image) -> List[QRPositionData]:
             ref_size = detect_reference_element_size(gray, (center_x, center_y))
             
             position_data.append(QRPositionData(
-                hostname=hostname,
+                hostname=ip,  # Now storing IP in hostname field
                 center=(center_x, center_y),
                 rotation=rotation,
                 corners=corners,
