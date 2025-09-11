@@ -121,6 +121,7 @@ function loadDeviceInfo() {
                         <div class="device-details">
                             Screen: ${device.screen_type}<br>
                             Position: (${device.coordinates.x}, ${device.coordinates.y})<br>
+                            Rotation: ${device.rotation}°<br>
                             Size: ${device.dimensions.width.toFixed(1)} × ${device.dimensions.height.toFixed(1)} mm
                         </div>
                     </div>

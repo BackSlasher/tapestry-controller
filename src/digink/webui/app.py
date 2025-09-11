@@ -382,6 +382,7 @@ def devices_info():
             'host': device.host,
             'screen_type': device.screen_type.__class__.__name__,
             'coordinates': {'x': device.coordinates.x, 'y': device.coordinates.y},
+            'rotation': device.rotation,
             'dimensions': {
                 'width': device.screen_type.total_dimensions().width,
                 'height': device.screen_type.total_dimensions().height
