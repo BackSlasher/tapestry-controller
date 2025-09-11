@@ -154,9 +154,9 @@ def start_qr_positioning():
                 
                 qr_image = generate_positioning_qr_image(device.host, screen_type_name)
                 
-                # Send QR image to device
-                from ..device import draw
-                t = threading.Thread(target=draw, args=(device.host, qr_image, True, 0))  # No rotation for QR positioning
+                # Send QR image to device with no rotation
+                from ..device import draw_unrotated
+                t = threading.Thread(target=draw_unrotated, args=(device.host, qr_image, True))
                 t.daemon = True
                 t.start()
                 threads.append(t)

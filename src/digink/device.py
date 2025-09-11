@@ -74,6 +74,32 @@ def convert_8bit_to_4bit(bytestring):
     return fourbit
 
 
+def draw_unrotated(hostname, img: PIL.Image, clear: bool):
+    """Draw image to device without any rotation - for QR positioning."""
+    try:
+        inf = info(hostname)
+        img = image_refit(img, Dimensions(width=inf.width, height=inf.height))
+        img = img.resize((inf.width, inf.height))
+        img = img.convert("L")
+        
+        # NO rotation applied - image goes to screen as-is
+        img_bytes = convert_8bit_to_4bit(img.tobytes())
+        requests.post(
+            f"http://{hostname}/draw",
+            headers={
+                "width": str(inf.width),
+                "height": str(inf.height),
+                "x": "0",
+                "y": "0",
+                "clear": "1" if clear else "0",
+            },
+            data=img_bytes,
+        )
+    except Exception as e:
+        print(f"Error drawing to {hostname}: {e}")
+        raise
+
+
 def draw(hostname, img: PIL.Image, clear: bool, rotation: int = 0):
     try:
         inf = info(hostname)
