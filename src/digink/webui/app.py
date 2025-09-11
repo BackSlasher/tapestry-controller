@@ -25,7 +25,7 @@ screensaver_state = {
     'thread': None,
     'stop_event': None,
     'wallpapers_dir': 'wallpapers',
-    'interval': 30  # seconds
+    'interval': 60  # seconds
 }
 
 # Last image state
@@ -277,6 +277,54 @@ def screensaver_status():
         'image_count': len(images),
         'has_images': len(images) > 0
     })
+
+@app.route('/screensaver/config', methods=['POST'])
+def update_screensaver_config():
+    """Update screensaver configuration."""
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    
+    # Validate interval
+    if 'interval' in data:
+        try:
+            interval = int(data['interval'])
+            if interval < 5 or interval > 3600:  # 5 seconds to 1 hour
+                return jsonify({'error': 'Interval must be between 5 and 3600 seconds'}), 400
+            
+            # If screensaver is currently active, we need to restart it with new interval
+            was_active = screensaver_state['active']
+            if was_active:
+                # Stop current screensaver
+                if screensaver_state['stop_event']:
+                    screensaver_state['stop_event'].set()
+                if screensaver_state['thread'] and screensaver_state['thread'].is_alive():
+                    screensaver_state['thread'].join(timeout=2)
+                screensaver_state['active'] = False
+            
+            # Update interval
+            screensaver_state['interval'] = interval
+            
+            # Restart screensaver if it was active
+            if was_active:
+                screensaver_state['stop_event'] = threading.Event()
+                screensaver_state['thread'] = threading.Thread(target=screensaver_worker)
+                screensaver_state['thread'].daemon = True
+                screensaver_state['active'] = True
+                screensaver_state['thread'].start()
+            
+            return jsonify({
+                'success': True,
+                'message': f'Screensaver interval updated to {interval} seconds',
+                'interval': interval,
+                'restarted': was_active
+            })
+            
+        except ValueError:
+            return jsonify({'error': 'Invalid interval value'}), 400
+    
+    return jsonify({'error': 'No valid configuration provided'}), 400
 
 def create_app(devices_file='devices.yaml'):
     """Create Flask app with configuration."""

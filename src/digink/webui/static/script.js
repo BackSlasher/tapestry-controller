@@ -82,6 +82,14 @@ document.addEventListener('DOMContentLoaded', function() {
             stopScreensaver();
         });
     }
+    
+    // Interval update button
+    const updateIntervalBtn = document.getElementById('update-interval');
+    if (updateIntervalBtn) {
+        updateIntervalBtn.addEventListener('click', function() {
+            updateScreensaverInterval();
+        });
+    }
 });
 
 function loadDeviceInfo() {
@@ -205,6 +213,7 @@ function loadScreensaverStatus() {
     const statusDiv = document.getElementById('screensaver-status');
     const startBtn = document.getElementById('start-screensaver');
     const stopBtn = document.getElementById('stop-screensaver');
+    const intervalInput = document.getElementById('interval-input');
     
     if (!statusDiv) return;
     
@@ -253,6 +262,11 @@ function loadScreensaverStatus() {
             }
             
             statusDiv.innerHTML = statusHtml;
+            
+            // Update interval input with current value
+            if (intervalInput) {
+                intervalInput.value = data.interval;
+            }
         })
         .catch(error => {
             console.error('Error loading screensaver status:', error);
@@ -327,6 +341,55 @@ function stopScreensaver() {
         // Restore button state
         stopBtn.disabled = false;
         stopBtn.innerHTML = originalText;
+    });
+}
+
+function updateScreensaverInterval() {
+    const intervalInput = document.getElementById('interval-input');
+    const updateBtn = document.getElementById('update-interval');
+    
+    if (!intervalInput || !updateBtn) return;
+    
+    const newInterval = parseInt(intervalInput.value);
+    if (isNaN(newInterval) || newInterval < 5 || newInterval > 3600) {
+        showAlert('Interval must be between 5 and 3600 seconds', 'danger');
+        return;
+    }
+    
+    // Show loading state
+    const originalText = updateBtn.innerHTML;
+    updateBtn.disabled = true;
+    updateBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>';
+    
+    fetch('/screensaver/config', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            interval: newInterval
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(data.message, 'success');
+            if (data.restarted) {
+                showAlert('Screensaver was restarted with new interval', 'info');
+            }
+            loadScreensaverStatus(); // Refresh status
+        } else {
+            showAlert(data.error || 'Failed to update interval', 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error updating interval:', error);
+        showAlert('Failed to update interval', 'danger');
+    })
+    .finally(() => {
+        // Restore button state
+        updateBtn.disabled = false;
+        updateBtn.innerHTML = originalText;
     });
 }
 
