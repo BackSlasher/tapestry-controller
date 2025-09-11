@@ -114,11 +114,11 @@ def upload_image():
         # Open and process the image
         image = PIL.Image.open(file.stream)
         
-        # Save for layout overlay
-        save_last_image(image)
-        
-        # Send to devices
+        # Send to devices first
         controller.send_image(image)
+        
+        # Only save for layout overlay if send was successful
+        save_last_image(image)
         
         flash(f'Successfully sent image to {len(controller.config.devices)} devices!')
         return redirect(url_for('index'))
@@ -192,11 +192,11 @@ def screensaver_worker():
             # Load and send image
             image = PIL.Image.open(image_path)
             
-            # Save for layout overlay
-            save_last_image(image)
-            
-            # Send to devices
+            # Send to devices first
             controller.send_image(image)
+            
+            # Only save for layout overlay if send was successful
+            save_last_image(image)
             
         except Exception as e:
             print(f"Screensaver error: {e}")
