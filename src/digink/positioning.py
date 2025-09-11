@@ -48,7 +48,7 @@ def generate_positioning_qr_image(hostname: str, screen_type_name: str) -> Image
     qr = qrcode.QRCode(
         version=3,  # Size 3 should be readable but not too large
         error_correction=qrcode.constants.ERROR_CORRECT_H,  # High error correction
-        box_size=4,
+        box_size=8,  # Increased from 4 to 8 for 2x bigger QR codes
         border=2,
     )
     qr.add_data(qr_data)
