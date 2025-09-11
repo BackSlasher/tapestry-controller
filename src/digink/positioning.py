@@ -263,9 +263,12 @@ def calculate_qr_rotation(corners: List[Tuple[float, float]], gray_image: np.nda
         # Normalize to -180 to 180 range
         rotation = ((rotation + 180) % 360) - 180
         
+        # Debug output for 180° vs 0° confusion
+        print(f"QR rotation debug: center=({center_x:.1f},{center_y:.1f}), ref=({ref_pos[0]:.1f},{ref_pos[1]:.1f}), ref_angle={ref_angle:.1f}°, rotation={rotation:.1f}°")
         
         return rotation
     else:
+        print(f"QR rotation debug: No reference square found near ({center_x:.1f},{center_y:.1f})")
         return 0.0
 
 
