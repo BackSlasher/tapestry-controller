@@ -197,8 +197,7 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert('Configuration applied successfully!');
-                // Optionally redirect to home page
+                // Redirect to homepage where flash message will be shown
                 window.location.href = '/';
             } else {
                 throw new Error(data.error || 'Failed to apply configuration');

@@ -321,9 +321,11 @@ def apply_positioning_config():
         if restored_image:
             message += '. Previous image restored to displays.'
         
+        # Flash success message for homepage display
+        flash(message, 'success')
+        
         return jsonify({
-            'success': True,
-            'message': message
+            'success': True
         })
         
     except Exception as e:
