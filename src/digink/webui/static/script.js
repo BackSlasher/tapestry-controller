@@ -1,5 +1,9 @@
 // Digink Web UI JavaScript
 
+// Global variables for screensaver monitoring
+let screensaverCheckInterval = null;
+let layoutRefreshInterval = null;
+
 document.addEventListener('DOMContentLoaded', function() {
     // Load device information and screensaver status on page load
     loadDeviceInfo();
@@ -219,6 +223,9 @@ function loadScreensaverStatus() {
                 `;
                 startBtn.style.display = 'none';
                 stopBtn.style.display = 'block';
+                
+                // Start monitoring screensaver and refreshing layout
+                startScreensaverMonitoring(data.interval);
             } else {
                 if (data.has_images) {
                     statusHtml = `
@@ -240,6 +247,9 @@ function loadScreensaverStatus() {
                     startBtn.style.display = 'none';
                 }
                 stopBtn.style.display = 'none';
+                
+                // Stop monitoring when screensaver is not active
+                stopScreensaverMonitoring();
             }
             
             statusDiv.innerHTML = statusHtml;
@@ -318,6 +328,41 @@ function stopScreensaver() {
         stopBtn.disabled = false;
         stopBtn.innerHTML = originalText;
     });
+}
+
+function startScreensaverMonitoring(interval) {
+    // Stop any existing monitoring
+    stopScreensaverMonitoring();
+    
+    // Refresh layout immediately
+    refreshLayout();
+    
+    // Set up interval to refresh layout every 10 seconds
+    // This polls more frequently than the screensaver changes (30s)
+    layoutRefreshInterval = setInterval(function() {
+        refreshLayout();
+    }, 10000);
+    
+    // Also check screensaver status every 10 seconds to detect if it stops
+    screensaverCheckInterval = setInterval(function() {
+        loadScreensaverStatus();
+    }, 10000);
+    
+    console.log(`Started screensaver monitoring - refreshing layout every 10 seconds`);
+}
+
+function stopScreensaverMonitoring() {
+    if (layoutRefreshInterval) {
+        clearInterval(layoutRefreshInterval);
+        layoutRefreshInterval = null;
+    }
+    
+    if (screensaverCheckInterval) {
+        clearInterval(screensaverCheckInterval);
+        screensaverCheckInterval = null;
+    }
+    
+    console.log('Stopped screensaver monitoring');
 }
 
 // Auto-dismiss alerts after 5 seconds
