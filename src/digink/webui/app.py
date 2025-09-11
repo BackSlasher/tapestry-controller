@@ -28,10 +28,44 @@ screensaver_state = {
     'interval': 30  # seconds
 }
 
+# Last image state
+last_image_state = {
+    'image': None,  # PIL Image object
+    'refit_image': None,  # Processed/resized image
+    'px_in_unit': None,  # Scaling factor
+}
+
 def allowed_file(filename):
     """Check if uploaded file has allowed extension."""
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff'}
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def save_last_image(image):
+    """Save the last sent image for layout overlay."""
+    from ..geometry import Point, Dimensions, Rectangle
+    from ..image_utils import image_refit
+    
+    # Calculate device rectangles and bounding rectangle (same as controller does)
+    device_rectangles = {}
+    for device in controller.config.devices:
+        start = Point(x=device.coordinates.x, y=device.coordinates.y)
+        dimensions = Dimensions(
+            width=device.screen_type.total_dimensions().width,
+            height=device.screen_type.total_dimensions().height,
+        )
+        device_rectangles[device] = Rectangle(
+            start=start,
+            dimensions=dimensions,
+        )
+    
+    # Refit image to complete rectangle (same as controller does)
+    bounding_rectangle = Rectangle.bounding_rectangle(device_rectangles.values())
+    refit_result = image_refit(image, bounding_rectangle.dimensions)
+    
+    # Save to global state
+    last_image_state['image'] = image.copy()
+    last_image_state['refit_image'] = refit_result.image.copy()
+    last_image_state['px_in_unit'] = refit_result.px_in_unit
 
 @app.route('/')
 def index():
@@ -45,16 +79,19 @@ def layout():
     if not controller:
         return "Controller not initialized", 500
     
-    # Create layout image in memory
-    device_rectangles = controller.config.to_rectangles()
-    from ..geometry import Rectangle
-    bounding_rectangle = Rectangle.bounding_rectangle(device_rectangles.values())
-    
-    # Generate layout image
+    # Generate layout image with last image overlay if available
     img_buffer = io.BytesIO()
-    controller.config.draw_rectangles_to_buffer(img_buffer)
-    img_buffer.seek(0)
     
+    if last_image_state['refit_image'] and last_image_state['px_in_unit']:
+        controller.config.draw_rectangles_to_buffer(
+            img_buffer, 
+            last_image_state['refit_image'], 
+            last_image_state['px_in_unit']
+        )
+    else:
+        controller.config.draw_rectangles_to_buffer(img_buffer)
+    
+    img_buffer.seek(0)
     return send_file(img_buffer, mimetype='image/png', as_attachment=False)
 
 @app.route('/upload', methods=['POST'])
@@ -76,6 +113,9 @@ def upload_image():
     try:
         # Open and process the image
         image = PIL.Image.open(file.stream)
+        
+        # Save for layout overlay
+        save_last_image(image)
         
         # Send to devices
         controller.send_image(image)
@@ -151,6 +191,11 @@ def screensaver_worker():
             
             # Load and send image
             image = PIL.Image.open(image_path)
+            
+            # Save for layout overlay
+            save_last_image(image)
+            
+            # Send to devices
             controller.send_image(image)
             
         except Exception as e:
