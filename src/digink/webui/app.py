@@ -763,11 +763,18 @@ def main():
     global controller
     controller = DiginkController.from_config_file(args.devices_file)
     
-    # Load persisted image from previous session
-    load_persisted_image()
+    # Start image loading in background thread
+    def load_image_async():
+        """Load persisted image in background thread."""
+        time.sleep(1)  # Give server a moment to start
+        load_persisted_image()
+    
+    loading_thread = threading.Thread(target=load_image_async, daemon=True)
+    loading_thread.start()
     
     print(f"Starting Digink Web UI with {len(controller.config.devices)} devices")
     print(f"Access at http://{args.host}:{args.port}")
+    print("Loading last image in background...")
     
     app.run(host=args.host, port=args.port, debug=args.debug)
 
