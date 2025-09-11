@@ -69,7 +69,7 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                displayResults(data.results, data.config);
+                displayResults(data);
                 resultsSection.style.display = 'block';
             } else {
                 throw new Error(data.error || 'Failed to analyze photo');
@@ -84,10 +84,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    function displayResults(results, config) {
+    function displayResults(data) {
         detectionResults.innerHTML = '';
 
-        if (Object.keys(results).length === 0) {
+        if (!data.positions || Object.keys(data.positions).length === 0) {
             detectionResults.innerHTML = `
                 <div class="alert alert-warning">
                     <i class="bi bi-exclamation-triangle"></i>
@@ -102,7 +102,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let tableHtml = `
             <div class="alert alert-success">
                 <i class="bi bi-check-circle"></i>
-                <strong>Found ${Object.keys(results).length} screens!</strong>
+                <strong>Found ${data.detected_devices.length} screens!</strong>
             </div>
             <div class="table-responsive">
                 <table class="table table-striped">
@@ -117,13 +117,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     <tbody>
         `;
 
-        for (const [hostname, data] of Object.entries(results)) {
+        for (const [hostname, posData] of Object.entries(data.positions)) {
             tableHtml += `
                 <tr>
                     <td><code>${hostname}</code></td>
-                    <td>(${data.x}, ${data.y})</td>
-                    <td>${Math.round(data.rotation)}°</td>
-                    <td>${data.scale_factor.toFixed(3)}</td>
+                    <td>(${posData.x}, ${posData.y})</td>
+                    <td>${Math.round(posData.rotation)}°</td>
+                    <td>${posData.scale_factor.toFixed(3)}</td>
                 </tr>
             `;
         }
@@ -136,9 +136,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         detectionResults.innerHTML = tableHtml;
 
-        // Show config preview
-        detectedConfig = config;
-        configYaml.textContent = formatYaml(config);
+        // Show config preview with YAML
+        detectedConfig = data.config;
+        configYaml.textContent = data.yaml_preview;
         configPreview.style.display = 'block';
     }
 
@@ -173,7 +173,14 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        if (!confirm('This will update your device configuration. Continue?')) {
+        // Show detailed confirmation dialog
+        const deviceCount = detectedConfig.devices ? detectedConfig.devices.length : 0;
+        const confirmMessage = `Apply New Configuration?\n\n` +
+            `This will update devices.yaml with the detected positions for ${deviceCount} devices.\n\n` +
+            `Changes will take effect immediately and update your device layout.\n\n` +
+            `Do you want to continue?`;
+
+        if (!confirm(confirmMessage)) {
             return;
         }
 
@@ -185,7 +192,7 @@ document.addEventListener('DOMContentLoaded', function() {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(detectedConfig)
+            body: JSON.stringify({config: detectedConfig})
         })
         .then(response => response.json())
         .then(data => {

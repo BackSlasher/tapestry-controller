@@ -185,12 +185,17 @@ def analyze_positioning_photo():
             # Generate updated configuration
             updated_config = generate_updated_config(controller.config, physical_positions)
             
+            # Convert config to YAML for preview
+            import yaml
+            yaml_preview = yaml.dump(updated_config, default_flow_style=False, indent=2)
+            
             return jsonify({
                 'success': True,
                 'message': f'Detected {len(position_data)} screens',
                 'detected_devices': list(physical_positions.keys()),
                 'positions': physical_positions,
-                'updated_config': updated_config
+                'config': updated_config,
+                'yaml_preview': yaml_preview
             })
             
         finally:
