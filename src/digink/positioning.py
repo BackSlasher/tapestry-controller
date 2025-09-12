@@ -25,6 +25,7 @@ class QRPositionData(NamedTuple):
     rotation: float  # degrees
     corners: List[Tuple[float, float]]  # QR code corner positions
     reference_size: float  # size of reference element in pixels
+    screen_corners: Optional[List[Tuple[float, float]]]  # Detected screen corner positions
 
 
 class ReferenceElement(NamedTuple):
@@ -118,7 +119,7 @@ def generate_all_positioning_qr_images() -> Dict[str, Image.Image]:
 
 
 def generate_positioning_qr_image(ip: str, screen_type_name: str) -> Image.Image:
-    """Generate QR code with reference elements for positioning."""
+    """Generate full-screen QR code with corner markers for precise positioning."""
     screen_type = SCREEN_TYPES[screen_type_name]
     
     # Get screen dimensions in pixels (use device resolution or estimate)
@@ -131,13 +132,39 @@ def generate_positioning_qr_image(ip: str, screen_type_name: str) -> Image.Image
     img = Image.new('L', (width_px, height_px), 255)  # White background
     draw = ImageDraw.Draw(img)
     
-    # Generate QR code with positioning data (use IP instead of hostname)
+    # Generate QR code with positioning data
     qr_data = f"DIGINK:{ip}:{screen_type_name}"
+    
+    # Calculate QR size to fill most of the screen (leave margin for corners)
+    margin = 60  # pixels for corner markers
+    available_width = width_px - (2 * margin)
+    available_height = height_px - (2 * margin)
+    
+    # Make QR size fit the smaller dimension to keep it square
+    qr_size = min(available_width, available_height)
+    
+    # Calculate box_size to achieve desired QR pixel size
+    # QR version 3 is 29x29 modules, version 4 is 33x33, etc.
+    # Start with a reasonable version and calculate box size
     qr = qrcode.QRCode(
-        version=3,  # Size 3 should be readable but not too large
-        error_correction=qrcode.constants.ERROR_CORRECT_H,  # High error correction
-        box_size=8,  # Increased from 4 to 8 for 2x bigger QR codes
-        border=2,
+        version=1,  # Start small and let it grow
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=1,  # We'll calculate this
+        border=1,   # Minimal border since we control the positioning
+    )
+    qr.add_data(qr_data)
+    qr.make(fit=True)
+    
+    # Calculate box size to achieve target QR size
+    modules_count = qr.modules_count  # Total modules in QR (including border)
+    box_size = max(1, qr_size // modules_count)
+    
+    # Recreate QR with calculated box size
+    qr = qrcode.QRCode(
+        version=qr.version,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=box_size,
+        border=1,
     )
     qr.add_data(qr_data)
     qr.make(fit=True)
@@ -151,65 +178,70 @@ def generate_positioning_qr_image(ip: str, screen_type_name: str) -> Image.Image
     qr_y = (height_px - qr_height) // 2
     img.paste(qr_img, (qr_x, qr_y))
     
-    # Add reference elements for scale and perspective correction
-    add_reference_elements(draw, width_px, height_px, screen_type)
+    # Add corner markers and lines
+    add_screen_boundary_markers(draw, width_px, height_px, qr_x + qr_width//2, qr_y + qr_height//2)
     
-    # Add hostname text at bottom
+    # Add screen info text at bottom
     try:
-        font_size = min(width_px, height_px) // 20
-        font = ImageFont.load_default()  # Use default font for reliability
+        font = ImageFont.load_default()
     except:
         font = None
     
-    text = f"{ip} ({screen_type_name})"
+    text = f"{ip} - {screen_type_name} - {screen_type.active_area.width:.0f}x{screen_type.active_area.height:.0f}mm"
     if font:
         bbox = draw.textbbox((0, 0), text, font=font)
         text_width = bbox[2] - bbox[0]
         text_x = (width_px - text_width) // 2
-        text_y = height_px - 30
+        text_y = height_px - 25
+        
+        # White background for text readability
+        draw.rectangle([text_x-5, text_y-3, text_x+text_width+5, text_y+15], fill=255)
         draw.text((text_x, text_y), text, fill=0, font=font)
     
     return img
 
 
-def add_reference_elements(draw: ImageDraw.Draw, width: int, height: int, screen_type):
-    """Add reference elements for scale and perspective correction."""
-    # Add corner markers for perspective correction
-    marker_size = 20
+def add_screen_boundary_markers(draw: ImageDraw.Draw, width: int, height: int, qr_center_x: int, qr_center_y: int):
+    """Add corner markers and lines to clearly define screen boundaries."""
     
-    # Top-left corner
-    draw.rectangle([5, 5, 5 + marker_size, 5 + marker_size], fill=0)
-    draw.rectangle([10, 10, 10 + marker_size//2, 10 + marker_size//2], fill=255)
+    # Large, distinctive corner markers
+    marker_size = 40  # Bigger than before
+    marker_thickness = 8
     
-    # Top-right corner  
-    draw.rectangle([width - 5 - marker_size, 5, width - 5, 5 + marker_size], fill=0)
-    draw.rectangle([width - 10 - marker_size//2, 10, width - 10, 10 + marker_size//2], fill=255)
+    # Corner positions (inset from edges for visibility)
+    inset = 15
+    corners = [
+        (inset, inset),  # Top-left
+        (width - inset - marker_size, inset),  # Top-right  
+        (inset, height - inset - marker_size),  # Bottom-left
+        (width - inset - marker_size, height - inset - marker_size),  # Bottom-right
+    ]
     
-    # Bottom-left corner
-    draw.rectangle([5, height - 5 - marker_size, 5 + marker_size, height - 5], fill=0)
-    draw.rectangle([10, height - 10 - marker_size//2, 10 + marker_size//2, height - 10], fill=255)
+    # Draw corner markers - distinctive "L" shapes
+    for i, (x, y) in enumerate(corners):
+        # Thick black "L" shape
+        # Horizontal line
+        draw.rectangle([x, y, x + marker_size, y + marker_thickness], fill=0)
+        # Vertical line  
+        draw.rectangle([x, y, x + marker_thickness, y + marker_size], fill=0)
+        
+        # White inner area for contrast
+        draw.rectangle([x + marker_thickness, y + marker_thickness, 
+                       x + marker_size//2, y + marker_size//2], fill=255)
     
-    # Bottom-right corner
-    draw.rectangle([width - 5 - marker_size, height - 5 - marker_size, width - 5, height - 5], fill=0)
-    draw.rectangle([width - 10 - marker_size//2, height - 10 - marker_size//2, width - 10, height - 10], fill=255)
+    # Draw lines from QR center to each corner for clear association
+    line_thickness = 3
+    for corner_x, corner_y in corners:
+        # Calculate line endpoint (to corner center)
+        end_x = corner_x + marker_size // 2
+        end_y = corner_y + marker_size // 2
+        
+        # Draw line from QR center to corner
+        draw.line([qr_center_x, qr_center_y, end_x, end_y], fill=128, width=line_thickness)
     
-    # Add scale reference - a known-size rectangle
-    # Use 10mm as reference size
-    ref_size_mm = 10.0
-    dpi = 150
-    ref_size_px = int(ref_size_mm * dpi / 25.4)
-    
-    # Place reference rectangle in top center
-    ref_x = (width - ref_size_px) // 2
-    ref_y = 50
-    draw.rectangle([ref_x, ref_y, ref_x + ref_size_px, ref_y + ref_size_px], fill=0, outline=0, width=2)
-    
-    # Add measurement lines for the reference
-    line_extend = 10
-    draw.line([ref_x - line_extend, ref_y - 5, ref_x + ref_size_px + line_extend, ref_y - 5], fill=0, width=1)
-    draw.line([ref_x - line_extend, ref_y + ref_size_px + 5, ref_x + ref_size_px + line_extend, ref_y + ref_size_px + 5], fill=0, width=1)
-    draw.line([ref_x - 5, ref_y - line_extend, ref_x - 5, ref_y + ref_size_px + line_extend], fill=0, width=1)
-    draw.line([ref_x + ref_size_px + 5, ref_y - line_extend, ref_x + ref_size_px + 5, ref_y + ref_size_px + line_extend], fill=0, width=1)
+    # Add screen boundary rectangle for extra clarity
+    border_thickness = 5
+    draw.rectangle([5, 5, width-5, height-5], outline=0, width=border_thickness)
 
 
 def detect_qr_positions(pil_image: Image.Image) -> List[QRPositionData]:
@@ -255,13 +287,17 @@ def detect_qr_positions(pil_image: Image.Image) -> List[QRPositionData]:
             # Find reference element size for scale calculation
             ref_size = detect_reference_element_size(gray, (center_x, center_y))
             
+            # Detect screen corners using corner markers
+            screen_corners = detect_screen_corners(gray, (center_x, center_y), corners)
+            
             position_data.append(QRPositionData(
                 hostname=ip,  # Now storing IP in hostname field
                 screen_type=screen_type,
                 center=(center_x, center_y),
                 rotation=rotation,
                 corners=corners,
-                reference_size=ref_size
+                reference_size=ref_size,
+                screen_corners=screen_corners
             ))
             
         except Exception as e:
@@ -361,6 +397,86 @@ def calculate_qr_rotation(corners: List[Tuple[float, float]], gray_image: np.nda
         return 0.0
 
 
+def detect_screen_corners(gray_image: np.ndarray, qr_center: Tuple[float, float], qr_corners: List[Tuple[float, float]]) -> Optional[List[Tuple[float, float]]]:
+    """Detect the L-shaped corner markers to find actual screen boundaries."""
+    
+    # Estimate search area around QR code - should cover most of the screen
+    qr_x_coords = [c[0] for c in qr_corners]
+    qr_y_coords = [c[1] for c in qr_corners]
+    
+    qr_left = min(qr_x_coords)
+    qr_right = max(qr_x_coords)
+    qr_top = min(qr_y_coords)
+    qr_bottom = max(qr_y_coords)
+    
+    qr_width = qr_right - qr_left
+    qr_height = qr_bottom - qr_top
+    
+    # Expand search area to cover entire screen (QR is ~75% of screen)
+    expansion_factor = 1.5
+    search_left = max(0, int(qr_left - qr_width * expansion_factor * 0.5))
+    search_right = min(gray_image.shape[1], int(qr_right + qr_width * expansion_factor * 0.5))
+    search_top = max(0, int(qr_top - qr_height * expansion_factor * 0.5))
+    search_bottom = min(gray_image.shape[0], int(qr_bottom + qr_height * expansion_factor * 0.5))
+    
+    search_region = gray_image[search_top:search_bottom, search_left:search_right]
+    
+    # Find L-shaped corner markers using contour detection
+    _, thresh = cv2.threshold(search_region, 127, 255, cv2.THRESH_BINARY)
+    thresh = cv2.bitwise_not(thresh)  # Invert to find black areas
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    corner_candidates = []
+    
+    # Look for L-shaped contours
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if area < 200 or area > 10000:  # Filter by reasonable size
+            continue
+            
+        # Get bounding box
+        x, y, w, h = cv2.boundingRect(contour)
+        aspect_ratio = float(w) / h
+        
+        # L-shapes should be roughly square overall
+        if 0.5 <= aspect_ratio <= 2.0:
+            # Convert back to full image coordinates
+            corner_x = search_left + x + w // 2
+            corner_y = search_top + y + h // 2
+            corner_candidates.append((corner_x, corner_y))
+    
+    # Sort by distance from QR center and take the 4 closest (should be the 4 corners)
+    qr_cx, qr_cy = qr_center
+    corner_candidates.sort(key=lambda c: (c[0] - qr_cx)**2 + (c[1] - qr_cy)**2)
+    
+    if len(corner_candidates) >= 4:
+        # Take the 4 closest corner markers
+        screen_corners = corner_candidates[:4]
+        
+        # Sort corners in clockwise order: top-left, top-right, bottom-right, bottom-left
+        # First, separate by Y coordinate to get top/bottom
+        screen_corners.sort(key=lambda c: c[1])  # Sort by Y
+        top_corners = screen_corners[:2]
+        bottom_corners = screen_corners[2:4]
+        
+        # Sort top corners by X (left to right)
+        top_corners.sort(key=lambda c: c[0])
+        # Sort bottom corners by X (left to right) 
+        bottom_corners.sort(key=lambda c: c[0])
+        
+        # Return in order: top-left, top-right, bottom-right, bottom-left
+        ordered_corners = [
+            top_corners[0],     # top-left
+            top_corners[1],     # top-right
+            bottom_corners[1],  # bottom-right
+            bottom_corners[0]   # bottom-left
+        ]
+        
+        return ordered_corners
+    
+    return None
+
+
 def detect_reference_element_size(gray_image: np.ndarray, qr_center: Tuple[float, float]) -> float:
     """Detect the reference element size near the QR code."""
     # This is a simplified implementation
@@ -373,67 +489,105 @@ def detect_reference_element_size(gray_image: np.ndarray, qr_center: Tuple[float
 
 
 def calculate_physical_positions(position_data: List[QRPositionData], config: Config) -> Dict[str, Dict]:
-    """Convert image coordinates to physical coordinates with perspective correction."""
+    """Convert image coordinates to physical coordinates using QR-based screen boundary calculation."""
     if not position_data:
         return {}
     
-    # Calculate scale factor using reference elements
-    # Assumes 10mm reference squares
-    reference_size_mm = 10.0
+    print(f"\n=== QR-Based Screen Boundary Calculation for {len(position_data)} screens ===")
     
-    results = {}
+    # Step 1: Calculate scale using QR dimensions  
+    total_scale = 0
+    scale_count = 0
+    screen_positions = []
     
-    # Find average scale factor from all detected screens
-    scale_factors = []
     for data in position_data:
-        if data.reference_size > 0:
-            scale_factor = reference_size_mm / data.reference_size
-            scale_factors.append(scale_factor)
+        if data.screen_type in SCREEN_TYPES and len(data.corners) >= 4:
+            screen_type = SCREEN_TYPES[data.screen_type]
+            
+            # Calculate QR dimensions in pixels
+            x_coords = [c[0] for c in data.corners]
+            y_coords = [c[1] for c in data.corners]
+            qr_width_px = max(x_coords) - min(x_coords)
+            qr_height_px = max(y_coords) - min(y_coords)
+            
+            # QR fills ~75% of screen, so calculate actual screen dimensions in pixels
+            screen_width_px = qr_width_px / 0.75
+            screen_height_px = qr_height_px / 0.75
+            
+            # Get actual physical screen dimensions
+            actual_width_mm = screen_type.active_area.width
+            actual_height_mm = screen_type.active_area.height
+            
+            # Calculate scale factor (mm per pixel)
+            scale_x = actual_width_mm / screen_width_px
+            scale_y = actual_height_mm / screen_height_px
+            scale_factor = (scale_x + scale_y) / 2
+            
+            total_scale += scale_factor
+            scale_count += 1
+            
+            # Calculate screen top-left corner from QR center
+            # QR is centered on screen, so screen top-left is at:
+            qr_cx, qr_cy = data.center
+            screen_top_left_x = qr_cx - (screen_width_px / 2)
+            screen_top_left_y = qr_cy - (screen_height_px / 2)
+            
+            # Convert to mm coordinates
+            screen_top_left_x_mm = screen_top_left_x * scale_factor
+            screen_top_left_y_mm = screen_top_left_y * scale_factor
+            
+            screen_positions.append({
+                'hostname': data.hostname,
+                'screen_type': data.screen_type,
+                'top_left_x': screen_top_left_x_mm,
+                'top_left_y': screen_top_left_y_mm,
+                'rotation': data.rotation,
+                'qr_center': data.center,
+                'screen_width_px': screen_width_px,
+                'screen_height_px': screen_height_px,
+                'scale_factor': scale_factor
+            })
+            
+            print(f"Screen {data.hostname} ({data.screen_type}):")
+            print(f"  QR: {qr_width_px:.0f}x{qr_height_px:.0f}px at ({qr_cx:.0f},{qr_cy:.0f})")
+            print(f"  Screen: {screen_width_px:.0f}x{screen_height_px:.0f}px → {actual_width_mm}x{actual_height_mm}mm")
+            print(f"  Top-left: ({screen_top_left_x:.0f},{screen_top_left_y:.0f})px → ({screen_top_left_x_mm:.0f},{screen_top_left_y_mm:.0f})mm")
+            print(f"  Scale: {scale_factor:.4f} mm/px")
     
-    if not scale_factors:
-        print("Warning: No reference elements detected for scale calculation")
+    if scale_count == 0:
+        print("ERROR: Could not calculate scale from any screens!")
         return {}
     
-    avg_scale = sum(scale_factors) / len(scale_factors)
+    avg_scale = total_scale / scale_count
+    print(f"Average scale: {avg_scale:.4f} mm/pixel")
     
-    # Convert positions to physical coordinates
-    # Use the first detected screen as temporary origin
-    if position_data:
-        origin = position_data[0].center
+    # Step 2: Find bounds and normalize coordinates  
+    if not screen_positions:
+        return {}
+    
+    min_x = min(pos['top_left_x'] for pos in screen_positions)
+    min_y = min(pos['top_left_y'] for pos in screen_positions)
+    
+    print(f"Screen bounds: X=[{min_x:.0f}, {max(pos['top_left_x'] for pos in screen_positions):.0f}], Y=[{min_y:.0f}, {max(pos['top_left_y'] for pos in screen_positions):.0f}]")
+    
+    # Step 3: Create final coordinates based on TOP-LEFT positions
+    margin = 20  # Small margin for clean layout
+    results = {}
+    
+    for pos in screen_positions:
+        # Normalize so leftmost screen starts at margin, topmost at margin
+        final_x = int(pos['top_left_x'] - min_x + margin)
+        final_y = int(pos['top_left_y'] - min_y + margin)
         
-        # First pass: calculate all relative positions
-        temp_positions = []
-        for data in position_data:
-            # Calculate relative position from origin
-            rel_x = (data.center[0] - origin[0]) * avg_scale
-            rel_y = (data.center[1] - origin[1]) * avg_scale
-            
-            temp_positions.append({
-                'hostname': data.hostname,
-                'x': rel_x,
-                'y': rel_y,
-                'rotation': data.rotation,
-                'screen_type': data.screen_type
-            })
+        results[pos['hostname']] = {
+            'x': final_x,
+            'y': final_y,
+            'rotation': pos['rotation'],
+            'scale_factor': avg_scale,
+            'screen_type': pos['screen_type']
+        }
         
-        # Find minimum coordinates to normalize to positive values
-        min_x = min(pos['x'] for pos in temp_positions)
-        min_y = min(pos['y'] for pos in temp_positions)
-        
-        # Add margin to ensure all coordinates are positive
-        margin = 20  # 20mm margin
-        offset_x = -min_x + margin if min_x < 0 else margin
-        offset_y = -min_y + margin if min_y < 0 else margin
-        
-        # Second pass: apply offset to make all coordinates positive
-        for pos in temp_positions:
-            results[pos['hostname']] = {
-                'x': int(pos['x'] + offset_x),
-                'y': int(pos['y'] + offset_y),
-                'rotation': pos['rotation'],
-                'scale_factor': avg_scale,
-                'screen_type': pos['screen_type']
-            }
+        print(f"  FINAL {pos['hostname']}: ({final_x}, {final_y}) - screen boundary positioned")
     
     return results
 

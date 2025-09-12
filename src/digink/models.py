@@ -56,11 +56,20 @@ class Config(NamedTuple):
         """Generate the layout visualization image with optional overlay."""
         device_rectangles = self.to_rectangles()
         bounding_rectangle = Rectangle.bounding_rectangle(device_rectangles.values())
-        background_image = Image.new('RGB', (int(bounding_rectangle.dimensions.width), int(bounding_rectangle.dimensions.height)), (0,0,0))
+        
+        # Add margin around the bounding box for labels
+        margin = 50  # pixels
+        canvas_width = int(bounding_rectangle.dimensions.width) + (2 * margin)
+        canvas_height = int(bounding_rectangle.dimensions.height) + (2 * margin)
+        background_image = Image.new('RGB', (canvas_width, canvas_height), (0,0,0))
+        
+        # Offset for positioning screens within the margin
+        margin_offset_x = margin - int(bounding_rectangle.start.x)
+        margin_offset_y = margin - int(bounding_rectangle.start.y)
         
         # If overlay image is provided, show it first (faded for non-screen areas)
         if overlay_image and overlay_px_in_unit:
-            # Resize overlay to fit the layout
+            # Resize overlay to fit the layout (within the margin)
             overlay_width = int(bounding_rectangle.dimensions.width)
             overlay_height = int(bounding_rectangle.dimensions.height)
             overlay_resized = overlay_image.resize((overlay_width, overlay_height))
@@ -69,9 +78,9 @@ class Config(NamedTuple):
             overlay_faded = overlay_resized.copy()
             overlay_faded.putalpha(128)  # 50% transparency
             
-            # Paste faded overlay as background
+            # Paste faded overlay as background with margin offset
             if overlay_faded.mode == 'RGBA':
-                background_image.paste(overlay_faded, (0, 0), overlay_faded)
+                background_image.paste(overlay_faded, (margin, margin), overlay_faded)
             else:
                 # Convert to RGBA for blending
                 bg_rgba = background_image.convert('RGBA')
@@ -129,6 +138,63 @@ class Config(NamedTuple):
                                   fill=(0, 0, 0, 180))
                 text_draw.text((text_x, text_y), text, font=font, fill=(255, 255, 255, 255))
                 
+                # Add orientation indicator (emoji)
+                import math
+                center_x = width // 2
+                center_y = height // 2
+                
+                # Use emoji size relative to screen size
+                emoji_size = min(width, height) // 4
+                
+                # Try to get a larger font for the emoji
+                try:
+                    emoji_font = ImageFont.truetype('/System/Library/Fonts/Apple Color Emoji.ttc', emoji_size)
+                except (OSError, IOError):
+                    try:
+                        # Try common emoji fonts on Linux
+                        emoji_font = ImageFont.truetype('/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf', emoji_size)
+                    except (OSError, IOError):
+                        try:
+                            emoji_font = ImageFont.truetype('/usr/share/fonts/TTF/NotoColorEmoji.ttf', emoji_size)
+                        except (OSError, IOError):
+                            try:
+                                # Fallback to regular font with larger size for emoji
+                                emoji_font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', emoji_size)
+                            except (OSError, IOError):
+                                emoji_font = ImageFont.load_default()
+                
+                # Choose orientation indicator based on rotation
+                # Normalize rotation to 0-360 range
+                normalized_rotation = device.rotation % 360
+                if normalized_rotation < 0:
+                    normalized_rotation += 360
+                
+                # Choose arrow character based on rotation
+                if 315 <= normalized_rotation or normalized_rotation < 45:
+                    orientation_indicator = "^"  # Up
+                elif 45 <= normalized_rotation < 135:
+                    orientation_indicator = ">"  # Right  
+                elif 135 <= normalized_rotation < 225:
+                    orientation_indicator = "v"  # Down
+                else:  # 225 <= normalized_rotation < 315
+                    orientation_indicator = "<"  # Left
+                
+                # Position indicator at center of screen
+                emoji_x = center_x
+                emoji_y = center_y
+                
+                # Get orientation indicator dimensions for centering
+                bbox = text_draw.textbbox((0, 0), orientation_indicator, font=emoji_font)
+                indicator_width = bbox[2] - bbox[0]
+                indicator_height = bbox[3] - bbox[1]
+                
+                # Center the indicator at the calculated position
+                final_x = emoji_x - indicator_width // 2
+                final_y = emoji_y - indicator_height // 2
+                
+                # Draw orientation indicator (use black color to be visible on white background)
+                text_draw.text((final_x, final_y), orientation_indicator, font=emoji_font, fill=(0, 0, 0, 255))
+                
                 # Composite text overlay onto screen image
                 if foreground_image.mode != 'RGBA':
                     foreground_image = foreground_image.convert('RGBA')
@@ -138,8 +204,8 @@ class Config(NamedTuple):
             except Exception as e:
                 print(f"Error adding text overlay for device {device.host}: {e}")
 
-            x = int(rectangle.start.x)
-            y = int(rectangle.start.y)
+            x = int(rectangle.start.x) + margin_offset_x
+            y = int(rectangle.start.y) + margin_offset_y
             
             background_image.paste(foreground_image, (x, y))
         
