@@ -397,21 +397,42 @@ def calculate_physical_positions(position_data: List[QRPositionData], config: Co
     avg_scale = sum(scale_factors) / len(scale_factors)
     
     # Convert positions to physical coordinates
-    # Use the first detected screen as origin (0,0)
+    # Use the first detected screen as temporary origin
     if position_data:
         origin = position_data[0].center
         
+        # First pass: calculate all relative positions
+        temp_positions = []
         for data in position_data:
             # Calculate relative position from origin
             rel_x = (data.center[0] - origin[0]) * avg_scale
             rel_y = (data.center[1] - origin[1]) * avg_scale
             
-            results[data.hostname] = {
-                'x': int(rel_x),
-                'y': int(rel_y),
+            temp_positions.append({
+                'hostname': data.hostname,
+                'x': rel_x,
+                'y': rel_y,
                 'rotation': data.rotation,
-                'scale_factor': avg_scale,
                 'screen_type': data.screen_type
+            })
+        
+        # Find minimum coordinates to normalize to positive values
+        min_x = min(pos['x'] for pos in temp_positions)
+        min_y = min(pos['y'] for pos in temp_positions)
+        
+        # Add margin to ensure all coordinates are positive
+        margin = 20  # 20mm margin
+        offset_x = -min_x + margin if min_x < 0 else margin
+        offset_y = -min_y + margin if min_y < 0 else margin
+        
+        # Second pass: apply offset to make all coordinates positive
+        for pos in temp_positions:
+            results[pos['hostname']] = {
+                'x': int(pos['x'] + offset_x),
+                'y': int(pos['y'] + offset_y),
+                'rotation': pos['rotation'],
+                'scale_factor': avg_scale,
+                'screen_type': pos['screen_type']
             }
     
     return results
