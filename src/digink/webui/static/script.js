@@ -119,10 +119,9 @@ function loadDeviceInfo() {
                     <div class="device-card border rounded p-3 mb-2">
                         <div class="device-host">${device.host}</div>
                         <div class="device-details">
-                            Screen: ${device.screen_type}<br>
+                            Screen: ${device.screen_type} (${device.dimensions.width.toFixed(1)} × ${device.dimensions.height.toFixed(1)} mm)<br>
                             Position: (${device.coordinates.x}, ${device.coordinates.y})<br>
-                            Rotation: ${device.rotation}°<br>
-                            Size: ${device.dimensions.width.toFixed(1)} × ${device.dimensions.height.toFixed(1)} mm
+                            Rotation: ${device.rotation}°
                         </div>
                     </div>
                 `;

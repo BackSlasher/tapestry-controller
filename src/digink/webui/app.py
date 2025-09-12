@@ -386,9 +386,16 @@ def devices_info():
     
     devices = []
     for device in controller.config.devices:
+        # Find the screen type name from SCREEN_TYPES registry
+        screen_type_name = "Unknown"
+        for name, screen_type_obj in SCREEN_TYPES.items():
+            if screen_type_obj == device.screen_type:
+                screen_type_name = name
+                break
+        
         devices.append({
             'host': device.host,
-            'screen_type': device.screen_type.__class__.__name__,
+            'screen_type': screen_type_name,
             'coordinates': {'x': device.coordinates.x, 'y': device.coordinates.y},
             'rotation': device.rotation,
             'dimensions': {
