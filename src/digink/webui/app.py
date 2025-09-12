@@ -323,6 +323,60 @@ def apply_positioning_config():
     except Exception as e:
         return jsonify({'error': f'Failed to apply configuration: {str(e)}'}), 500
 
+@app.route('/positioning/layout-preview')
+def positioning_layout_preview():
+    """Generate layout preview for detected positions."""
+    if 'detected_config' not in request.args:
+        return "No detected configuration", 400
+    
+    try:
+        import json
+        detected_config = json.loads(request.args.get('detected_config'))
+        
+        # Create temporary config from detected positions
+        from ..models import Config, Device, Coordinates
+        from ..geometry import Point, Dimensions, Rectangle
+        import io
+        
+        devices = []
+        for device_data in detected_config.get('devices', []):
+            try:
+                screen_type = SCREEN_TYPES[device_data['screen_type']]
+                device = Device(
+                    host=device_data['host'],
+                    screen_type=screen_type,
+                    coordinates=Coordinates(
+                        x=device_data['coordinates']['x'],
+                        y=device_data['coordinates']['y']
+                    ),
+                    rotation=device_data.get('rotation', 0)
+                )
+                devices.append(device)
+            except KeyError as e:
+                print(f"Unknown screen type in preview: {e}")
+                continue
+        
+        if not devices:
+            return "No valid devices in configuration", 400
+            
+        temp_config = Config(devices=devices)
+        
+        # Generate layout visualization
+        buffer = io.BytesIO()
+        temp_config.draw_rectangles_to_buffer(buffer)
+        buffer.seek(0)
+        
+        return send_file(
+            buffer,
+            mimetype='image/png',
+            as_attachment=False,
+            download_name='detected_layout.png'
+        )
+        
+    except Exception as e:
+        print(f"Error generating layout preview: {e}")
+        return f"Error generating layout preview: {str(e)}", 500
+
 @app.route('/layout')
 def layout():
     """Generate and return the device layout visualization."""

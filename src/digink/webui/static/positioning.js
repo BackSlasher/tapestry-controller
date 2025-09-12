@@ -109,6 +109,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <thead>
                         <tr>
                             <th>Hostname</th>
+                            <th>Screen Type</th>
                             <th>Position (mm)</th>
                             <th>Rotation</th>
                             <th>Scale Factor</th>
@@ -121,6 +122,7 @@ document.addEventListener('DOMContentLoaded', function() {
             tableHtml += `
                 <tr>
                     <td><code>${hostname}</code></td>
+                    <td>${posData.screen_type}</td>
                     <td>(${posData.x}, ${posData.y})</td>
                     <td>${Math.round(posData.rotation)}°</td>
                     <td>${posData.scale_factor.toFixed(3)}</td>
@@ -131,6 +133,20 @@ document.addEventListener('DOMContentLoaded', function() {
         tableHtml += `
                     </tbody>
                 </table>
+            </div>
+        `;
+
+        // Add layout diagram
+        tableHtml += `
+            <div class="mt-4">
+                <h6>Detected Layout</h6>
+                <div class="text-center">
+                    <img id="detected-layout" src="/positioning/layout-preview?detected_config=${encodeURIComponent(JSON.stringify(data.config))}" 
+                         class="img-fluid border" alt="Detected Layout" style="max-height: 400px;">
+                    <div class="mt-2">
+                        <small class="text-muted">Layout visualization of detected screens</small>
+                    </div>
+                </div>
             </div>
         `;
 

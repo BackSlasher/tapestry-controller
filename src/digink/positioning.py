@@ -20,6 +20,7 @@ from .screen_types import SCREEN_TYPES
 class QRPositionData(NamedTuple):
     """Data structure for QR positioning information."""
     hostname: str
+    screen_type: str  # screen type from QR code
     center: Tuple[float, float]  # (x, y) in image coordinates
     rotation: float  # degrees
     corners: List[Tuple[float, float]]  # QR code corner positions
@@ -256,6 +257,7 @@ def detect_qr_positions(pil_image: Image.Image) -> List[QRPositionData]:
             
             position_data.append(QRPositionData(
                 hostname=ip,  # Now storing IP in hostname field
+                screen_type=screen_type,
                 center=(center_x, center_y),
                 rotation=rotation,
                 corners=corners,
@@ -408,7 +410,8 @@ def calculate_physical_positions(position_data: List[QRPositionData], config: Co
                 'x': int(rel_x),
                 'y': int(rel_y),
                 'rotation': data.rotation,
-                'scale_factor': avg_scale
+                'scale_factor': avg_scale,
+                'screen_type': data.screen_type
             }
     
     return results
