@@ -416,51 +416,62 @@ def calculate_physical_positions(position_data: List[QRPositionData], config: Co
 
 def generate_updated_config(original_config: Config, positions: Dict[str, Dict]) -> Dict:
     """Generate updated device configuration with detected positions."""
-    # Create new devices list with updated coordinates
+    # Create new devices list with detected coordinates
     devices_yaml = []
     
-    for device in original_config.devices:
-        if device.host in positions:
-            pos = positions[device.host]
-            
-            # Try to get actual screen type from device
-            try:
-                from .device import info
-                device_info = info(device.host)
-                actual_screen_type = device_info.screen_model
-            except:
-                # Fall back to configured screen type
-                actual_screen_type = device.screen_type.__class__.__name__.replace('ScreenType', '')
-            
-            device_yaml = {
-                'host': device.host,
-                'screen_type': actual_screen_type,
-                'coordinates': {
-                    'x': pos['x'],
-                    'y': pos['y']
-                }
+    # First, add all detected devices (these are the primary ones from QR detection)
+    for ip_or_host, pos in positions.items():
+        # Try to get actual screen type from device
+        try:
+            screen_type = get_device_screen_type(ip_or_host)
+            if not screen_type:
+                print(f"Warning: Could not determine screen type for {ip_or_host}")
+                continue
+        except:
+            print(f"Warning: Could not query screen type for {ip_or_host}")
+            continue
+        
+        device_yaml = {
+            'host': ip_or_host,  # Use IP address as host
+            'screen_type': screen_type,
+            'coordinates': {
+                'x': pos['x'],
+                'y': pos['y']
             }
-            # Add rotation if significant (not close to 0)
-            if abs(pos['rotation']) > 5:  # More than 5 degrees
-                device_yaml['rotation'] = int(pos['rotation'])
-        else:
-            # Keep original coordinates if not detected
+        }
+        
+        # Add rotation if significant (not close to 0)
+        if abs(pos['rotation']) > 5:  # More than 5 degrees
+            device_yaml['rotation'] = int(pos['rotation'])
+        
+        devices_yaml.append(device_yaml)
+    
+    # Add any existing devices that weren't detected (to preserve them)
+    for device in original_config.devices:
+        # Check if this device was already added from detected positions
+        device_found = any(d['host'] == device.host for d in devices_yaml)
+        
+        if not device_found:
+            # Keep original device configuration
             try:
-                from .device import info
-                device_info = info(device.host)
-                actual_screen_type = device_info.screen_model
+                screen_type = get_device_screen_type(device.host)
+                if not screen_type:
+                    screen_type = device.screen_type.__class__.__name__.replace('ScreenType', '')
             except:
-                actual_screen_type = device.screen_type.__class__.__name__.replace('ScreenType', '')
+                screen_type = device.screen_type.__class__.__name__.replace('ScreenType', '')
             
             device_yaml = {
                 'host': device.host,
-                'screen_type': actual_screen_type,
+                'screen_type': screen_type,
                 'coordinates': {
                     'x': device.coordinates.x,
                     'y': device.coordinates.y
                 }
             }
-        
-        devices_yaml.append(device_yaml)
+            
+            if device.rotation != 0:
+                device_yaml['rotation'] = device.rotation
+            
+            devices_yaml.append(device_yaml)
     
     return {'devices': devices_yaml}
