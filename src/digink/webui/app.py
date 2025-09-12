@@ -159,38 +159,30 @@ def positioning():
 
 @app.route('/positioning/qr-mode', methods=['POST'])
 def start_qr_positioning():
-    """Start QR positioning mode - display QR codes on all screens."""
-    if not controller:
-        return jsonify({'error': 'Controller not initialized'}), 500
-    
+    """Start QR positioning mode - display QR codes on all discovered devices."""
     try:
-        from ..positioning import generate_positioning_qr_image
+        from ..positioning import generate_all_positioning_qr_images
+        from ..device import draw_unrotated
+        
+        # Discover devices from DHCP and generate QR codes
+        qr_images = generate_all_positioning_qr_images()
+        
+        if not qr_images:
+            return jsonify({'error': 'No devices discovered from DHCP leases. Ensure devices are connected and DHCP server is running.'}), 400
         
         threads = []
         errors = []
         
-        for device in controller.config.devices:
+        # Send QR codes to discovered devices
+        for ip, qr_image in qr_images.items():
             try:
-                # Get device info to determine actual screen type
-                from ..device import info
-                device_info = info(device.host)
-                screen_type_name = device_info.screen_model
-                
-                if screen_type_name not in SCREEN_TYPES:
-                    errors.append(f"Unknown screen model '{screen_type_name}' for device {device.host}")
-                    continue
-                
-                qr_image = generate_positioning_qr_image(device.host, screen_type_name)
-                
-                # Send QR image to device with no rotation
-                from ..device import draw_unrotated
-                t = threading.Thread(target=draw_unrotated, args=(device.host, qr_image, True))
+                t = threading.Thread(target=draw_unrotated, args=(ip, qr_image, True))
                 t.daemon = True
                 t.start()
                 threads.append(t)
-                
             except Exception as e:
-                errors.append(f"Error generating QR for {device.host}: {str(e)}")
+                errors.append(f"Error sending QR to {ip}: {str(e)}")
+                continue
         
         # Wait for all images to be sent
         for t in threads:
@@ -199,13 +191,13 @@ def start_qr_positioning():
         if errors:
             return jsonify({
                 'success': True,
-                'message': f'QR codes sent to {len(threads)} devices',
+                'message': f'QR codes sent to {len(threads)} discovered devices',
                 'warnings': errors
             })
         else:
             return jsonify({
                 'success': True,
-                'message': f'QR codes sent to {len(threads)} devices'
+                'message': f'QR codes sent to {len(threads)} discovered devices'
             })
             
     except Exception as e:
