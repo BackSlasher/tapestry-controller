@@ -62,9 +62,10 @@ def discover_devices_from_dhcp() -> List[DiscoveredDevice]:
 def get_device_screen_type(ip: str, timeout: int = 5) -> Optional[str]:
     """Query a device's screen type via HTTP."""
     try:
-        response = requests.get(f"http://{ip}/screen-type", timeout=timeout)
+        response = requests.get(f"http://{ip}/", timeout=timeout)
         if response.status_code == 200:
-            return response.text.strip()
+            data = response.json()
+            return data.get('screen_model')
     except Exception as e:
         print(f"Failed to get screen type from {ip}: {e}")
     
