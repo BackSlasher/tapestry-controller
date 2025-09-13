@@ -10,7 +10,7 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from digink.positioning import detect_qr_positions, calculate_physical_positions
+from digink.position_detection import detect_qr_positions, calculate_physical_positions
 from digink.models import Config
 from PIL import Image
 

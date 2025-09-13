@@ -9,8 +9,8 @@ from PIL import Image, ImageDraw
 import cv2
 import math
 from typing import List, Dict, Tuple, Optional
-from .positioning import (
-    generate_positioning_qr_image, 
+from .qr_generation import generate_positioning_qr_image
+from .position_detection import (
     detect_qr_positions, 
     calculate_physical_positions,
     QRPositionData

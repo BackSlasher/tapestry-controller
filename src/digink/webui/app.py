@@ -161,7 +161,7 @@ def positioning():
 def start_qr_positioning():
     """Start QR positioning mode - display QR codes on all discovered devices."""
     try:
-        from ..positioning import generate_all_positioning_qr_images
+        from ..qr_generation import generate_all_positioning_qr_images
         from ..device import draw_unrotated
         
         # Discover devices from DHCP and generate QR codes
@@ -220,7 +220,7 @@ def analyze_positioning_photo():
         return jsonify({'error': 'Invalid file type. Please upload an image file.'}), 400
     
     try:
-        from ..positioning import detect_qr_positions, calculate_physical_positions, generate_updated_config
+        from ..position_detection import detect_qr_positions, calculate_physical_positions, generate_updated_config
         
         # Open image and fix EXIF orientation
         image = PIL.Image.open(file.stream)
@@ -232,17 +232,33 @@ def analyze_positioning_photo():
         corrected_image.save(debug_filename, quality=95)
         print(f"Debug: Saved QR analysis image to {debug_filename}")
         
+        # Get DHCP discovered devices for comparison
+        from ..qr_generation import discover_devices_from_dhcp
+        dhcp_devices = discover_devices_from_dhcp()
+        dhcp_ips = {device.ip for device in dhcp_devices}
+        
         # Detect QR codes from EXIF-corrected PIL image
         position_data = detect_qr_positions(corrected_image)
         
         if not position_data:
-            return jsonify({'error': 'No QR codes detected in the photo'}), 400
+            return jsonify({
+                'error': 'No QR codes detected in the photo',
+                'can_apply': False
+            }), 400
         
         # Calculate physical positions
         physical_positions = calculate_physical_positions(position_data, controller.config)
         
         if not physical_positions:
-            return jsonify({'error': 'Could not calculate physical positions'}), 400
+            return jsonify({
+                'error': 'Could not calculate physical positions', 
+                'can_apply': False
+            }), 400
+        
+        # Check for missing devices
+        detected_ips = set(physical_positions.keys())
+        missing_ips = dhcp_ips - detected_ips
+        has_missing_devices = len(missing_ips) > 0
         
         # Generate updated configuration
         updated_config = generate_updated_config(controller.config, physical_positions)
@@ -251,14 +267,23 @@ def analyze_positioning_photo():
         import yaml
         yaml_preview = yaml.dump(updated_config, default_flow_style=False, indent=2)
         
-        return jsonify({
+        response_data = {
             'success': True,
             'message': f'Detected {len(position_data)} screens',
             'detected_devices': list(physical_positions.keys()),
             'positions': physical_positions,
             'config': updated_config,
-            'yaml_preview': yaml_preview
-        })
+            'yaml_preview': yaml_preview,
+            'can_apply': True,
+            'dhcp_devices': list(dhcp_ips),
+            'missing_devices': list(missing_ips),
+            'has_missing_devices': has_missing_devices
+        }
+        
+        if has_missing_devices:
+            response_data['warning'] = f"Warning: {len(missing_ips)} devices found in DHCP but not detected in photo: {', '.join(missing_ips)}"
+        
+        return jsonify(response_data)
         
     except Exception as e:
         return jsonify({'error': f'Failed to analyze photo: {str(e)}'}), 500
@@ -269,6 +294,14 @@ def apply_positioning_config():
     data = request.get_json()
     if not data or 'config' not in data:
         return jsonify({'error': 'No configuration provided'}), 400
+    
+    # Check if user confirmed when there are missing devices
+    if data.get('has_missing_devices', False) and not data.get('confirmed', False):
+        return jsonify({
+            'error': 'Confirmation required',
+            'message': 'Some DHCP devices were not detected. Please confirm you want to proceed.',
+            'requires_confirmation': True
+        }), 400
     
     try:
         # Write updated configuration to devices.yaml

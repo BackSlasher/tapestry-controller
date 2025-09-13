@@ -89,17 +89,36 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (!data.positions || Object.keys(data.positions).length === 0) {
             detectionResults.innerHTML = `
-                <div class="alert alert-warning">
+                <div class="alert alert-danger">
                     <i class="bi bi-exclamation-triangle"></i>
                     <strong>No screens detected!</strong> 
                     Please ensure QR codes are visible and try again.
                 </div>
             `;
+            // Disable apply button when no screens detected
+            applyConfigBtn.disabled = true;
             return;
         }
 
+        // Store the analysis data for later use
+        detectedConfig = data;
+
+        // Check for missing devices warning
+        let warningHtml = '';
+        if (data.has_missing_devices) {
+            warningHtml = `
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Missing Devices Warning!</strong><br>
+                    ${data.warning}<br>
+                    <small>DHCP devices: ${data.dhcp_devices.join(', ')}<br>
+                    Detected in photo: ${data.detected_devices.join(', ')}</small>
+                </div>
+            `;
+        }
+
         // Display detected screens table
-        let tableHtml = `
+        let tableHtml = warningHtml + `
             <div class="alert alert-success">
                 <i class="bi bi-check-circle"></i>
                 <strong>Found ${data.detected_devices.length} screens!</strong>
@@ -153,9 +172,11 @@ document.addEventListener('DOMContentLoaded', function() {
         detectionResults.innerHTML = tableHtml;
 
         // Show config preview with YAML
-        detectedConfig = data.config;
         configYaml.textContent = data.yaml_preview;
         configPreview.style.display = 'block';
+
+        // Enable apply button for detected screens
+        applyConfigBtn.disabled = false;
     }
 
     function formatYaml(obj, indent = 0) {
@@ -189,11 +210,17 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // Show detailed confirmation dialog
-        const deviceCount = detectedConfig.devices ? detectedConfig.devices.length : 0;
-        const confirmMessage = `Apply New Configuration?\n\n` +
-            `This will update devices.yaml with the detected positions for ${deviceCount} devices.\n\n` +
-            `Changes will take effect immediately and update your device layout.\n\n` +
+        // Check for missing devices and require additional confirmation
+        let confirmMessage = `Apply New Configuration?\n\n` +
+            `This will update devices.yaml with the detected positions for ${detectedConfig.detected_devices.length} devices.\n\n`;
+        
+        if (detectedConfig.has_missing_devices) {
+            confirmMessage += `⚠️  WARNING: ${detectedConfig.missing_devices.length} DHCP devices were not detected in the photo:\n` +
+                `${detectedConfig.missing_devices.join(', ')}\n\n` +
+                `These devices will NOT be included in the configuration.\n\n`;
+        }
+        
+        confirmMessage += `Changes will take effect immediately and update your device layout.\n\n` +
             `Do you want to continue?`;
 
         if (!confirm(confirmMessage)) {
@@ -203,12 +230,18 @@ document.addEventListener('DOMContentLoaded', function() {
         applyConfigBtn.disabled = true;
         applyConfigBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Applying...';
 
+        const requestData = {
+            config: detectedConfig.config,
+            has_missing_devices: detectedConfig.has_missing_devices || false,
+            confirmed: true  // User has confirmed they want to proceed
+        };
+
         fetch('/positioning/apply', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({config: detectedConfig})
+            body: JSON.stringify(requestData)
         })
         .then(response => response.json())
         .then(data => {
