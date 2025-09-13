@@ -510,6 +510,32 @@ def clear_screens():
     except Exception as e:
         return jsonify({'error': f'Failed to clear screens: {str(e)}'}), 500
 
+
+@app.route('/restore-image', methods=['POST'])
+def restore_last_image():
+    """Restore the last saved image from disk."""
+    if not controller:
+        return jsonify({'error': 'Controller not initialized'}), 500
+    
+    try:
+        # Load the persisted image
+        if load_persisted_image():
+            # If image was loaded successfully, also send it to devices
+            if last_image_state['image'] is not None:
+                controller.send_image(last_image_state['image'])
+                return jsonify({
+                    'success': True,
+                    'message': 'Successfully restored and sent last image to devices'
+                })
+            else:
+                return jsonify({'error': 'Image loaded but not available'}), 500
+        else:
+            return jsonify({'error': 'No saved image found to restore'}), 404
+            
+    except Exception as e:
+        return jsonify({'error': f'Failed to restore image: {str(e)}'}), 500
+
+
 def get_wallpaper_images():
     """Get list of wallpaper images from wallpapers directory."""
     patterns = ['*.png', '*.jpg', '*.jpeg', '*.gif', '*.bmp', '*.tiff', '*.webp']
@@ -867,24 +893,12 @@ def main():
     controller = DiginkController.from_config_file(args.devices_file)
     
     # Start image loading in background thread
-    def load_image_async():
-        """Load persisted image in background thread."""
-        time.sleep(1)  # Give server a moment to start
-        if load_persisted_image():
-            # If image was loaded successfully, also send it to devices
-            if last_image_state['image'] is not None:
-                try:
-                    controller.send_image(last_image_state['image'])
-                    print("Successfully sent restored image to devices")
-                except Exception as e:
-                    print(f"Warning: Could not send restored image to devices: {e}")
-    
-    loading_thread = threading.Thread(target=load_image_async, daemon=True)
-    loading_thread.start()
+    # Automatic image loading on startup has been removed
+    # Use the "Restore Last Image" button on the main page instead
     
     print(f"Starting Digink Web UI with {len(controller.config.devices)} devices")
     print(f"Access at http://{args.host}:{args.port}")
-    print("Loading last image in background...")
+    print("Use 'Restore Last Image' button to load previous image")
     
     app.run(host=args.host, port=args.port, debug=args.debug)
 

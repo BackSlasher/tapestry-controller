@@ -48,6 +48,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const refreshLayoutBtn = document.getElementById('refresh-layout');
     const refreshDevicesBtn = document.getElementById('refresh-devices');
     const clearScreensBtn = document.getElementById('clear-screens');
+    const restoreImageBtn = document.getElementById('restore-image');
     
     if (refreshLayoutBtn) {
         refreshLayoutBtn.addEventListener('click', function() {
@@ -64,6 +65,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (clearScreensBtn) {
         clearScreensBtn.addEventListener('click', function() {
             clearAllScreens();
+        });
+    }
+    
+    if (restoreImageBtn) {
+        restoreImageBtn.addEventListener('click', function() {
+            restoreLastImage();
         });
     }
     
@@ -185,6 +192,45 @@ function clearAllScreens() {
         // Restore button state
         clearBtn.disabled = false;
         clearBtn.innerHTML = originalText;
+    });
+}
+
+function restoreLastImage() {
+    const restoreBtn = document.getElementById('restore-image');
+    if (!restoreBtn) return;
+    
+    // Show loading state
+    const originalText = restoreBtn.innerHTML;
+    restoreBtn.disabled = true;
+    restoreBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Restoring...';
+    
+    fetch('/restore-image', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message
+            showAlert(data.message, 'success');
+            
+            // Refresh layout to show the restored image
+            refreshLayout();
+        } else {
+            // Show error message
+            showAlert(data.error || 'Failed to restore image', 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('Failed to restore image: ' + error.message, 'danger');
+    })
+    .finally(() => {
+        // Restore button state
+        restoreBtn.disabled = false;
+        restoreBtn.innerHTML = originalText;
     });
 }
 
