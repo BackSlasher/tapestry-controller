@@ -1,32 +1,10 @@
-install:
-	pip install -e .
-
-install-dev:
-	pip install -e ".[dev]"
-
-
-run:
-	digink '/home/nitz/Pictures/Wallpapers/keepers/Oculus_Wallpaper_2560x1600.png'
-
-run-debug:
-	mkdir -p debug
-	digink '/home/nitz/Pictures/Wallpapers/keepers/Oculus_Wallpaper_2560x1600.png' --debug-output-dir debug
-
-run-webui:
-	digink-webui
-
-clean:
-	rm -rf build/ dist/ src/*.egg-info/ debug/
-
 test:
-	pytest
+	poetry run pytest
 
 lint:
-	black src/
-	flake8 src/
-
-type-check:
-	mypy src/
+	poetry run black src/
+	poetry run flake8 src/
+	poetry run mypy src/
 
 deploy:
 	rsync -avz --delete --exclude='__pycache__' --exclude='.pytest_cache' --exclude='*.pyc' --exclude='.git' --exclude='.sl' --exclude='debug/' --exclude='build/' --exclude='dist/' --exclude='src/*.egg-info/' --exclude='devices.yaml' . digink:./controller/

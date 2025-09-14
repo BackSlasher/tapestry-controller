@@ -37,12 +37,30 @@ last_image_state = {
     'image': None,  # PIL Image object
     'refit_image': None,  # Processed/resized image
     'px_in_unit': None,  # Scaling factor
+    'thumbnail_cache': None,  # Cached thumbnail for web display
+    'thumbnail_max_size': (800, 600),  # Max thumbnail dimensions
 }
 
 def allowed_file(filename):
     """Check if uploaded file has allowed extension."""
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff'}
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def get_or_create_thumbnail():
+    """Get cached thumbnail or create one from refit_image."""
+    if last_image_state['thumbnail_cache'] is not None:
+        return last_image_state['thumbnail_cache']
+    
+    if last_image_state['refit_image'] is None:
+        return None
+    
+    # Create thumbnail
+    img = last_image_state['refit_image'].copy()
+    img.thumbnail(last_image_state['thumbnail_max_size'], PIL.Image.LANCZOS)
+    
+    # Cache it
+    last_image_state['thumbnail_cache'] = img
+    return img
 
 def fix_image_orientation(image):
     """Fix image orientation based on EXIF data and return corrected PIL Image."""
@@ -130,6 +148,7 @@ def save_last_image(image):
     last_image_state['image'] = image.copy()
     last_image_state['refit_image'] = refit_result.image.copy()
     last_image_state['px_in_unit'] = refit_result.px_in_unit
+    last_image_state['thumbnail_cache'] = None  # Clear thumbnail cache
     
     # Persist to disk for restart recovery
     try:
@@ -430,6 +449,83 @@ def layout():
     
     img_buffer.seek(0)
     return send_file(img_buffer, mimetype='image/png', as_attachment=False)
+
+
+@app.route('/layout-data')
+def layout_data():
+    """Get screen layout data as JSON for canvas operations."""
+    try:
+        # Get the current image if available
+        current_image = None
+        image_size = None
+        if last_image_state['refit_image'] is not None:
+            current_image = "/current-image"  # Endpoint to serve current image
+            image_size = {
+                'width': last_image_state['refit_image'].size[0],
+                'height': last_image_state['refit_image'].size[1]
+            }
+        
+        # Get screen layout information
+        screens = []
+        if controller and controller.config and controller.config.devices:
+            for device in controller.config.devices:
+                screen_info = {
+                    'hostname': device.host,
+                    'screen_type': device.screen_type.name if hasattr(device.screen_type, 'name') else str(device.screen_type),
+                    'x': device.coordinates.x,
+                    'y': device.coordinates.y,
+                    'width': device.screen_type.active_area.width,
+                    'height': device.screen_type.active_area.height,
+                    'rotation': device.rotation
+                }
+                screens.append(screen_info)
+        
+        return jsonify({
+            'current_image': current_image,
+            'image_size': image_size,
+            'screens': screens,
+            'scale_factor': last_image_state.get('px_in_unit', 1.0)
+        })
+        
+    except Exception as e:
+        print(f"Error getting layout data: {e}")
+        return jsonify({
+            'current_image': None,
+            'image_size': None,
+            'screens': [],
+            'scale_factor': 1.0,
+            'error': str(e)
+        })
+
+
+@app.route('/current-image')
+def current_image():
+    """Serve the current image thumbnail for the canvas."""
+    try:
+        thumbnail = get_or_create_thumbnail()
+        if thumbnail is not None:
+            # Convert thumbnail to bytes
+            img_buffer = io.BytesIO()
+            thumbnail.save(img_buffer, format='PNG')
+            img_buffer.seek(0)
+            return send_file(img_buffer, mimetype='image/png')
+        else:
+            # Return empty/placeholder image
+            placeholder_img = PIL.Image.new('RGB', (400, 300), color='white')
+            img_buffer = io.BytesIO()
+            placeholder_img.save(img_buffer, format='PNG')
+            img_buffer.seek(0)
+            return send_file(img_buffer, mimetype='image/png')
+            
+    except Exception as e:
+        print(f"Error serving current image: {e}")
+        # Return error placeholder
+        error_img = PIL.Image.new('RGB', (400, 300), color='lightgray')
+        img_buffer = io.BytesIO()
+        error_img.save(img_buffer, format='PNG')
+        img_buffer.seek(0)
+        return send_file(img_buffer, mimetype='image/png')
+
 
 @app.route('/upload', methods=['POST'])
 def upload_image():

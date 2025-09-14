@@ -9,6 +9,9 @@ document.addEventListener('DOMContentLoaded', function() {
     loadDeviceInfo();
     loadScreensaverStatus();
     
+    // Initialize canvas layout
+    initializeCanvas();
+    
     // Image preview functionality
     const imageInput = document.getElementById('image-input');
     const imagePreview = document.getElementById('image-preview');
@@ -146,13 +149,147 @@ function loadDeviceInfo() {
         });
 }
 
+function initializeCanvas() {
+    // Initialize canvas and load layout data
+    drawLayoutCanvas();
+}
+
 function refreshLayout() {
-    const layoutImg = document.getElementById('layout-image');
-    if (layoutImg) {
-        // Add timestamp to force refresh
-        const timestamp = new Date().getTime();
-        layoutImg.src = `/layout?t=${timestamp}`;
-    }
+    // Refresh the canvas layout
+    drawLayoutCanvas();
+}
+
+function drawLayoutCanvas() {
+    const canvas = document.getElementById('layout-canvas');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Load layout data
+    fetch('/layout-data')
+        .then(response => response.json())
+        .then(data => {
+            // Update device count
+            const deviceCountSpan = document.getElementById('device-count');
+            if (deviceCountSpan) {
+                deviceCountSpan.textContent = data.screens.length;
+            }
+            
+            if (data.screens.length === 0) {
+                // No screens, show placeholder
+                canvas.width = 400;
+                canvas.height = 300;
+                ctx.fillStyle = '#f8f9fa';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#6c757d';
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('No devices configured', canvas.width/2, canvas.height/2);
+                return;
+            }
+            
+            // Calculate canvas dimensions based on screen layout
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            data.screens.forEach(screen => {
+                minX = Math.min(minX, screen.x);
+                minY = Math.min(minY, screen.y);
+                maxX = Math.max(maxX, screen.x + screen.width);
+                maxY = Math.max(maxY, screen.y + screen.height);
+            });
+            
+            const layoutWidth = maxX - minX;
+            const layoutHeight = maxY - minY;
+            const padding = 40;
+            
+            // Scale to fit canvas nicely
+            const maxCanvasWidth = 800;
+            const maxCanvasHeight = 600;
+            const scaleX = (maxCanvasWidth - padding * 2) / layoutWidth;
+            const scaleY = (maxCanvasHeight - padding * 2) / layoutHeight;
+            const scale = Math.min(scaleX, scaleY, 1); // Don't scale up
+            
+            canvas.width = layoutWidth * scale + padding * 2;
+            canvas.height = layoutHeight * scale + padding * 2;
+            
+            // Draw background image if available
+            if (data.current_image && data.image_size) {
+                const img = new Image();
+                img.onload = function() {
+                    // Calculate image position and size to fit in layout
+                    const imgScale = Math.min(
+                        (layoutWidth * scale) / data.image_size.width,
+                        (layoutHeight * scale) / data.image_size.height
+                    );
+                    const imgWidth = data.image_size.width * imgScale;
+                    const imgHeight = data.image_size.height * imgScale;
+                    const imgX = (canvas.width - imgWidth) / 2;
+                    const imgY = (canvas.height - imgHeight) / 2;
+                    
+                    // Draw image with low opacity
+                    ctx.globalAlpha = 0.3;
+                    ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight);
+                    ctx.globalAlpha = 1.0;
+                    
+                    // Draw screens on top
+                    drawScreens(ctx, data.screens, minX, minY, scale, padding);
+                };
+                img.src = data.current_image;
+            } else {
+                // No image, just draw screens
+                drawScreens(ctx, data.screens, minX, minY, scale, padding);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading layout data:', error);
+            canvas.width = 400;
+            canvas.height = 300;
+            ctx.fillStyle = '#f8f9fa';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#dc3545';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Error loading layout', canvas.width/2, canvas.height/2);
+        });
+}
+
+function drawScreens(ctx, screens, offsetX, offsetY, scale, padding) {
+    screens.forEach(screen => {
+        const x = (screen.x - offsetX) * scale + padding;
+        const y = (screen.y - offsetY) * scale + padding;
+        const width = screen.width * scale;
+        const height = screen.height * scale;
+        
+        // Draw screen rectangle with blue fill and border
+        ctx.fillStyle = 'rgba(13, 110, 253, 0.3)'; // Bootstrap primary with opacity
+        ctx.fillRect(x, y, width, height);
+        
+        ctx.strokeStyle = '#0d6efd';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, width, height);
+        
+        // Draw screen label
+        ctx.fillStyle = '#000';
+        ctx.font = `${Math.max(10, 12 * scale)}px Arial`;
+        ctx.textAlign = 'center';
+        
+        const centerX = x + width / 2;
+        const centerY = y + height / 2;
+        
+        // Draw hostname
+        ctx.fillText(screen.hostname, centerX, centerY - 5);
+        
+        // Draw screen type and rotation
+        ctx.font = `${Math.max(8, 10 * scale)}px Arial`;
+        ctx.fillStyle = '#666';
+        ctx.fillText(`${screen.screen_type}`, centerX, centerY + 8);
+        
+        if (screen.rotation !== 0) {
+            ctx.fillText(`${screen.rotation}°`, centerX, centerY + 20);
+        }
+    });
 }
 
 function clearAllScreens() {

@@ -4,14 +4,28 @@
 <div class="row">
     <div class="col-md-8">
         <div class="card">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0">Screen Layout</h5>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="restore-image">
+                        <i class="bi bi-arrow-clockwise"></i> Restore Last Image
+                    </button>
+                    <button type="button" class="btn btn-outline-warning btn-sm" id="clear-screens">
+                        Clear All Screens
+                    </button>
+                </div>
             </div>
             <div class="card-body">
                 <div class="text-center">
-                    <img id="layout-image" src="{{ url_for('layout') }}" class="img-fluid border" alt="Device Layout">
+                    <canvas id="layout-canvas" class="border" style="max-width: 100%; height: auto;"></canvas>
                     <div class="mt-2">
-                        <small class="text-muted">Current layout with {{ device_count }} device(s)</small>
+                        <small class="text-muted">Current layout with <span id="device-count">{{ device_count }}</span> device(s)</small>
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            <span class="badge bg-primary me-1">Blue</span> = Screen areas
+                            <span class="badge bg-success me-1">Green</span> = Image coverage
+                        </small>
                     </div>
                 </div>
             </div>
@@ -110,17 +124,11 @@
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
-                    <button type="button" class="btn btn-outline-primary" id="restore-image">
-                        <i class="bi bi-arrow-clockwise"></i> Restore Last Image
-                    </button>
                     <button type="button" class="btn btn-outline-secondary" id="refresh-layout">
                         Refresh Layout
                     </button>
                     <button type="button" class="btn btn-outline-info" id="refresh-devices">
                         Refresh Device Info
-                    </button>
-                    <button type="button" class="btn btn-outline-warning" id="clear-screens">
-                        Clear All Screens
                     </button>
                 </div>
             </div>
