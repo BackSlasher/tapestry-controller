@@ -132,8 +132,8 @@ def save_last_image(image):
     for device in controller.config.devices:
         start = Point(x=device.coordinates.x, y=device.coordinates.y)
         dimensions = Dimensions(
-            width=device.screen_type.total_dimensions().width,
-            height=device.screen_type.total_dimensions().height,
+            width=device.screen_type.active_area.width,
+            height=device.screen_type.active_area.height,
         )
         device_rectangles[device] = Rectangle(
             start=start,
