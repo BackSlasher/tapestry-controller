@@ -294,10 +294,10 @@ def generate_updated_config(original_config: Config, positions: Dict[str, Dict])
             'host': ip,
             'screen_type': pos_data['screen_type'],
             'coordinates': {
-                'x': pos_data['x'],
-                'y': pos_data['y']
+                'x': int(pos_data['x']),
+                'y': int(pos_data['y'])
             },
-            'rotation': pos_data['rotation']
+            'rotation': int(pos_data['rotation'])
         }
         devices.append(device_config)
     
@@ -311,14 +311,14 @@ def generate_updated_config(original_config: Config, positions: Dict[str, Dict])
         for name, screen_type in original_config.screen_types.items():
             screen_types[name] = {
                 'active_area': {
-                    'width': screen_type.active_area.width,
-                    'height': screen_type.active_area.height
+                    'width': int(screen_type.active_area.width),
+                    'height': int(screen_type.active_area.height)
                 },
                 'bezel': {
-                    'top': screen_type.bezel.top,
-                    'bottom': screen_type.bezel.bottom,
-                    'left': screen_type.bezel.left,
-                    'right': screen_type.bezel.right
+                    'top': int(screen_type.bezel.top),
+                    'bottom': int(screen_type.bezel.bottom),
+                    'left': int(screen_type.bezel.left),
+                    'right': int(screen_type.bezel.right)
                 }
             }
         config['screen_types'] = screen_types

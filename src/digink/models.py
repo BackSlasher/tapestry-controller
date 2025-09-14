@@ -245,8 +245,8 @@ def load_config(devices_file):
             host=d['host'],
             screen_type=SCREEN_TYPES[screen_type_name],
             coordinates=Coordinates(
-                x=d['coordinates']['x'],
-                y=d['coordinates']['y'],
+                x=int(d['coordinates']['x']),
+                y=int(d['coordinates']['y']),
             ),
             rotation=d.get('rotation', 0)  # default to 0 if not specified
         ))

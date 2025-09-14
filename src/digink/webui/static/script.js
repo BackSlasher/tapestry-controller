@@ -218,15 +218,12 @@ function drawLayoutCanvas() {
             if (data.current_image && data.image_size) {
                 const img = new Image();
                 img.onload = function() {
-                    // Calculate image position and size to fit in layout
-                    const imgScale = Math.min(
-                        (layoutWidth * scale) / data.image_size.width,
-                        (layoutHeight * scale) / data.image_size.height
-                    );
-                    const imgWidth = data.image_size.width * imgScale;
-                    const imgHeight = data.image_size.height * imgScale;
-                    const imgX = (canvas.width - imgWidth) / 2;
-                    const imgY = (canvas.height - imgHeight) / 2;
+                    // The image should cover the entire layout area since it's the refit image
+                    // that matches the screen layout bounds
+                    const imgX = padding;
+                    const imgY = padding;
+                    const imgWidth = layoutWidth * scale;
+                    const imgHeight = layoutHeight * scale;
                     
                     // Draw image with low opacity
                     ctx.globalAlpha = 0.3;
@@ -270,7 +267,7 @@ function drawScreens(ctx, screens, offsetX, offsetY, scale, padding) {
         ctx.lineWidth = 2;
         ctx.strokeRect(x, y, width, height);
         
-        // Draw screen label
+        // Draw screen label (IP address) and rotation arrow
         ctx.fillStyle = '#000';
         ctx.font = `${Math.max(10, 12 * scale)}px Arial`;
         ctx.textAlign = 'center';
@@ -278,17 +275,16 @@ function drawScreens(ctx, screens, offsetX, offsetY, scale, padding) {
         const centerX = x + width / 2;
         const centerY = y + height / 2;
         
-        // Draw hostname
-        ctx.fillText(screen.hostname, centerX, centerY - 5);
+        // Draw hostname (IP address)
+        ctx.fillText(screen.hostname, centerX, centerY + 8);
         
-        // Draw screen type and rotation
-        ctx.font = `${Math.max(8, 10 * scale)}px Arial`;
-        ctx.fillStyle = '#666';
-        ctx.fillText(`${screen.screen_type}`, centerX, centerY + 8);
-        
-        if (screen.rotation !== 0) {
-            ctx.fillText(`${screen.rotation}°`, centerX, centerY + 20);
-        }
+        // Draw rotation arrow pointing to top of screen
+        ctx.save();
+        ctx.translate(centerX, centerY - 15);
+        ctx.rotate((screen.rotation * Math.PI) / 180);
+        ctx.font = `${Math.max(12, 14 * scale)}px Arial`;
+        ctx.fillText('⇑', 0, 0);
+        ctx.restore();
     });
 }
 
