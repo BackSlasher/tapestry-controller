@@ -191,7 +191,7 @@ def detect_qr_positions(pil_image: Image.Image) -> List[QRPositionData]:
 # Old corner dot detection function removed - now using calculated corners from QR JSON data
 
 
-def calculate_physical_positions_from_qr(position_data: List[QRPositionData], config: Config, pil_image: Image.Image = None) -> Dict[str, Dict]:
+def calculate_physical_positions_from_qr(position_data: List[QRPositionData], config: Config) -> Dict[str, Dict]:
     """Calculate physical screen positions using detected corner lines."""
     if not position_data:
         return {}
@@ -278,9 +278,9 @@ def calculate_physical_positions_from_qr(position_data: List[QRPositionData], co
 
 
 def calculate_physical_positions(position_data: List[QRPositionData], config: Config, pil_image: Image.Image = None) -> Dict[str, Dict]:
-    """Calculate physical screen positions using cv2 QR detection only."""
-    # Use the new cv2-only implementation with corner detection
-    return calculate_physical_positions_from_qr(position_data, config, pil_image)
+    """Calculate physical screen positions using cv2 QR detection and JSON data."""
+    # Use the new JSON-based implementation (pil_image parameter kept for backward compatibility but unused)
+    return calculate_physical_positions_from_qr(position_data, config)
 
 
 def generate_updated_config(original_config: Config, positions: Dict[str, Dict]) -> Dict:

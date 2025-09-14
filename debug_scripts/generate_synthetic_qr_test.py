@@ -80,7 +80,7 @@ def create_synthetic_test_image():
     
     return img
 
-def test_cv2_detection(img):
+def run_cv2_detection(img):
     """Test OpenCV QR detection on the synthetic image."""
     print("\n=== Testing cv2.QRCodeDetector ===")
     
