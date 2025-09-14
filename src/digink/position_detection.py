@@ -2,10 +2,11 @@
 Image parsing and position detection for QR-based positioning system.
 """
 
+import json
+import math
 import numpy as np
 from PIL import Image
 import cv2
-import math
 from typing import Dict, List, Tuple, NamedTuple, Optional
 from .models import Device, Config
 from .screen_types import SCREEN_TYPES
@@ -18,8 +19,11 @@ class QRPositionData(NamedTuple):
     center: Tuple[float, float]  # (x, y) in image coordinates
     rotation: float  # degrees
     corners: List[Tuple[float, float]]  # QR code corner positions
-    reference_size: float  # size of reference element in pixels
-    screen_corners: Optional[List[Tuple[float, float]]]  # Not used in cv2-only approach
+    bounding_box: Tuple[float, float, float, float]  # (min_x, min_y, max_x, max_y) of QR code
+    screen_width_px: int  # actual screen width from JSON data
+    screen_height_px: int  # actual screen height from JSON data
+    qr_size_px: int  # expected QR size from JSON data
+    screen_corners: List[Tuple[float, float]]  # calculated screen corners in image
 
 
 def calculate_qr_rotation_from_corners(corners: List[Tuple[float, float]]) -> float:
@@ -50,72 +54,113 @@ def calculate_qr_rotation_from_corners(corners: List[Tuple[float, float]]) -> fl
 
 
 def detect_qr_positions(pil_image: Image.Image) -> List[QRPositionData]:
-    """Detect QR codes using OpenCV QRCodeDetector with single detection call."""
-    import numpy as np
+    """
+    1. Detect all QR codes in the image
+    2. Filter out non-DIGINK ones  
+    3. Get rotation from QR code
+    4. Calculate screen corners from QR bounding box and JSON data
+    """
     
     # Convert PIL image to OpenCV format
     if pil_image.mode != 'RGB':
         pil_image = pil_image.convert('RGB')
     
     np_image = np.array(pil_image)
-    img = cv2.cvtColor(np_image, cv2.COLOR_RGB2GRAY)
+    cv_image = cv2.cvtColor(np_image, cv2.COLOR_RGB2GRAY)
     
-    # Single call to OpenCV QRCodeDetector
+    # Step 1: Detect all QR codes
     qcd = cv2.QRCodeDetector()
-    retval, decoded_info, points, straight_qrcode = qcd.detectAndDecodeMulti(img)
+    retval, decoded_info, points, straight_qrcode = qcd.detectAndDecodeMulti(cv_image)
     
     if not retval or not decoded_info:
-        print("No QR codes detected by OpenCV")
+        print("No QR codes detected by cv2")
         return []
     
-    print(f"OpenCV detected {len(decoded_info)} QR codes")
+    print(f"cv2 detected {len(decoded_info)} QR codes")
     
     position_data = []
     
-    # Iterate over the first dimension of points to get every QR code
+    # Process each detected QR code
     for i in range(len(decoded_info)):
         try:
+            # Step 2: Filter out non-DIGINK ones
             data = decoded_info[i]
             if not data or not data.startswith('DIGINK:'):
-                print(f"QR {i}: Invalid data format: {data}")
+                print(f"QR {i}: Not a DIGINK QR code: {data}")
                 continue
-                
-            # Parse QR data: DIGINK:IP:SCREEN_TYPE
-            parts = data.split(':')
-            if len(parts) != 3:
-                print(f"QR {i}: Invalid data parts: {parts}")
+            
+            # Parse DIGINK JSON data
+            json_str = data[7:]  # Remove "DIGINK:" prefix
+            try:
+                qr_json = json.loads(json_str)
+            except json.JSONDecodeError as e:
+                print(f"QR {i}: Invalid JSON data: {e}")
                 continue
-                
-            ip = parts[1]
-            screen_type = parts[2]
+            
+            # Extract data from JSON
+            ip = qr_json['ip']
+            screen_type = qr_json['screen_type'] 
+            screen_width_px = qr_json['screen_width_px']
+            screen_height_px = qr_json['screen_height_px']
+            qr_size_px = qr_json['qr_size_px']
             
             # Get corner positions for this QR code
-            # OpenCV returns corners in order: top-left, top-right, bottom-right, bottom-left
             qr_corners = points[i].reshape(-1, 2)
-            corners = [(float(x), float(y)) for x, y in qr_corners]
-            
-            if len(corners) < 4:
-                print(f"QR {i} ({ip}): Insufficient corners: {len(corners)}")
+            if len(qr_corners) < 4:
+                print(f"QR {i} ({ip}): Insufficient corners: {len(qr_corners)}")
                 continue
+            
+            corners = [(float(x), float(y)) for x, y in qr_corners]
             
             # Calculate center
             center_x = float(np.mean(qr_corners[:, 0]))
             center_y = float(np.mean(qr_corners[:, 1]))
             center = (center_x, center_y)
             
-            # Calculate rotation from corner positions
+            # Step 3: Get rotation from QR code
             rotation = calculate_qr_rotation_from_corners(corners)
             
-            # Calculate QR code dimensions for reference
-            dx = corners[1][0] - corners[0][0]  # top edge
-            dy = corners[1][1] - corners[0][1]
-            qr_width_px = math.sqrt(dx*dx + dy*dy)
+            # Map raw rotation to standard orientations (0°, 90°, 180°, 270°)
+            normalized = rotation % 360
+            if normalized < 45 or normalized >= 315:
+                rotation = 0
+            elif 45 <= normalized < 135:
+                rotation = 90
+            elif 135 <= normalized < 225:
+                rotation = 180
+            else:  # 225 <= normalized < 315
+                rotation = 270
             
-            dx = corners[3][0] - corners[0][0]  # left edge
-            dy = corners[3][1] - corners[0][1]
-            qr_height_px = math.sqrt(dx*dx + dy*dy)
+            # Step 4: Calculate screen corners from QR bounding box and JSON data
             
-            reference_size = (qr_width_px + qr_height_px) / 2
+            # Step 4.1: Measure bounding box of QR code
+            min_x = min(c[0] for c in corners)
+            max_x = max(c[0] for c in corners)
+            min_y = min(c[1] for c in corners)
+            max_y = max(c[1] for c in corners)
+            bounding_box = (min_x, min_y, max_x, max_y)
+            
+            # Measure actual QR size in image
+            qr_width_img = max_x - min_x
+            qr_height_img = max_y - min_y
+            qr_size_img = (qr_width_img + qr_height_img) / 2
+            
+            # Step 4.2: Get qr_size_px from QR code (already extracted from JSON)
+            # Step 4.3: Calculate pixel ratio
+            pixel_ratio = qr_size_img / qr_size_px
+            print(f"QR {i} ({ip}): QR size in image: {qr_size_img:.1f}px, expected: {qr_size_px}px, ratio: {pixel_ratio:.4f}")
+            
+            # Step 4.4: Calculate screen corners using ratio and screen dimensions
+            screen_width_img = screen_width_px * pixel_ratio  
+            screen_height_img = screen_height_px * pixel_ratio
+            
+            # Calculate screen corners relative to QR center
+            screen_corners = [
+                (center_x - screen_width_img/2, center_y - screen_height_img/2),  # top-left
+                (center_x + screen_width_img/2, center_y - screen_height_img/2),  # top-right  
+                (center_x + screen_width_img/2, center_y + screen_height_img/2),  # bottom-right
+                (center_x - screen_width_img/2, center_y + screen_height_img/2)   # bottom-left
+            ]
             
             # Create position data
             qr_data = QRPositionData(
@@ -124,13 +169,17 @@ def detect_qr_positions(pil_image: Image.Image) -> List[QRPositionData]:
                 center=center,
                 rotation=rotation,
                 corners=corners,
-                reference_size=reference_size,
-                screen_corners=None  # Not used in cv2-only approach
+                bounding_box=bounding_box,
+                screen_width_px=screen_width_px,
+                screen_height_px=screen_height_px,
+                qr_size_px=qr_size_px,
+                screen_corners=screen_corners
             )
             
             position_data.append(qr_data)
             
-            print(f"QR {i}: {ip} ({screen_type}) at ({center_x:.1f},{center_y:.1f}), rotation: {rotation:.1f}°")
+            print(f"QR {i}: {ip} ({screen_type}) at ({center_x:.1f},{center_y:.1f}), rotation: {rotation}°")
+            print(f"  Screen: {screen_width_px}x{screen_height_px}px → {screen_width_img:.1f}x{screen_height_img:.1f}px in image")
             
         except Exception as e:
             print(f"Error processing QR code {i}: {e}")
@@ -139,143 +188,99 @@ def detect_qr_positions(pil_image: Image.Image) -> List[QRPositionData]:
     return position_data
 
 
-def calculate_physical_positions_from_qr(position_data: List[QRPositionData], config: Config) -> Dict[str, Dict]:
-    """Calculate physical screen positions directly from QR code corner information."""
+# Old corner dot detection function removed - now using calculated corners from QR JSON data
+
+
+def calculate_physical_positions_from_qr(position_data: List[QRPositionData], config: Config, pil_image: Image.Image = None) -> Dict[str, Dict]:
+    """Calculate physical screen positions using detected corner lines."""
     if not position_data:
         return {}
     
-    print(f"\n=== QR-Based Direct Position Calculation for {len(position_data)} screens ===")
+    print(f"\n=== Corner-Based Position Calculation for {len(position_data)} screens ===")
     
-    screen_positions = []
+    # For each QR code, try to detect screen corners from diagonal lines
+    screen_data = []
     
     for data in position_data:
-        if data.screen_type not in SCREEN_TYPES:
-            print(f"Warning: Unknown screen type {data.screen_type} for {data.hostname}")
-            continue
-            
-        screen_type = SCREEN_TYPES[data.screen_type]
+        print(f"Analyzing screen boundaries for {data.hostname}...")
         
-        # Get QR corner positions (OpenCV order: top-left, top-right, bottom-right, bottom-left)
-        qr_corners = data.corners
-        if len(qr_corners) < 4:
-            print(f"Warning: Insufficient corners for {data.hostname}")
-            continue
-        
-        # Calculate QR dimensions in pixels from corners
-        qr_tl = qr_corners[0]  # top-left
-        qr_tr = qr_corners[1]  # top-right
-        qr_br = qr_corners[2]  # bottom-right  
-        qr_bl = qr_corners[3]  # bottom-left
-        
-        # QR width and height in pixels
-        qr_width_px = math.sqrt((qr_tr[0] - qr_tl[0])**2 + (qr_tr[1] - qr_tl[1])**2)
-        qr_height_px = math.sqrt((qr_bl[0] - qr_tl[0])**2 + (qr_bl[1] - qr_tl[1])**2)
-        
-        # Assume QR code takes up a specific portion of the screen (e.g., 75%)
-        # and is centered on the screen
-        qr_screen_ratio = 0.75
-        screen_width_px = qr_width_px / qr_screen_ratio
-        screen_height_px = qr_height_px / qr_screen_ratio
-        
-        # Calculate screen corners from QR center and rotation
         qr_center = data.center
-        rotation_rad = math.radians(data.rotation)
+        detected_corners = None
         
-        # Screen half-dimensions
-        half_width = screen_width_px / 2
-        half_height = screen_height_px / 2
+        # Use the calculated screen corners from QR JSON data
+        screen_corner_positions = data.screen_corners
         
-        # Calculate screen corners relative to center, then rotate
-        cos_r = math.cos(rotation_rad)
-        sin_r = math.sin(rotation_rad)
+        if screen_corner_positions and len(screen_corner_positions) >= 4:
+            print(f"  Using calculated screen corners from QR data")
+            
+            # Build screen box from calculated corners
+            min_x = min(c[0] for c in screen_corner_positions)
+            max_x = max(c[0] for c in screen_corner_positions) 
+            min_y = min(c[1] for c in screen_corner_positions)
+            max_y = max(c[1] for c in screen_corner_positions)
+            
+            screen_width_px = max_x - min_x
+            screen_height_px = max_y - min_y
+            screen_top_left = (min_x, min_y)
+            
+            print(f"  Screen box: ({min_x:.0f},{min_y:.0f}) to ({max_x:.0f},{max_y:.0f}), size: {screen_width_px:.0f}x{screen_height_px:.0f}px")
+        else:
+            print(f"  No screen corners calculated for {data.hostname} - skipping")
+            continue
         
-        # Screen corners in local coordinates (relative to center)
-        local_corners = [
-            (-half_width, -half_height),  # top-left
-            (half_width, -half_height),   # top-right  
-            (half_width, half_height),    # bottom-right
-            (-half_width, half_height)    # bottom-left
-        ]
-        
-        # Rotate and translate to global coordinates
-        screen_corners_px = []
-        for lx, ly in local_corners:
-            # Rotate
-            rx = lx * cos_r - ly * sin_r
-            ry = lx * sin_r + ly * cos_r
-            # Translate
-            gx = rx + qr_center[0]
-            gy = ry + qr_center[1]
-            screen_corners_px.append((gx, gy))
-        
-        # Calculate scale factor from screen physical dimensions
-        screen_width_mm = screen_type.active_area.width
-        screen_height_mm = screen_type.active_area.height
-        
-        scale_x = screen_width_mm / screen_width_px
-        scale_y = screen_height_mm / screen_height_px
-        scale_factor = (scale_x + scale_y) / 2
-        
-        # Screen top-left corner in mm
-        screen_tl_px = screen_corners_px[0]  # top-left corner
-        screen_tl_mm = (screen_tl_px[0] * scale_factor, screen_tl_px[1] * scale_factor)
-        
-        print(f"Screen {data.hostname} ({data.screen_type}):")
-        print(f"  QR: {qr_width_px:.0f}x{qr_height_px:.0f}px at ({qr_center[0]:.0f},{qr_center[1]:.0f})")
-        print(f"  Screen: {screen_width_px:.0f}x{screen_height_px:.0f}px → {screen_width_mm}x{screen_height_mm}mm")
-        print(f"  Top-left: ({screen_tl_px[0]:.0f},{screen_tl_px[1]:.0f})px → ({screen_tl_mm[0]:.0f},{screen_tl_mm[1]:.0f})mm")
-        print(f"  Scale: {scale_factor:.4f} mm/px")
-        
-        screen_positions.append({
+        screen_data.append({
             'hostname': data.hostname,
             'screen_type': data.screen_type,
             'rotation': data.rotation,
-            'screen_tl_mm': screen_tl_mm,
-            'scale_factor': scale_factor
+            'qr_center': qr_center,
+            'screen_top_left': screen_top_left,
+            'screen_width_px': screen_width_px,
+            'screen_height_px': screen_height_px
         })
     
-    # Calculate average scale for consistency
-    if screen_positions:
-        avg_scale = sum(pos['scale_factor'] for pos in screen_positions) / len(screen_positions)
-        print(f"Average scale: {avg_scale:.4f} mm/pixel")
-    
-    # Find bounding box and normalize coordinates
-    if not screen_positions:
+    if not screen_data:
         return {}
     
-    min_x = min(pos['screen_tl_mm'][0] for pos in screen_positions)
-    min_y = min(pos['screen_tl_mm'][1] for pos in screen_positions)
-    max_x = max(pos['screen_tl_mm'][0] + SCREEN_TYPES[pos['screen_type']].active_area.width 
-                for pos in screen_positions)
-    max_y = max(pos['screen_tl_mm'][1] + SCREEN_TYPES[pos['screen_type']].active_area.height 
-                for pos in screen_positions)
+    # Step 2.6: Understand positioning and rotation using the detected boxes
+    # Convert to layout coordinates using a reasonable scale
+    avg_screen_size = sum(s['screen_width_px'] for s in screen_data) / len(screen_data)
+    typical_screen_size_mm = 150  # Assume average screen is ~150mm wide
+    scale_factor = typical_screen_size_mm / avg_screen_size
     
-    print(f"Screen bounds: X=[{min_x:.0f}, {max_x:.0f}], Y=[{min_y:.0f}, {max_y:.0f}]")
+    print(f"Average screen size: {avg_screen_size:.0f}px → {typical_screen_size_mm}mm, scale: {scale_factor:.4f} mm/px")
     
-    # Create final position dictionary with normalized coordinates
+    # Step 3.1: Translate so that there are no negative coordinates
+    min_x = min(s['screen_top_left'][0] for s in screen_data)
+    min_y = min(s['screen_top_left'][1] for s in screen_data)
+    
     positions = {}
-    for pos in screen_positions:
-        # Normalize to start from (20, 20) with margin
-        margin = 20
-        final_x = pos['screen_tl_mm'][0] - min_x + margin
-        final_y = pos['screen_tl_mm'][1] - min_y + margin
+    margin = 20  # Add small margin around layout
+    
+    for screen in screen_data:
+        # Translate coordinates to remove negatives, then scale and add margin
+        translated_x = screen['screen_top_left'][0] - min_x
+        translated_y = screen['screen_top_left'][1] - min_y
         
-        positions[pos['hostname']] = {
-            'x': final_x,
-            'y': final_y,
-            'rotation': pos['rotation'],
-            'screen_type': pos['screen_type']
+        layout_x = translated_x * scale_factor + margin
+        layout_y = translated_y * scale_factor + margin
+        
+        positions[screen['hostname']] = {
+            'x': layout_x,
+            'y': layout_y,
+            'rotation': screen['rotation'],
+            'screen_type': screen['screen_type'],
+            'scale_factor': scale_factor
         }
         
-        print(f"  FINAL {pos['hostname']}: ({final_x:.0f}, {final_y:.0f}) - direct QR calculation")
+        print(f"  FINAL {screen['hostname']}: ({layout_x:.0f}, {layout_y:.0f}) - from detected screen box")
     
     return positions
 
 
-def calculate_physical_positions(position_data: List[QRPositionData], config: Config) -> Dict[str, Dict]:
+def calculate_physical_positions(position_data: List[QRPositionData], config: Config, pil_image: Image.Image = None) -> Dict[str, Dict]:
     """Calculate physical screen positions using cv2 QR detection only."""
-    # Use the new cv2-only implementation
-    return calculate_physical_positions_from_qr(position_data, config)
+    # Use the new cv2-only implementation with corner detection
+    return calculate_physical_positions_from_qr(position_data, config, pil_image)
 
 
 def generate_updated_config(original_config: Config, positions: Dict[str, Dict]) -> Dict:

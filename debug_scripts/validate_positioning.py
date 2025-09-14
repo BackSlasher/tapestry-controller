@@ -142,8 +142,8 @@ def validate_positioning(input_photo_path, output_dir=None):
     
     # Calculate physical positions
     print("\n--- Position Calculation ---")
-    config = Config(devices=[], screen_types={})  # Empty config for positioning
-    positions = calculate_physical_positions(position_data, config)
+    config = Config(devices=[])  # Empty config for positioning
+    positions = calculate_physical_positions(position_data, config, image)
     
     if not positions:
         print("❌ Position calculation failed!")

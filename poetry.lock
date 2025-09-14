@@ -805,7 +805,7 @@ version = "0.1.9"
 description = "Read one-dimensional barcodes and QR codes from Python 2 and 3."
 optional = false
 python-versions = "*"
-groups = ["main", "dev"]
+groups = ["main"]
 files = [
     {file = "pyzbar-0.1.9-py2.py3-none-any.whl", hash = "sha256:4559628b8192feb25766d954b36a3753baaf5c97c03135aec7e4a026036b475d"},
     {file = "pyzbar-0.1.9-py2.py3-none-win32.whl", hash = "sha256:8f4c5264c9c7c6b9f20d01efc52a4eba1ded47d9ba857a94130afe33703eb518"},
@@ -913,4 +913,4 @@ dev = ["black", "flake8", "mypy", "pytest"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13,<4.0"
-content-hash = "ae391566739aaa092a3520ae7afed2a09c36a60dacb616ae5fc2fff2eb19d022"
+content-hash = "6cfeeed21b83ef3c9cdae30ab8911575320cac9bed5c604f41e8a59a9f7becbd"
