@@ -283,7 +283,7 @@ function drawScreens(ctx, screens, offsetX, offsetY, scale, padding) {
         ctx.translate(centerX, centerY - 15);
         ctx.rotate((screen.rotation * Math.PI) / 180);
         ctx.font = `${Math.max(12, 14 * scale)}px Arial`;
-        ctx.fillText('⇑', 0, 0);
+        ctx.fillText('🔼', 0, 0);
         ctx.restore();
     });
 }
