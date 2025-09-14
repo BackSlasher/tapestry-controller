@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Image preview functionality
     const imageInput = document.getElementById('image-input');
     const imagePreview = document.getElementById('image-preview');
-    const previewImg = document.getElementById('preview-img');
+    const previewCanvas = document.getElementById('preview-canvas');
     
     if (imageInput) {
         imageInput.addEventListener('change', function(e) {
@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (file) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    previewImg.src = e.target.result;
+                    drawPreviewCanvas(e.target.result);
                     imagePreview.style.display = 'block';
                 };
                 reader.readAsDataURL(file);
@@ -290,6 +290,89 @@ function drawScreens(ctx, screens, offsetX, offsetY, scale, padding) {
             ctx.fillText(`${screen.rotation}°`, centerX, centerY + 20);
         }
     });
+}
+
+function drawPreviewCanvas(imageSrc) {
+    const canvas = document.getElementById('preview-canvas');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    
+    img.onload = function() {
+        // Set canvas size to maintain aspect ratio with max height of 200px
+        const maxHeight = 200;
+        const aspectRatio = img.width / img.height;
+        
+        let canvasWidth, canvasHeight;
+        if (img.height > maxHeight) {
+            canvasHeight = maxHeight;
+            canvasWidth = maxHeight * aspectRatio;
+        } else {
+            canvasWidth = img.width;
+            canvasHeight = img.height;
+        }
+        
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+        
+        // Draw the preview image
+        ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+        
+        // Fetch layout data and draw screen overlays
+        fetch('/layout-data')
+            .then(response => response.json())
+            .then(data => {
+                if (data.screens && data.screens.length > 0) {
+                    // Calculate scale and offsets to match the image
+                    const screens = data.screens;
+                    
+                    // Find bounding box of all screens
+                    const minX = Math.min(...screens.map(s => s.x));
+                    const minY = Math.min(...screens.map(s => s.y));
+                    const maxX = Math.max(...screens.map(s => s.x + s.width));
+                    const maxY = Math.max(...screens.map(s => s.y + s.height));
+                    
+                    const layoutWidth = maxX - minX;
+                    const layoutHeight = maxY - minY;
+                    
+                    // Calculate scale to fit preview canvas
+                    const scaleX = canvasWidth / layoutWidth;
+                    const scaleY = canvasHeight / layoutHeight;
+                    const scale = Math.min(scaleX, scaleY);
+                    
+                    // Calculate offset to center the layout
+                    const offsetX = (canvasWidth - layoutWidth * scale) / 2;
+                    const offsetY = (canvasHeight - layoutHeight * scale) / 2;
+                    
+                    // Draw screen rectangles
+                    screens.forEach(screen => {
+                        const x = (screen.x - minX) * scale + offsetX;
+                        const y = (screen.y - minY) * scale + offsetY;
+                        const width = screen.width * scale;
+                        const height = screen.height * scale;
+                        
+                        // Draw screen rectangle with blue border
+                        ctx.strokeStyle = '#0d6efd';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(x, y, width, height);
+                        
+                        // Draw screen rectangle with semi-transparent blue fill
+                        ctx.fillStyle = 'rgba(13, 110, 253, 0.2)';
+                        ctx.fillRect(x, y, width, height);
+                    });
+                }
+            })
+            .catch(error => {
+                console.log('Could not load layout data for preview:', error);
+                // Preview will just show the image without screen overlays
+            });
+    };
+    
+    img.src = imageSrc;
 }
 
 function clearAllScreens() {
