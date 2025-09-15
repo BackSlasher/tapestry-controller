@@ -225,18 +225,36 @@ function drawLayoutCanvas() {
                     const imgWidth = layoutWidth * scale;
                     const imgHeight = layoutHeight * scale;
                     
-                    // Draw image with low opacity
-                    ctx.globalAlpha = 0.3;
+                    // Draw image at half opacity everywhere
+                    ctx.globalAlpha = 0.5;
                     ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight);
-                    ctx.globalAlpha = 1.0;
                     
-                    // Draw screens on top
-                    drawScreens(ctx, data.screens, minX, minY, scale, padding);
+                    // Draw image at full opacity only in screen areas
+                    ctx.globalAlpha = 1.0;
+                    data.screens.forEach(screen => {
+                        const x = (screen.x - minX) * scale + padding;
+                        const y = (screen.y - minY) * scale + padding;
+                        const width = screen.width * scale;
+                        const height = screen.height * scale;
+                        
+                        // Create a clipping region for this screen
+                        ctx.save();
+                        ctx.rect(x, y, width, height);
+                        ctx.clip();
+                        
+                        // Draw the full-opacity image within the clipped region
+                        ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight);
+                        
+                        ctx.restore();
+                    });
+                    
+                    // Draw screen borders, labels and arrows on top
+                    drawScreens(ctx, data.screens, minX, minY, scale, padding, true);
                 };
                 img.src = data.current_image;
             } else {
-                // No image, just draw screens
-                drawScreens(ctx, data.screens, minX, minY, scale, padding);
+                // No image, just draw screen borders and labels
+                drawScreens(ctx, data.screens, minX, minY, scale, padding, false);
             }
         })
         .catch(error => {
@@ -252,37 +270,46 @@ function drawLayoutCanvas() {
         });
 }
 
-function drawScreens(ctx, screens, offsetX, offsetY, scale, padding) {
+function drawScreens(ctx, screens, offsetX, offsetY, scale, padding, hasImage) {
     screens.forEach(screen => {
         const x = (screen.x - offsetX) * scale + padding;
         const y = (screen.y - offsetY) * scale + padding;
         const width = screen.width * scale;
         const height = screen.height * scale;
         
-        // Draw screen rectangle with blue fill and border
-        ctx.fillStyle = 'rgba(13, 110, 253, 0.3)'; // Bootstrap primary with opacity
-        ctx.fillRect(x, y, width, height);
-        
-        ctx.strokeStyle = '#0d6efd';
-        ctx.lineWidth = 2;
+        // Always draw black border around screen area
+        ctx.globalAlpha = 1.0;
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1;
         ctx.strokeRect(x, y, width, height);
-        
-        // Draw screen label (IP address) and rotation arrow
-        ctx.fillStyle = '#000';
-        ctx.font = `${Math.max(10, 12 * scale)}px Arial`;
-        ctx.textAlign = 'center';
         
         const centerX = x + width / 2;
         const centerY = y + height / 2;
         
-        // Draw hostname (IP address)
+        // Draw hostname (IP address) with white background for visibility
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.font = `${Math.max(10, 12 * scale)}px Arial`;
+        ctx.textAlign = 'center';
+        const textWidth = ctx.measureText(screen.hostname).width;
+        const textHeight = Math.max(10, 12 * scale);
+        ctx.fillRect(centerX - textWidth/2 - 4, centerY + 8 - textHeight, textWidth + 8, textHeight + 4);
+        
+        ctx.fillStyle = '#000';
         ctx.fillText(screen.hostname, centerX, centerY + 8);
         
-        // Draw rotation arrow pointing to top of screen
+        // Draw rotation arrow pointing to top of screen with white background
         ctx.save();
         ctx.translate(centerX, centerY - 15);
         ctx.rotate((screen.rotation * Math.PI) / 180);
+        
+        // Draw white circle background for arrow
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.max(8, 10 * scale), 0, 2 * Math.PI);
+        ctx.fill();
+        
         ctx.font = `${Math.max(12, 14 * scale)}px Arial`;
+        ctx.fillStyle = '#000';
         ctx.fillText('🔼', 0, 0);
         ctx.restore();
     });
