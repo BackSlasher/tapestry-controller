@@ -170,7 +170,7 @@ def index():
 @app.route('/flash')
 def flash_firmware():
     """Flash firmware page."""
-    return render_template('flash.html')
+    return render_template('flash.html', screen_types=SCREEN_TYPES)
 
 @app.route('/positioning')
 def positioning():

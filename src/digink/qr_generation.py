@@ -80,8 +80,6 @@ def generate_positioning_qr_image(ip: str, screen_type_name: str) -> Image.Image
     if screen_type_name not in SCREEN_TYPES:
         raise ValueError(f"Unknown screen type: {screen_type_name}")
     
-    screen_type = SCREEN_TYPES[screen_type_name]
-    
     # Get actual pixel dimensions from device
     response = requests.get(f"http://{ip}/", timeout=5)
     response.raise_for_status()

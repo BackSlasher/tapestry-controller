@@ -19,8 +19,9 @@
                             <label for="screen-type-select" class="form-label">Screen Type</label>
                             <select class="form-select" id="screen-type-select">
                                 <option value="">Select screen type...</option>
-                                <option value="ED060XC3">ED060XC3 (6.0" E-Paper Display)</option>
-                                <option value="ED097TC2">ED097TC2 (9.7" E-Paper Display)</option>
+                                {% for key, screen_type in screen_types.items() %}
+                                <option value="{{ key }}">{{ screen_type.name }} ({{ screen_type.description }}) - Connector {{ screen_type.connector }}</option>
+                                {% endfor %}
                             </select>
                         </div>
                         
