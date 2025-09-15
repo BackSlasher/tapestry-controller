@@ -131,9 +131,10 @@ def save_last_image(image):
     device_rectangles = {}
     for device in controller.config.devices:
         start = Point(x=device.coordinates.x, y=device.coordinates.y)
+        # Use detected dimensions from YAML
         dimensions = Dimensions(
-            width=device.screen_type.active_area_px.width,
-            height=device.screen_type.active_area_px.height,
+            width=device.detected_dimensions.width,
+            height=device.detected_dimensions.height,
         )
         device_rectangles[device] = Rectangle(
             start=start,
@@ -386,7 +387,7 @@ def positioning_layout_preview():
         detected_config = json.loads(request.args.get('detected_config'))
         
         # Create temporary config from detected positions
-        from ..models import Config, Device, Coordinates
+        from ..models import Config, Device, Coordinates, DetectedDimensions
         from ..geometry import Point, Dimensions, Rectangle
         import io
         
@@ -400,6 +401,10 @@ def positioning_layout_preview():
                     coordinates=Coordinates(
                         x=device_data['coordinates']['x'],
                         y=device_data['coordinates']['y']
+                    ),
+                    detected_dimensions=DetectedDimensions(
+                        width=device_data['detected_dimensions']['width'],
+                        height=device_data['detected_dimensions']['height']
                     ),
                     rotation=device_data.get('rotation', 0)
                 )
@@ -474,8 +479,8 @@ def layout_data():
                     'screen_type': device.screen_type.name if hasattr(device.screen_type, 'name') else str(device.screen_type),
                     'x': device.coordinates.x,
                     'y': device.coordinates.y,
-                    'width': device.screen_type.active_area_px.width,
-                    'height': device.screen_type.active_area_px.height,
+                    'width': device.detected_dimensions.width,
+                    'height': device.detected_dimensions.height,
                     'rotation': device.rotation
                 }
                 screens.append(screen_info)

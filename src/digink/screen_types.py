@@ -19,7 +19,6 @@ class FullDimensions(NamedTuple):
 
 class ScreenType(NamedTuple):
     active_area: AreaDimensions
-    active_area_px: AreaDimensions
     bezel: FullDimensions
 
 
@@ -36,10 +35,6 @@ ED060XC3 = ScreenType(
         height=90.58,
         width=122.37,
     ),
-    active_area_px = AreaDimensions(
-        height=768,
-        width=1024,
-    ),
     bezel=FullDimensions(
         left=0.2,
         right=1.4,
@@ -52,10 +47,6 @@ ED097TC2 = ScreenType(
     active_area=AreaDimensions(
         height=139.425,
         width=202.8,
-    ),
-    active_area_px = AreaDimensions(
-        height=825,
-        width=1200,
     ),
     # Approximated
     bezel=FullDimensions(

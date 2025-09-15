@@ -269,7 +269,9 @@ def calculate_physical_positions_from_qr(position_data: List[QRPositionData], co
             'y': layout_y,
             'rotation': screen['rotation'],
             'screen_type': screen['screen_type'],
-            'scale_factor': scale_factor
+            'scale_factor': scale_factor,
+            'detected_width': screen['screen_width_px'] * scale_factor,
+            'detected_height': screen['screen_height_px'] * scale_factor
         }
         
         print(f"  FINAL {screen['hostname']}: ({layout_x:.0f}, {layout_y:.0f}) - from detected screen box")
@@ -297,7 +299,11 @@ def generate_updated_config(original_config: Config, positions: Dict[str, Dict])
                 'x': int(pos_data['x']),
                 'y': int(pos_data['y'])
             },
-            'rotation': int(pos_data['rotation'])
+            'rotation': int(pos_data['rotation']),
+            'detected_dimensions': {
+                'width': int(pos_data['detected_width']),
+                'height': int(pos_data['detected_height'])
+            }
         }
         devices.append(device_config)
     

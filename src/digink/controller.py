@@ -14,9 +14,10 @@ class DiginkController:
         device_rectangles = {}
         for device in self.config.devices:
             start = Point(x=device.coordinates.x, y=device.coordinates.y)
+            # Use detected dimensions from YAML
             dimensions = Dimensions(
-                width=device.screen_type.active_area_px.width,
-                height=device.screen_type.active_area_px.height,
+                width=device.detected_dimensions.width,
+                height=device.detected_dimensions.height,
             )
             device_rectangles[device] = Rectangle(
                 start=start,

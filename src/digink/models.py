@@ -13,10 +13,16 @@ class Coordinates(NamedTuple):
     y: int
 
 
+class DetectedDimensions(NamedTuple):
+    width: int
+    height: int
+
+
 class Device(NamedTuple):
     host: str
     screen_type: ScreenType
     coordinates: Coordinates
+    detected_dimensions: DetectedDimensions  # actual detected pixel dimensions
     rotation: int = 0  # rotation in degrees
 
 
@@ -241,6 +247,12 @@ def load_config(devices_file):
         if screen_type_name not in SCREEN_TYPES:
             raise ValueError(f"Unknown screen type: {screen_type_name}")
         
+        # Parse detected dimensions (required)
+        detected_dims = DetectedDimensions(
+            width=int(d['detected_dimensions']['width']),
+            height=int(d['detected_dimensions']['height'])
+        )
+        
         devices.append(Device(
             host=d['host'],
             screen_type=SCREEN_TYPES[screen_type_name],
@@ -248,6 +260,7 @@ def load_config(devices_file):
                 x=int(d['coordinates']['x']),
                 y=int(d['coordinates']['y']),
             ),
+            detected_dimensions=detected_dims,
             rotation=d.get('rotation', 0)  # default to 0 if not specified
         ))
     
