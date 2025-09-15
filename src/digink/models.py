@@ -2,7 +2,7 @@ from typing import NamedTuple
 import yaml
 from PIL import Image, ImageDraw, ImageFont
 from .geometry import Point, Dimensions, Rectangle
-from .screen_types import ScreenType, SCREEN_TYPES
+from .screen_types import SCREEN_TYPES
 
 # Import PIL modules unconditionally to fail early if missing dependencies
 from PIL import _imagingft  # This will fail immediately if FreeType support is missing
@@ -20,7 +20,7 @@ class DetectedDimensions(NamedTuple):
 
 class Device(NamedTuple):
     host: str
-    screen_type: ScreenType
+    screen_type: str
     coordinates: Coordinates
     detected_dimensions: DetectedDimensions  # actual detected pixel dimensions
     rotation: int = 0  # rotation in degrees
@@ -33,12 +33,10 @@ class Config(NamedTuple):
         device_rectangles = {}
         for device in self.devices:
             start = Point(x=device.coordinates.x, y=device.coordinates.y)
-            base_dimensions = device.screen_type.total_dimensions()
-            
-            # Calculate bounding box for rotated rectangle
+            # Use detected dimensions
             import math
             angle_rad = math.radians(abs(device.rotation))
-            w, h = base_dimensions.width, base_dimensions.height
+            w, h = device.detected_dimensions.width, device.detected_dimensions.height
             
             # Bounding box calculation works for all rotation angles
             cos_a = abs(math.cos(angle_rad))
@@ -255,7 +253,7 @@ def load_config(devices_file):
         
         devices.append(Device(
             host=d['host'],
-            screen_type=SCREEN_TYPES[screen_type_name],
+            screen_type=screen_type_name,
             coordinates=Coordinates(
                 x=int(d['coordinates']['x']),
                 y=int(d['coordinates']['y']),

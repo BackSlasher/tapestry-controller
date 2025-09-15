@@ -311,26 +311,6 @@ def generate_updated_config(original_config: Config, positions: Dict[str, Dict])
         'devices': devices
     }
     
-    # Preserve screen_types if they exist in original config
-    if hasattr(original_config, 'screen_types') and original_config.screen_types:
-        screen_types = {}
-        for name, screen_type in original_config.screen_types.items():
-            screen_types[name] = {
-                'active_area': {
-                    'width': int(screen_type.active_area.width),
-                    'height': int(screen_type.active_area.height)
-                },
-                'active_area_px': {
-                    'width': int(screen_type.active_area_px.width),
-                    'height': int(screen_type.active_area_px.height)
-                },
-                'bezel': {
-                    'top': int(screen_type.bezel.top),
-                    'bottom': int(screen_type.bezel.bottom),
-                    'left': int(screen_type.bezel.left),
-                    'right': int(screen_type.bezel.right)
-                }
-            }
-        config['screen_types'] = screen_types
+    # No screen_types data to preserve - now just strings
     
     return config

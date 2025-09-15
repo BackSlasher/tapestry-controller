@@ -394,10 +394,12 @@ def positioning_layout_preview():
         devices = []
         for device_data in detected_config.get('devices', []):
             try:
-                screen_type = SCREEN_TYPES[device_data['screen_type']]
+                screen_type_name = device_data['screen_type']
+                if screen_type_name not in SCREEN_TYPES:
+                    raise ValueError(f"Unknown screen type: {screen_type_name}")
                 device = Device(
                     host=device_data['host'],
-                    screen_type=screen_type,
+                    screen_type=screen_type_name,
                     coordinates=Coordinates(
                         x=device_data['coordinates']['x'],
                         y=device_data['coordinates']['y']
@@ -476,7 +478,7 @@ def layout_data():
             for device in controller.config.devices:
                 screen_info = {
                     'hostname': device.host,
-                    'screen_type': device.screen_type.name if hasattr(device.screen_type, 'name') else str(device.screen_type),
+                    'screen_type': device.screen_type,
                     'x': device.coordinates.x,
                     'y': device.coordinates.y,
                     'width': device.detected_dimensions.width,
@@ -574,21 +576,14 @@ def devices_info():
     
     devices = []
     for device in controller.config.devices:
-        # Find the screen type name from SCREEN_TYPES registry
-        screen_type_name = "Unknown"
-        for name, screen_type_obj in SCREEN_TYPES.items():
-            if screen_type_obj == device.screen_type:
-                screen_type_name = name
-                break
-        
         devices.append({
             'host': device.host,
-            'screen_type': screen_type_name,
+            'screen_type': device.screen_type,
             'coordinates': {'x': device.coordinates.x, 'y': device.coordinates.y},
             'rotation': device.rotation,
             'dimensions': {
-                'width': device.screen_type.total_dimensions().width,
-                'height': device.screen_type.total_dimensions().height
+                'width': device.detected_dimensions.width,
+                'height': device.detected_dimensions.height
             }
         })
     
