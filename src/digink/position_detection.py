@@ -314,6 +314,10 @@ def generate_updated_config(original_config: Config, positions: Dict[str, Dict])
                     'width': int(screen_type.active_area.width),
                     'height': int(screen_type.active_area.height)
                 },
+                'active_area_px': {
+                    'width': int(screen_type.active_area_px.width),
+                    'height': int(screen_type.active_area_px.height)
+                },
                 'bezel': {
                     'top': int(screen_type.bezel.top),
                     'bottom': int(screen_type.bezel.bottom),
