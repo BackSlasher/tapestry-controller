@@ -192,7 +192,7 @@ function drawLayoutCanvas() {
             }
             
             // Calculate canvas dimensions based on screen layout
-            // Since coordinates are now relative to bounding rectangle, minX and minY should be 0
+            // Coordinates are now scaled raw coordinates (ratioed)
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             data.screens.forEach(screen => {
                 minX = Math.min(minX, screen.x);
@@ -219,16 +219,16 @@ function drawLayoutCanvas() {
             if (data.current_image && data.image_size) {
                 const img = new Image();
                 img.onload = function() {
-                    // The refit image is already sized to match the bounding rectangle
-                    // of all screens in the coordinate system we're using
+                    // The refit image is sized to exactly match the bounding rectangle
+                    // dimensions, so it should fill the entire layout area
                     const imgX = padding;
                     const imgY = padding;
-                    const imgWidth = layoutWidth * scale;
-                    const imgHeight = layoutHeight * scale;
+                    const imgDisplayWidth = layoutWidth * scale;
+                    const imgDisplayHeight = layoutHeight * scale;
                     
                     // Draw image at half opacity everywhere
                     ctx.globalAlpha = 0.5;
-                    ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight);
+                    ctx.drawImage(img, imgX, imgY, imgDisplayWidth, imgDisplayHeight);
                     
                     // Draw image at full opacity only in screen areas
                     ctx.globalAlpha = 1.0;
@@ -244,7 +244,7 @@ function drawLayoutCanvas() {
                         ctx.clip();
                         
                         // Draw the full-opacity image within the clipped region
-                        ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight);
+                        ctx.drawImage(img, imgX, imgY, imgDisplayWidth, imgDisplayHeight);
                         
                         ctx.restore();
                     });

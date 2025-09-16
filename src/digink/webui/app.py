@@ -473,7 +473,7 @@ def layout_data():
                 'height': last_image_state['refit_image'].size[1]
             }
         
-        # Get screen layout information with coordinate transformation
+        # Get screen layout information using the same coordinate system as image cropping
         screens = []
         if controller and controller.config and controller.config.devices:
             # Create device rectangles the same way the controller does
@@ -489,25 +489,29 @@ def layout_data():
                     dimensions=dimensions,
                 )
             
-            # Calculate bounding rectangle the same way the controller does
-            bounding_rectangle = Rectangle.bounding_rectangle(device_rectangles.values())
+            # Get the px_in_unit scaling factor
+            px_in_unit = last_image_state.get('px_in_unit', 1.0)
             
-            # Transform coordinates relative to bounding rectangle origin
+            # Use the same coordinate system as controller, but account for image_crop's centering
             for device in controller.config.devices:
-                # Get the device rectangle
                 device_rect = device_rectangles[device]
+                # Apply the same ratioed transformation as the controller
+                ratioed_rect = device_rect.ratioed(px_in_unit)
                 
-                # Transform coordinates relative to bounding rectangle
-                transformed_x = device_rect.start.x - bounding_rectangle.start.x
-                transformed_y = device_rect.start.y - bounding_rectangle.start.y
+                # The image_crop function places the refit image in the center of a 3x canvas,
+                # so the actual crop coordinates are ratioed_rect + image_dimensions.
+                # For display purposes, we need coordinates relative to the refit image (at 0,0).
+                # The relationship is: crop_coords = ratioed_coords + image_offset
+                # So: display_coords = ratioed_coords = crop_coords - image_offset
+                # Since the refit image starts at (0,0) in display, we use ratioed coords directly
                 
                 screen_info = {
                     'hostname': device.host,
                     'screen_type': device.screen_type,
-                    'x': transformed_x,
-                    'y': transformed_y,
-                    'width': device.detected_dimensions.width,
-                    'height': device.detected_dimensions.height,
+                    'x': ratioed_rect.start.x,
+                    'y': ratioed_rect.start.y,
+                    'width': ratioed_rect.dimensions.width,
+                    'height': ratioed_rect.dimensions.height,
                     'rotation': device.rotation
                 }
                 screens.append(screen_info)
