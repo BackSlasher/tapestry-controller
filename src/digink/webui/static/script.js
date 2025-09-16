@@ -191,52 +191,66 @@ function drawLayoutCanvas() {
                 return;
             }
             
-            // Calculate canvas dimensions based on screen layout
-            // Coordinates are now scaled raw coordinates (ratioed)
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            data.screens.forEach(screen => {
-                minX = Math.min(minX, screen.x);
-                minY = Math.min(minY, screen.y);
-                maxX = Math.max(maxX, screen.x + screen.width);
-                maxY = Math.max(maxY, screen.y + screen.height);
-            });
+            // Check if we should use server-side rendering
+            if (data.use_server_rendering) {
+                drawServerSideLayout(canvas, ctx);
+                return;
+            }
             
-            const layoutWidth = maxX - minX;
-            const layoutHeight = maxY - minY;
-            const padding = 40;
+            // With the new coordinate system, coordinates are already in pixels
+            // relative to the scaled image, so we can work directly with them
             
-            // Scale to fit canvas nicely
-            const maxCanvasWidth = 800;
-            const maxCanvasHeight = 600;
-            const scaleX = (maxCanvasWidth - padding * 2) / layoutWidth;
-            const scaleY = (maxCanvasHeight - padding * 2) / layoutHeight;
-            const scale = Math.min(scaleX, scaleY, 1); // Don't scale up
+            // Determine canvas size based on image size if available, otherwise screen bounds
+            let canvasWidth, canvasHeight;
+            if (data.image_size) {
+                // Use the scaled image dimensions directly
+                canvasWidth = data.image_size.width;
+                canvasHeight = data.image_size.height;
+            } else {
+                // Fallback: calculate from screen bounds
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                data.screens.forEach(screen => {
+                    minX = Math.min(minX, screen.x);
+                    minY = Math.min(minY, screen.y);
+                    maxX = Math.max(maxX, screen.x + screen.width);
+                    maxY = Math.max(maxY, screen.y + screen.height);
+                });
+                canvasWidth = maxX - minX;
+                canvasHeight = maxY - minY;
+            }
             
-            canvas.width = layoutWidth * scale + padding * 2;
-            canvas.height = layoutHeight * scale + padding * 2;
+            // Scale canvas to fit nicely in the UI while maintaining aspect ratio
+            const maxDisplayWidth = 800;
+            const maxDisplayHeight = 600;
+            const displayScale = Math.min(
+                maxDisplayWidth / canvasWidth,
+                maxDisplayHeight / canvasHeight,
+                1 // Don't scale up
+            );
+            
+            canvas.width = canvasWidth * displayScale;
+            canvas.height = canvasHeight * displayScale;
             
             // Draw background image if available
             if (data.current_image && data.image_size) {
                 const img = new Image();
                 img.onload = function() {
-                    // The refit image is sized to exactly match the bounding rectangle
-                    // dimensions, so it should fill the entire layout area
-                    const imgX = padding;
-                    const imgY = padding;
-                    const imgDisplayWidth = layoutWidth * scale;
-                    const imgDisplayHeight = layoutHeight * scale;
+                    // The scaled image fills the entire canvas
+                    const imgWidth = canvas.width;
+                    const imgHeight = canvas.height;
                     
                     // Draw image at half opacity everywhere
                     ctx.globalAlpha = 0.5;
-                    ctx.drawImage(img, imgX, imgY, imgDisplayWidth, imgDisplayHeight);
+                    ctx.drawImage(img, 0, 0, imgWidth, imgHeight);
                     
                     // Draw image at full opacity only in screen areas
                     ctx.globalAlpha = 1.0;
                     data.screens.forEach(screen => {
-                        const x = (screen.x - minX) * scale + padding;
-                        const y = (screen.y - minY) * scale + padding;
-                        const width = screen.width * scale;
-                        const height = screen.height * scale;
+                        // Scale screen coordinates to match canvas display size
+                        const x = screen.x * displayScale;
+                        const y = screen.y * displayScale;
+                        const width = screen.width * displayScale;
+                        const height = screen.height * displayScale;
                         
                         // Create a clipping region for this screen
                         ctx.save();
@@ -244,18 +258,18 @@ function drawLayoutCanvas() {
                         ctx.clip();
                         
                         // Draw the full-opacity image within the clipped region
-                        ctx.drawImage(img, imgX, imgY, imgDisplayWidth, imgDisplayHeight);
+                        ctx.drawImage(img, 0, 0, imgWidth, imgHeight);
                         
                         ctx.restore();
                     });
                     
                     // Draw screen borders, labels and arrows on top
-                    drawScreens(ctx, data.screens, minX, minY, scale, padding, true);
+                    drawScreens(ctx, data.screens, displayScale);
                 };
                 img.src = data.current_image;
             } else {
                 // No image, just draw screen borders and labels
-                drawScreens(ctx, data.screens, minX, minY, scale, padding, false);
+                drawScreens(ctx, data.screens, displayScale);
             }
         })
         .catch(error => {
@@ -271,47 +285,78 @@ function drawLayoutCanvas() {
         });
 }
 
-function drawScreens(ctx, screens, offsetX, offsetY, scale, padding, hasImage) {
+function drawServerSideLayout(canvas, ctx) {
+    // Load server-side rendered image and display it
+    const img = new Image();
+    img.onload = function() {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+    };
+    img.onerror = function() {
+        // Fallback to error message
+        canvas.width = 400;
+        canvas.height = 300;
+        ctx.fillStyle = '#f8f9fa';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#dc3545';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Error loading server-side layout', canvas.width/2, canvas.height/2);
+    };
+    img.src = '/layout-image';
+}
+
+function drawScreens(ctx, screens, displayScale) {
     screens.forEach(screen => {
-        const x = (screen.x - offsetX) * scale + padding;
-        const y = (screen.y - offsetY) * scale + padding;
-        const width = screen.width * scale;
-        const height = screen.height * scale;
+        // Scale screen coordinates to match canvas display size
+        const x = screen.x * displayScale;
+        const y = screen.y * displayScale;
+        const width = screen.width * displayScale;
+        const height = screen.height * displayScale;
         
         // Always draw black border around screen area
         ctx.globalAlpha = 1.0;
         ctx.strokeStyle = '#000';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 2;
         ctx.strokeRect(x, y, width, height);
         
         const centerX = x + width / 2;
         const centerY = y + height / 2;
         
         // Draw hostname (IP address) with white background for visibility
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-        ctx.font = `${Math.max(10, 12 * scale)}px Arial`;
+        const fontSize = Math.max(10, 12 * displayScale);
+        ctx.font = `${fontSize}px Arial`;
         ctx.textAlign = 'center';
         const textWidth = ctx.measureText(screen.hostname).width;
-        const textHeight = Math.max(10, 12 * scale);
+        const textHeight = fontSize;
+        
+        // White background for text
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
         ctx.fillRect(centerX - textWidth/2 - 4, centerY + 8 - textHeight, textWidth + 8, textHeight + 4);
         
+        // Black text
         ctx.fillStyle = '#000';
         ctx.fillText(screen.hostname, centerX, centerY + 8);
         
-        // Draw rotation arrow pointing to top of screen with white background
+        // Draw rotation arrow pointing to top of screen
         ctx.save();
         ctx.translate(centerX, centerY - 15);
         ctx.rotate((screen.rotation * Math.PI) / 180);
         
-        // Draw white circle background for arrow
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        // White circle background for arrow
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
         ctx.beginPath();
-        ctx.arc(0, 0, Math.max(8, 10 * scale), 0, 2 * Math.PI);
+        const arrowRadius = Math.max(8, 10 * displayScale);
+        ctx.arc(0, 0, arrowRadius, 0, 2 * Math.PI);
         ctx.fill();
         
-        ctx.font = `${Math.max(12, 14 * scale)}px Arial`;
+        // Arrow
+        const arrowFontSize = Math.max(12, 14 * displayScale);
+        ctx.font = `${arrowFontSize}px Arial`;
         ctx.fillStyle = '#000';
-        ctx.fillText('🔼', 0, 0);
+        ctx.textAlign = 'center';
+        ctx.fillText('🔼', 0, 4); // Slight offset to center vertically
         ctx.restore();
     });
 }
@@ -350,32 +395,29 @@ function drawPreviewCanvas(imageSrc) {
         fetch('/layout-data')
             .then(response => response.json())
             .then(data => {
-                if (data.screens && data.screens.length > 0) {
-                    // Calculate scale and offsets to match the image
+                if (data.screens && data.screens.length > 0 && data.image_size) {
                     const screens = data.screens;
                     
-                    // Find bounding box of all screens
-                    const minX = Math.min(...screens.map(s => s.x));
-                    const minY = Math.min(...screens.map(s => s.y));
-                    const maxX = Math.max(...screens.map(s => s.x + s.width));
-                    const maxY = Math.max(...screens.map(s => s.y + s.height));
+                    // Calculate scale to match the preview canvas size to the actual image layout
+                    const imageAspectRatio = data.image_size.width / data.image_size.height;
+                    const canvasAspectRatio = canvasWidth / canvasHeight;
                     
-                    const layoutWidth = maxX - minX;
-                    const layoutHeight = maxY - minY;
+                    let scale, offsetX = 0, offsetY = 0;
                     
-                    // Calculate scale to fit preview canvas
-                    const scaleX = canvasWidth / layoutWidth;
-                    const scaleY = canvasHeight / layoutHeight;
-                    const scale = Math.min(scaleX, scaleY);
+                    if (imageAspectRatio > canvasAspectRatio) {
+                        // Image is wider - fit to canvas width
+                        scale = canvasWidth / data.image_size.width;
+                        offsetY = (canvasHeight - data.image_size.height * scale) / 2;
+                    } else {
+                        // Image is taller - fit to canvas height
+                        scale = canvasHeight / data.image_size.height;
+                        offsetX = (canvasWidth - data.image_size.width * scale) / 2;
+                    }
                     
-                    // Calculate offset to center the layout
-                    const offsetX = (canvasWidth - layoutWidth * scale) / 2;
-                    const offsetY = (canvasHeight - layoutHeight * scale) / 2;
-                    
-                    // Draw screen rectangles
+                    // Draw screen rectangles using direct pixel coordinates
                     screens.forEach(screen => {
-                        const x = (screen.x - minX) * scale + offsetX;
-                        const y = (screen.y - minY) * scale + offsetY;
+                        const x = screen.x * scale + offsetX;
+                        const y = screen.y * scale + offsetY;
                         const width = screen.width * scale;
                         const height = screen.height * scale;
                         

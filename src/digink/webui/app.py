@@ -11,11 +11,12 @@ import queue
 from flask import Flask, render_template, request, jsonify, send_file, flash, redirect, url_for, Response
 from werkzeug.utils import secure_filename
 import PIL.Image
-from PIL import ExifTags
+from PIL import ExifTags, ImageDraw, ImageFont
 from ..controller import DiginkController
 from ..geometry import Point, Dimensions, Rectangle
 from ..models import load_config
 from ..screen_types import SCREEN_TYPES
+from ..image_utils import image_refit, image_crop
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'digink-webui-secret-key'
@@ -41,6 +42,64 @@ last_image_state = {
     'thumbnail_cache': None,  # Cached thumbnail for web display
     'thumbnail_max_size': (800, 600),  # Max thumbnail dimensions
 }
+
+# Configuration for layout rendering method
+USE_SERVER_SIDE_RENDERING = False  # Set to False to use canvas-based rendering
+
+
+def create_layout_visualization(scaled_image, device_rectangles, mm_to_px_ratio):
+    """Create a layout visualization using the new simplified controller logic."""
+    
+    # Calculate bounding rectangle in mm (same as controller)
+    bounding_rect_mm = Rectangle.bounding_rectangle(device_rectangles.values())
+    
+    # Start with the scaled image as the background
+    layout_canvas = scaled_image.copy()
+    draw = ImageDraw.Draw(layout_canvas)
+    
+    # For each device, show where it will be cropped from
+    for device, rect_mm in device_rectangles.items():
+        # Convert device position from mm to pixels (same as controller)
+        device_rect_px = Rectangle(
+            start=Point(
+                x=int((rect_mm.start.x - bounding_rect_mm.start.x) * mm_to_px_ratio),
+                y=int((rect_mm.start.y - bounding_rect_mm.start.y) * mm_to_px_ratio)
+            ),
+            dimensions=Dimensions(
+                width=int(rect_mm.dimensions.width * mm_to_px_ratio),
+                height=int(rect_mm.dimensions.height * mm_to_px_ratio)
+            )
+        )
+        
+        # Draw screen border at the exact position where cropping will occur
+        x = device_rect_px.start.x
+        y = device_rect_px.start.y
+        width = device_rect_px.dimensions.width
+        height = device_rect_px.dimensions.height
+        
+        # Draw red border to show the crop area
+        draw.rectangle([x, y, x + width, y + height], outline='red', width=3)
+        
+        # Draw screen label
+        try:
+            font = ImageFont.load_default()
+            label = device.host
+            text_bbox = draw.textbbox((0, 0), label, font=font)
+            text_width = text_bbox[2] - text_bbox[0]
+            text_height = text_bbox[3] - text_bbox[1]
+            
+            # White background for text
+            text_bg_x = x + 2
+            text_bg_y = y + 2
+            draw.rectangle(
+                [text_bg_x, text_bg_y, text_bg_x + text_width + 4, text_bg_y + text_height + 4],
+                fill=(255, 255, 255, 180)
+            )
+            draw.text((text_bg_x + 2, text_bg_y + 2), label, fill='black', font=font)
+        except Exception as e:
+            print(f"Error drawing label for {device.host}: {e}")
+    
+    return layout_canvas
 
 def allowed_file(filename):
     """Check if uploaded file has allowed extension."""
@@ -142,14 +201,16 @@ def save_last_image(image):
             dimensions=dimensions,
         )
     
-    # Refit image to complete rectangle (same as controller does)
+    # Process image using the new controller approach
     bounding_rectangle = Rectangle.bounding_rectangle(device_rectangles.values())
-    refit_result = image_refit(image, bounding_rectangle.dimensions)
+    scaled_image, mm_to_px_ratio = controller._scale_image_to_layout(
+        image, bounding_rectangle.dimensions
+    )
     
     # Save to global state
     last_image_state['image'] = image.copy()
-    last_image_state['refit_image'] = refit_result.image.copy()
-    last_image_state['px_in_unit'] = refit_result.px_in_unit
+    last_image_state['refit_image'] = scaled_image.copy()  # Now using scaled_image
+    last_image_state['px_in_unit'] = mm_to_px_ratio  # Now using mm_to_px_ratio
     last_image_state['thumbnail_cache'] = None  # Clear thumbnail cache
     
     # Persist to disk for restart recovery
@@ -473,54 +534,60 @@ def layout_data():
                 'height': last_image_state['refit_image'].size[1]
             }
         
-        # Get screen layout information using the same coordinate system as image cropping
+        # Get screen layout information using the new simplified coordinate system  
         screens = []
         if controller and controller.config and controller.config.devices:
-            # Create device rectangles the same way the controller does
+            # Create device rectangles in mm (same as new controller logic)
             device_rectangles = {}
             for device in controller.config.devices:
-                start = Point(x=device.coordinates.x, y=device.coordinates.y)
-                dimensions = Dimensions(
-                    width=device.detected_dimensions.width,
-                    height=device.detected_dimensions.height,
-                )
                 device_rectangles[device] = Rectangle(
-                    start=start,
-                    dimensions=dimensions,
+                    start=Point(x=device.coordinates.x, y=device.coordinates.y),
+                    dimensions=Dimensions(
+                        width=device.detected_dimensions.width,
+                        height=device.detected_dimensions.height,
+                    )
                 )
             
-            # Get the px_in_unit scaling factor
-            px_in_unit = last_image_state.get('px_in_unit', 1.0)
+            # Calculate bounding rectangle and get scaling factor
+            bounding_rect_mm = Rectangle.bounding_rectangle(device_rectangles.values())
+            mm_to_px_ratio = last_image_state.get('px_in_unit')
             
-            # Use the same coordinate system as controller, but account for image_crop's centering
-            for device in controller.config.devices:
-                device_rect = device_rectangles[device]
-                # Apply the same ratioed transformation as the controller
-                ratioed_rect = device_rect.ratioed(px_in_unit)
-                
-                # The image_crop function places the refit image in the center of a 3x canvas,
-                # so the actual crop coordinates are ratioed_rect + image_dimensions.
-                # For display purposes, we need coordinates relative to the refit image (at 0,0).
-                # The relationship is: crop_coords = ratioed_coords + image_offset
-                # So: display_coords = ratioed_coords = crop_coords - image_offset
-                # Since the refit image starts at (0,0) in display, we use ratioed coords directly
-                
-                screen_info = {
-                    'hostname': device.host,
-                    'screen_type': device.screen_type,
-                    'x': ratioed_rect.start.x,
-                    'y': ratioed_rect.start.y,
-                    'width': ratioed_rect.dimensions.width,
-                    'height': ratioed_rect.dimensions.height,
-                    'rotation': device.rotation
-                }
-                screens.append(screen_info)
+            # If no image has been processed yet, we can't provide pixel coordinates
+            if mm_to_px_ratio is None:
+                # Return empty screens data when no image is loaded
+                screens = []
+            else:
+                # Convert each device from mm to pixels in scaled image coordinate system
+                for device, rect_mm in device_rectangles.items():
+                    # Same conversion as the new controller
+                    device_rect_px = Rectangle(
+                        start=Point(
+                            x=int((rect_mm.start.x - bounding_rect_mm.start.x) * mm_to_px_ratio),
+                            y=int((rect_mm.start.y - bounding_rect_mm.start.y) * mm_to_px_ratio)
+                        ),
+                        dimensions=Dimensions(
+                            width=int(rect_mm.dimensions.width * mm_to_px_ratio),
+                            height=int(rect_mm.dimensions.height * mm_to_px_ratio)
+                        )
+                    )
+                    
+                    screen_info = {
+                        'hostname': device.host,
+                        'screen_type': device.screen_type,
+                        'x': device_rect_px.start.x,
+                        'y': device_rect_px.start.y,
+                        'width': device_rect_px.dimensions.width,
+                        'height': device_rect_px.dimensions.height,
+                        'rotation': device.rotation
+                    }
+                    screens.append(screen_info)
         
         return jsonify({
             'current_image': current_image,
             'image_size': image_size,
             'screens': screens,
-            'scale_factor': last_image_state.get('px_in_unit', 1.0)
+            'scale_factor': last_image_state.get('px_in_unit', 1.0),
+            'use_server_rendering': USE_SERVER_SIDE_RENDERING
         })
         
     except Exception as e:
@@ -561,6 +628,62 @@ def current_image():
         error_img.save(img_buffer, format='PNG')
         img_buffer.seek(0)
         return send_file(img_buffer, mimetype='image/png')
+
+
+@app.route('/layout-image')
+def layout_image():
+    """Serve a server-side rendered layout image with screen rectangles."""
+    try:
+        if not controller or not controller.config or not controller.config.devices:
+            return '', 404
+            
+        # Use the exact same logic as the controller
+        device_rectangles = {}
+        for device in controller.config.devices:
+            start = Point(x=device.coordinates.x, y=device.coordinates.y)
+            dimensions = Dimensions(
+                width=device.detected_dimensions.width,
+                height=device.detected_dimensions.height,
+            )
+            device_rectangles[device] = Rectangle(
+                start=start,
+                dimensions=dimensions,
+            )
+        
+        # Calculate bounding rectangle exactly like the controller
+        bounding_rectangle = Rectangle.bounding_rectangle(device_rectangles.values())
+        
+        # Use the scaled image if available, otherwise create a white background
+        if last_image_state['refit_image'] is not None:
+            scaled_image = last_image_state['refit_image'].copy()
+        else:
+            # Create a white background scaled to the bounding rectangle
+            scaled_image, _ = controller._scale_image_to_layout(
+                PIL.Image.new('RGB', (800, 600), 'white'), 
+                bounding_rectangle.dimensions
+            )
+        
+        # Get mm_to_px_ratio scaling factor
+        mm_to_px_ratio = last_image_state.get('px_in_unit')
+        
+        # If no image has been processed, return a simple placeholder
+        if mm_to_px_ratio is None:
+            mm_to_px_ratio = 1.0  # Default scale for placeholder
+        
+        # Create visualization by drawing screen rectangles 
+        layout_image = create_layout_visualization(
+            scaled_image, device_rectangles, mm_to_px_ratio
+        )
+        
+        # Convert to bytes and serve
+        img_buffer = io.BytesIO()
+        layout_image.save(img_buffer, format='PNG')
+        img_buffer.seek(0)
+        return send_file(img_buffer, mimetype='image/png')
+        
+    except Exception as e:
+        print(f"Error serving layout image: {e}")
+        return '', 500
 
 
 @app.route('/upload', methods=['POST'])
