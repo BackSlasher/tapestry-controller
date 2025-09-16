@@ -192,6 +192,7 @@ function drawLayoutCanvas() {
             }
             
             // Calculate canvas dimensions based on screen layout
+            // Since coordinates are now relative to bounding rectangle, minX and minY should be 0
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             data.screens.forEach(screen => {
                 minX = Math.min(minX, screen.x);
@@ -218,8 +219,8 @@ function drawLayoutCanvas() {
             if (data.current_image && data.image_size) {
                 const img = new Image();
                 img.onload = function() {
-                    // The image should cover the entire layout area since it's the refit image
-                    // that matches the screen layout bounds
+                    // The refit image is already sized to match the bounding rectangle
+                    // of all screens in the coordinate system we're using
                     const imgX = padding;
                     const imgY = padding;
                     const imgWidth = layoutWidth * scale;

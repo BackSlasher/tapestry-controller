@@ -13,6 +13,7 @@ from werkzeug.utils import secure_filename
 import PIL.Image
 from PIL import ExifTags
 from ..controller import DiginkController
+from ..geometry import Point, Dimensions, Rectangle
 from ..models import load_config
 from ..screen_types import SCREEN_TYPES
 
@@ -472,15 +473,39 @@ def layout_data():
                 'height': last_image_state['refit_image'].size[1]
             }
         
-        # Get screen layout information
+        # Get screen layout information with coordinate transformation
         screens = []
         if controller and controller.config and controller.config.devices:
+            # Create device rectangles the same way the controller does
+            device_rectangles = {}
             for device in controller.config.devices:
+                start = Point(x=device.coordinates.x, y=device.coordinates.y)
+                dimensions = Dimensions(
+                    width=device.detected_dimensions.width,
+                    height=device.detected_dimensions.height,
+                )
+                device_rectangles[device] = Rectangle(
+                    start=start,
+                    dimensions=dimensions,
+                )
+            
+            # Calculate bounding rectangle the same way the controller does
+            bounding_rectangle = Rectangle.bounding_rectangle(device_rectangles.values())
+            
+            # Transform coordinates relative to bounding rectangle origin
+            for device in controller.config.devices:
+                # Get the device rectangle
+                device_rect = device_rectangles[device]
+                
+                # Transform coordinates relative to bounding rectangle
+                transformed_x = device_rect.start.x - bounding_rectangle.start.x
+                transformed_y = device_rect.start.y - bounding_rectangle.start.y
+                
                 screen_info = {
                     'hostname': device.host,
                     'screen_type': device.screen_type,
-                    'x': device.coordinates.x,
-                    'y': device.coordinates.y,
+                    'x': transformed_x,
+                    'y': transformed_y,
                     'width': device.detected_dimensions.width,
                     'height': device.detected_dimensions.height,
                     'rotation': device.rotation
