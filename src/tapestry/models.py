@@ -19,7 +19,7 @@ class DetectedDimensions(NamedTuple):
 
 
 class Device(NamedTuple):
-    host: str
+    host: str  # hostname (not IP)
     screen_type: str
     coordinates: Coordinates
     detected_dimensions: DetectedDimensions  # actual detected pixel dimensions

@@ -98,8 +98,8 @@ def detect_qr_positions(pil_image: Image.Image) -> List[QRPositionData]:
                 continue
             
             # Extract data from JSON
-            ip = qr_json['ip']
-            screen_type = qr_json['screen_type'] 
+            hostname = qr_json['host']  # hostname from host field
+            screen_type = qr_json['screen_type']
             screen_width_px = qr_json['screen_width_px']
             screen_height_px = qr_json['screen_height_px']
             qr_size_px = qr_json['qr_size_px']
@@ -164,7 +164,7 @@ def detect_qr_positions(pil_image: Image.Image) -> List[QRPositionData]:
             
             # Create position data
             qr_data = QRPositionData(
-                hostname=ip,
+                hostname=hostname,
                 screen_type=screen_type,
                 center=center,
                 rotation=rotation,
@@ -291,9 +291,9 @@ def generate_updated_config(original_config: Config, positions: Dict[str, Dict])
     # Create updated configuration dictionary
     devices = []
     
-    for ip, pos_data in positions.items():
+    for hostname, pos_data in positions.items():
         device_config = {
-            'host': ip,
+            'host': hostname,
             'screen_type': pos_data['screen_type'],
             'coordinates': {
                 'x': int(pos_data['x']),

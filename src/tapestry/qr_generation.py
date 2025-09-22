@@ -15,6 +15,7 @@ from .screen_types import SCREEN_TYPES
 class DiscoveredDevice(NamedTuple):
     """Device discovered from DHCP leases."""
     ip: str
+    hostname: str
     screen_type: str
 
 
@@ -39,18 +40,19 @@ def discover_devices_from_dhcp() -> List[DiscoveredDevice]:
         for line in result.stdout.strip().split('\n'):
             if not line.strip():
                 continue
-            
+
             parts = line.split()
-            if len(parts) >= 3:
+            if len(parts) >= 4:
                 ip = parts[2]
-                
+                hostname = parts[3] if len(parts) > 3 and parts[3] != '*' else ip
+
                 # Query device for screen type
                 screen_type = get_device_screen_type(ip)
                 if screen_type:
-                    devices.append(DiscoveredDevice(ip=ip, screen_type=screen_type))
-                    print(f"Discovered device: {ip} ({screen_type})")
+                    devices.append(DiscoveredDevice(ip=ip, hostname=hostname, screen_type=screen_type))
+                    print(f"Discovered device: {hostname} ({ip}) - {screen_type}")
                 else:
-                    print(f"Could not determine screen type for {ip}")
+                    print(f"Could not determine screen type for {hostname} ({ip})")
     
     except subprocess.TimeoutExpired:
         print("Timeout reading DHCP leases")
@@ -73,7 +75,7 @@ def get_device_screen_type(ip: str, timeout: int = 5) -> Optional[str]:
     return None
 
 
-def generate_positioning_qr_image(ip: str, screen_type_name: str) -> Image.Image:
+def generate_positioning_qr_image(ip: str, hostname: str, screen_type_name: str) -> Image.Image:
     """Generate QR positioning image for a specific device."""
     
     # Get screen type info
@@ -92,7 +94,7 @@ def generate_positioning_qr_image(ip: str, screen_type_name: str) -> Image.Image
     
     # Create JSON data to encode in QR
     qr_json_data = {
-        "ip": ip,
+        "host": hostname,  # hostname only (no IP needed)
         "screen_type": screen_type_name,
         "screen_width_px": width,
         "screen_height_px": height,
@@ -154,8 +156,8 @@ def generate_all_positioning_qr_images() -> Dict[str, Image.Image]:
     print(f"Found {len(devices)} devices, generating QR codes...")
     
     for device in devices:
-        qr_img = generate_positioning_qr_image(device.ip, device.screen_type)
+        qr_img = generate_positioning_qr_image(device.ip, device.hostname, device.screen_type)
         qr_images[device.ip] = qr_img
-        print(f"Generated QR code for {device.ip} ({device.screen_type})")
+        print(f"Generated QR code for {device.hostname} ({device.ip}) - {device.screen_type}")
     
     return qr_images

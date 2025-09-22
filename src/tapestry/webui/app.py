@@ -460,7 +460,7 @@ def positioning_layout_preview():
                 if screen_type_name not in SCREEN_TYPES:
                     raise ValueError(f"Unknown screen type: {screen_type_name}")
                 device = Device(
-                    host=device_data['host'],
+                    host=device_data['host'],  # hostname stored in host field
                     screen_type=screen_type_name,
                     coordinates=Coordinates(
                         x=device_data['coordinates']['x'],
