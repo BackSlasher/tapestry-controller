@@ -1,0 +1,14 @@
+[Unit]
+Description=Tapestry Web UI - Distributed E-ink Display Controller
+After=network.target
+
+[Service]
+Type=simple
+User=USER_PLACEHOLDER
+WorkingDirectory=WORKING_DIR_PLACEHOLDER
+ExecStart=poetry run tapestry-webui
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
