@@ -1,4 +1,4 @@
-// Digink Web UI JavaScript
+// Tapestry Web UI JavaScript
 
 // Global variables for screensaver monitoring
 let screensaverCheckInterval = null;

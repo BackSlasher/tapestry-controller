@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "digink"
+name = "tapestry"
 version = "0.1.0"
-description = "Distributed e-ink display controller"
+description = "Distributed e-ink display controller (Tapestry)"
 readme = "README.md"
 requires-python = ">=3.13,<4.0"
 authors = [
@@ -42,8 +42,8 @@ dev = [
 ]
 
 [project.scripts]
-digink = "digink.cli:main"
-digink-webui = "digink.webui.app:main"
+tapestry = "tapestry.cli:main"
+tapestry-webui = "tapestry.webui.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

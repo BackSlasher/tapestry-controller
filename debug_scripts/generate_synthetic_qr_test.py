@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw
 import qrcode
-from digink.position_detection import detect_qr_positions
+from tapestry.position_detection import detect_qr_positions
 
 def create_synthetic_test_image():
     """Create synthetic test image with QR codes matching physical layout."""

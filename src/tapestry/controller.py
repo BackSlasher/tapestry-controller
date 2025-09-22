@@ -6,7 +6,7 @@ from .image_utils import image_refit, image_crop
 from .device import draw, clear
 
 
-class DiginkController:
+class TapestryController:
     def __init__(self, config: Config):
         self.config = config
 
@@ -143,6 +143,6 @@ class DiginkController:
             t.join()
 
     @classmethod
-    def from_config_file(cls, config_file: str) -> 'DiginkController':
+    def from_config_file(cls, config_file: str) -> 'TapestryController':
         config = load_config(config_file)
         return cls(config)

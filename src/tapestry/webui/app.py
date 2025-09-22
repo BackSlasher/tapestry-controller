@@ -12,14 +12,14 @@ from flask import Flask, render_template, request, jsonify, send_file, flash, re
 from werkzeug.utils import secure_filename
 import PIL.Image
 from PIL import ExifTags, ImageDraw, ImageFont
-from ..controller import DiginkController
+from ..controller import TapestryController
 from ..geometry import Point, Dimensions, Rectangle
 from ..models import load_config
 from ..screen_types import SCREEN_TYPES
 from ..image_utils import image_refit, image_crop
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'digink-webui-secret-key'
+app.config['SECRET_KEY'] = 'tapestry-webui-secret-key'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # Global controller instance
@@ -168,7 +168,7 @@ def load_persisted_image():
     """Load the last image from disk if it exists."""
     try:
         import os
-        persist_dir = os.path.expanduser("~/.digink")
+        persist_dir = os.path.expanduser("~/.tapestry")
         persist_path = os.path.join(persist_dir, "last_image.png")
         
         if os.path.exists(persist_path):
@@ -216,7 +216,7 @@ def save_last_image(image):
     # Persist to disk for restart recovery
     try:
         import os
-        persist_dir = os.path.expanduser("~/.digink")
+        persist_dir = os.path.expanduser("~/.tapestry")
         os.makedirs(persist_dir, exist_ok=True)
         persist_path = os.path.join(persist_dir, "last_image.png")
         image.save(persist_path, "PNG")
@@ -1104,11 +1104,11 @@ def stop_flash(process_id):
 def create_app(devices_file='devices.yaml'):
     """Create Flask app with configuration."""
     global controller
-    controller = DiginkController.from_config_file(devices_file)
+    controller = TapestryController.from_config_file(devices_file)
     return app
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Start Digink Web UI")
+    parser = argparse.ArgumentParser(description="Start Tapestry Web UI")
     parser.add_argument(
         '--devices-file', 
         default='devices.yaml',
@@ -1138,13 +1138,13 @@ def main():
     
     # Initialize controller
     global controller
-    controller = DiginkController.from_config_file(args.devices_file)
+    controller = TapestryController.from_config_file(args.devices_file)
     
     # Start image loading in background thread
     # Automatic image loading on startup has been removed
     # Use the "Restore Last Image" button on the main page instead
     
-    print(f"Starting Digink Web UI with {len(controller.config.devices)} devices")
+    print(f"Starting Tapestry Web UI with {len(controller.config.devices)} devices")
     print(f"Access at http://{args.host}:{args.port}")
     print("Use 'Restore Last Image' button to load previous image")
     

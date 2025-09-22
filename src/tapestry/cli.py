@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import PIL.Image
-from .controller import DiginkController
+from .controller import TapestryController
 
 
 def parse_args():
@@ -28,7 +28,7 @@ def main():
     image = PIL.Image.open(args.filename)
     
     # Create controller from config
-    controller = DiginkController.from_config_file(args.devices_file)
+    controller = TapestryController.from_config_file(args.devices_file)
     
     # Send image to displays
     controller.send_image(image, debug_output_dir=args.debug_output_dir)
