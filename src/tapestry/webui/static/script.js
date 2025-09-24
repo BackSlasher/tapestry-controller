@@ -138,19 +138,23 @@ async function refreshLayout() {
             fetch('/current-image')
         ]);
 
-        // Check if either response indicates changes (not 304)
-        const layoutChanged = layoutResponse.status !== 304;
-        const imageChanged = imageResponse.status !== 304;
+        // Get ETags from responses
+        const layoutETag = layoutResponse.headers.get('etag');
+        const imageETag = imageResponse.headers.get('etag');
+
+        // Compare with cached ETags to determine if content changed
+        const layoutChanged = !window.cachedLayoutETag || window.cachedLayoutETag !== layoutETag;
+        const imageChanged = !window.cachedImageETag || window.cachedImageETag !== imageETag;
 
         if (layoutChanged || imageChanged) {
-            console.log('Canvas update needed:', { layoutChanged, imageChanged });
 
             // Get layout data (either from response if changed, or from cache)
             let layoutData;
             if (layoutChanged) {
                 layoutData = await layoutResponse.json();
-                // Cache the layout data for future use
+                // Cache the layout data and ETag for future use
                 window.cachedLayoutData = layoutData;
+                window.cachedLayoutETag = layoutETag;
             } else if (window.cachedLayoutData) {
                 // Use cached layout data since it hasn't changed
                 layoutData = window.cachedLayoutData;
@@ -159,12 +163,16 @@ async function refreshLayout() {
                 const freshLayoutResponse = await fetch('/layout-data');
                 layoutData = await freshLayoutResponse.json();
                 window.cachedLayoutData = layoutData;
+                window.cachedLayoutETag = freshLayoutResponse.headers.get('etag');
+            }
+
+            // Cache image ETag
+            if (imageChanged) {
+                window.cachedImageETag = imageETag;
             }
 
             // Redraw the canvas with the layout data and image response
             await drawCanvas(layoutData, imageResponse);
-        } else {
-            console.log('No changes detected (both 304), skipping canvas redraw');
         }
 
     } catch (error) {
