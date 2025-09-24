@@ -1,15 +1,16 @@
+# Configuration
+REMOTE_HOST = digink.lan
+
 help:
 	@echo "Available targets:"
 	@echo "  test              - Run tests with pytest"
 	@echo "  lint              - Run code formatting and linting"
-	@echo "  deploy            - Deploy to remote server"
+	@echo "  deploy            - Deploy to remote server (files only)"
+	@echo "  remote-install    - Install dependencies on remote server"
+	@echo "  remote-restart    - Restart service on remote server"
+	@echo "  big-deploy        - Full deployment: deploy + remote-install + remote-restart"
 	@echo "  install-systemd   - Install as systemd service (runs poetry install + systemd setup)"
 	@echo "  uninstall-systemd - Remove systemd service"
-	@echo "  start-service     - Start the systemd service"
-	@echo "  stop-service      - Stop the systemd service"
-	@echo "  restart-service   - Restart the systemd service"
-	@echo "  status-service    - Check systemd service status"
-	@echo "  logs-service      - Follow systemd service logs"
 
 test:
 	poetry run pytest
@@ -20,7 +21,19 @@ lint:
 	poetry run mypy src/
 
 deploy:
-	rsync -avz --delete --exclude='__pycache__' --exclude='.pytest_cache' --exclude='*.pyc' --exclude='.git' --exclude='.sl' --exclude='debug/' --exclude='build/' --exclude='dist/' --exclude='src/*.egg-info/' --exclude='devices.yaml' . digink.lan:./controller/
+	rsync -avz --delete --exclude='__pycache__' --exclude='.pytest_cache' --exclude='*.pyc' --exclude='.git' --exclude='.sl' --exclude='debug/' --exclude='build/' --exclude='dist/' --exclude='src/*.egg-info/' --exclude='devices.yaml' . $(REMOTE_HOST):./controller/
+
+remote-install:
+	@echo "Installing dependencies on $(REMOTE_HOST)..."
+	ssh $(REMOTE_HOST) "cd ./controller && poetry install"
+
+remote-restart:
+	@echo "Restarting tapestry-webui service on $(REMOTE_HOST)..."
+	ssh $(REMOTE_HOST) "sudo systemctl restart tapestry-webui"
+	ssh $(REMOTE_HOST) "sudo systemctl status tapestry-webui --no-pager"
+
+big-deploy: deploy remote-install remote-restart
+	@echo "Big deployment complete!"
 
 install-systemd:
 	@echo "Installing Tapestry WebUI as systemd service..."
@@ -49,18 +62,4 @@ uninstall-systemd:
 	sudo systemctl daemon-reload
 	@echo "Systemd service uninstalled."
 
-start-service:
-	sudo systemctl start tapestry-webui
-
-stop-service:
-	sudo systemctl stop tapestry-webui
-
-restart-service:
-	sudo systemctl restart tapestry-webui
-
-status-service:
-	sudo systemctl status tapestry-webui
-
-logs-service:
-	sudo journalctl -u tapestry-webui -f
 
