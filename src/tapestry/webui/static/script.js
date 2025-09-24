@@ -51,23 +51,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Refresh buttons
-    const refreshLayoutBtn = document.getElementById('refresh-layout');
-    const refreshDevicesBtn = document.getElementById('refresh-devices');
+    // Action buttons
     const clearScreensBtn = document.getElementById('clear-screens');
     const restoreImageBtn = document.getElementById('restore-image');
-    
-    if (refreshLayoutBtn) {
-        refreshLayoutBtn.addEventListener('click', function() {
-            refreshLayout();
-        });
-    }
-    
-    if (refreshDevicesBtn) {
-        refreshDevicesBtn.addEventListener('click', function() {
-            loadDeviceInfo();
-        });
-    }
     
     if (clearScreensBtn) {
         clearScreensBtn.addEventListener('click', function() {
