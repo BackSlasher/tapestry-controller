@@ -880,27 +880,24 @@ def restore_last_image():
         return jsonify({'error': f'Failed to restore image: {str(e)}'}), 500
 
 
-def get_wallpaper_images():
+def get_wallpaper_images(wallpapers_dir):
     """Get list of wallpaper images from wallpapers directory."""
     patterns = ['*.png', '*.jpg', '*.jpeg', '*.gif', '*.bmp', '*.tiff', '*.webp']
     images = []
-    config = get_screensaver_config()
-    wallpapers_dir = config['gallery']['wallpapers_dir']
     for pattern in patterns:
         images.extend(glob.glob(os.path.join(wallpapers_dir, pattern)))
     return images
 
-def get_reddit_wallpaper():
+def get_reddit_wallpaper(subreddit, sort, time_period, limit):
     """Fetch a random wallpaper from Reddit."""
     import requests
     import random
     from urllib.parse import urlparse
 
-    config = get_screensaver_config()['reddit']
-    url = f"https://www.reddit.com/r/{config['subreddit']}/{config['sort']}/.json"
+    url = f"https://www.reddit.com/r/{subreddit}/{sort}/.json"
     params = {
-        't': config['time_period'],
-        'limit': config['limit']
+        't': time_period,
+        'limit': limit
     }
 
     headers = {
@@ -960,55 +957,43 @@ def get_reddit_wallpaper():
 def screensaver_worker():
     """Background worker that cycles through wallpaper images."""
     stop_event = screensaver_runtime['stop_event']
-    first_iteration = True
 
     while not stop_event.is_set():
         try:
-            image = None
             config = get_screensaver_config()
+            image = None
 
             if config['type'] == 'gallery':
-                # Get list of wallpaper images
-                images = get_wallpaper_images()
+                images = get_wallpaper_images(config['gallery']['wallpapers_dir'])
                 if not images:
                     logger.warning(f"No wallpaper images found in {config['gallery']['wallpapers_dir']}")
-                    stop_event.wait(config['interval'])
                     continue
-
-                # Choose random image
                 image_path = random.choice(images)
                 logger.info(f"Gallery screensaver: displaying {os.path.basename(image_path)}")
-
-                # Load image
                 image = PIL.Image.open(image_path)
 
             elif config['type'] == 'reddit':
-                # Fetch image from Reddit
-                image = get_reddit_wallpaper()
+                image = get_reddit_wallpaper(
+                    config['reddit']['subreddit'],
+                    config['reddit']['sort'],
+                    config['reddit']['time_period'],
+                    config['reddit']['limit']
+                )
                 if not image:
                     logger.warning("Failed to fetch Reddit wallpaper, waiting...")
-                    stop_event.wait(config['interval'])
                     continue
 
             if not image:
                 logger.warning(f"No image available for screensaver type: {config['type']}")
-                stop_event.wait(config['interval'])
                 continue
-            
-            # Send to devices first
+
             controller.send_image(image)
-            
-            # Only save for layout overlay if send was successful
             save_last_image(image)
-            
+
         except Exception as e:
             logger.error(f"Screensaver error: {e}")
-        
-        # Wait for next cycle or stop signal
-        # For first iteration, don't wait - show image immediately
-        if not first_iteration:
-            stop_event.wait(config['interval'])
-        first_iteration = False
+
+        stop_event.wait(config['interval'])
 
 def start_screensaver_internal():
     """Start the screensaver (internal version for startup)."""
@@ -1032,7 +1017,7 @@ def start_screensaver_internal():
         if not os.path.exists(wallpapers_dir):
             raise Exception(f"Wallpapers directory '{wallpapers_dir}' not found")
 
-        images = get_wallpaper_images()
+        images = get_wallpaper_images(wallpapers_dir)
         if not images:
             raise Exception(f"No wallpaper images found in '{wallpapers_dir}'")
         image_count = len(images)
@@ -1108,7 +1093,7 @@ def screensaver_status():
     }
 
     if config['type'] == 'gallery':
-        images = get_wallpaper_images()
+        images = get_wallpaper_images(config['gallery']['wallpapers_dir'])
         status.update({
             'wallpapers_dir': config['gallery']['wallpapers_dir'],
             'image_count': len(images),
@@ -1416,22 +1401,19 @@ def main():
     """Main entry point for web UI."""
     args = parse_args()
 
-    # Set up logging
     logging.basicConfig(
         level=logging.DEBUG if args.debug else logging.INFO,
         format='[%(levelname)s] %(message)s'
     )
 
-    # Initialize settings
-    logger.info("Initializing settings...")
-    get_settings()
+    settings = get_settings()
 
-    # Initialize controller
     global controller
     controller = TapestryController.from_config_file(args.devices_file)
 
-    # Auto-start screensaver if enabled in settings
     settings = get_settings()
+
+    # Auto-start screensaver if enabled in settings
     if settings.screensaver.enabled:
         logger.info("Screensaver is enabled in settings, starting automatically...")
         try:
@@ -1439,10 +1421,6 @@ def main():
             logger.info(f"Screensaver started successfully: {message}")
         except Exception as e:
             logger.error(f"Failed to auto-start screensaver: {e}")
-
-    # Start image loading in background thread
-    # Automatic image loading on startup has been removed
-    # Use the "Restore Last Image" button on the main page instead
 
     logger.info(f"Starting Tapestry Web UI with {len(controller.config.devices)} devices")
     logger.info(f"Access at http://{args.host}:{args.port}")
