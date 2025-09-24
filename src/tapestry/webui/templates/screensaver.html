@@ -28,6 +28,7 @@
                             <label for="screensaver-type" class="form-label">Type</label>
                             <select class="form-select" id="screensaver-type" name="type">
                                 <option value="gallery">Gallery - Random wallpapers</option>
+                                <option value="reddit">Reddit - AI Wallpapers</option>
                             </select>
                         </div>
                         <div class="col-md-6">
@@ -45,6 +46,16 @@
                                 <option value="">Loading...</option>
                             </select>
                             <div class="form-text">Directory containing wallpaper images</div>
+                        </div>
+                    </div>
+
+                    <!-- Reddit Type Settings -->
+                    <div id="reddit-settings" class="screensaver-type-settings" style="display: none;">
+                        <h6>Reddit Settings</h6>
+                        <div class="mb-3">
+                            <label for="reddit-limit" class="form-label">Number of top posts to consider</label>
+                            <input type="number" class="form-control" id="reddit-limit" name="reddit_limit" min="1" max="100" value="30">
+                            <div class="form-text">Random selection from top N posts in r/aiwallpapers</div>
                         </div>
                     </div>
 
@@ -105,6 +116,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('screensaver-type').addEventListener('change', function() {
         showTypeSettings(this.value);
     });
+
+    // Initialize type settings display
+    showTypeSettings(document.getElementById('screensaver-type').value);
 });
 
 function loadScreensaverStatus() {
@@ -116,11 +130,15 @@ function loadScreensaverStatus() {
         .then(response => response.json())
         .then(data => {
             if (data.active) {
+                const typeInfo = data.type === 'reddit'
+                    ? 'Reddit r/aiwallpapers'
+                    : `Gallery (${data.wallpapers_dir})`;
+
                 statusDiv.innerHTML = `
                     <div class="alert alert-success mb-0">
                         <i class="bi bi-play-circle-fill"></i>
                         <strong>Screensaver Active</strong>
-                        <br>Type: Gallery | Interval: ${data.interval}s | Directory: ${data.wallpapers_dir}
+                        <br>Type: ${data.type} | Interval: ${data.interval}s | Source: ${typeInfo}
                     </div>
                 `;
                 startBtn.style.display = 'none';
@@ -147,21 +165,44 @@ function loadScreensaverConfig() {
         .then(response => response.json())
         .then(data => {
             document.getElementById('screensaver-interval').value = data.interval || 60;
+            document.getElementById('screensaver-type').value = data.type || 'gallery';
+
+            // Load type-specific config
+            if (data.type === 'reddit') {
+                // Load Reddit config
+                fetch('/screensaver/config/reddit')
+                    .then(response => response.json())
+                    .then(redditData => {
+                        document.getElementById('reddit-limit').value = redditData.limit || 30;
+                    })
+                    .catch(error => {
+                        console.error('Error loading Reddit config:', error);
+                        document.getElementById('reddit-limit').value = 30;
+                    });
+            }
+
+            // Show appropriate settings
+            showTypeSettings(data.type || 'gallery');
 
             // Update current config display
+            const typeDisplay = data.type === 'reddit' ? 'Reddit' : 'Gallery';
+            const extraInfo = data.type === 'reddit'
+                ? `r/aiwallpapers (top 30)`
+                : data.wallpapers_dir || 'wallpapers';
+
             document.getElementById('current-config').innerHTML = `
                 <div class="row">
                     <div class="col-md-4">
                         <strong>Type:</strong><br>
-                        Gallery
+                        ${typeDisplay}
                     </div>
                     <div class="col-md-4">
                         <strong>Interval:</strong><br>
                         ${data.interval || 60} seconds
                     </div>
                     <div class="col-md-4">
-                        <strong>Directory:</strong><br>
-                        ${data.wallpapers_dir || 'wallpapers'}
+                        <strong>Source:</strong><br>
+                        ${extraInfo}
                     </div>
                 </div>
             `;

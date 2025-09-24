@@ -35,6 +35,12 @@ screensaver_state = {
     'config': {
         'gallery': {
             'wallpapers_dir': 'wallpapers'
+        },
+        'reddit': {
+            'subreddit': 'aiwallpapers',
+            'time_period': 'all',
+            'sort': 'top',
+            'limit': 30
         }
     }
 }
@@ -851,6 +857,63 @@ def get_wallpaper_images():
         images.extend(glob.glob(os.path.join(wallpapers_dir, pattern)))
     return images
 
+def get_reddit_wallpaper():
+    """Fetch a random wallpaper from Reddit."""
+    import requests
+    import random
+    from urllib.parse import urlparse
+
+    config = screensaver_state['config']['reddit']
+    url = f"https://www.reddit.com/r/{config['subreddit']}/{config['sort']}/.json"
+    params = {
+        't': config['time_period'],
+        'limit': config['limit']
+    }
+
+    headers = {
+        'User-Agent': 'Tapestry:v1.0 (by /u/tapestry_user)'
+    }
+
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        # Filter posts that have valid image URLs
+        image_posts = []
+        for post in data['data']['children']:
+            post_data = post['data']
+            url = post_data.get('url', '')
+
+            # Check if it's a direct image URL
+            parsed_url = urlparse(url)
+            if parsed_url.path.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+                image_posts.append({
+                    'url': url,
+                    'title': post_data.get('title', 'Reddit Wallpaper')
+                })
+
+        if not image_posts:
+            raise Exception("No valid image posts found")
+
+        # Select random image
+        selected = random.choice(image_posts)
+
+        # Download the image
+        img_response = requests.get(selected['url'], headers=headers, timeout=30)
+        img_response.raise_for_status()
+
+        # Open as PIL Image
+        from io import BytesIO
+        image = PIL.Image.open(BytesIO(img_response.content))
+        print(f"Reddit screensaver: displaying '{selected['title']}'")
+
+        return image
+
+    except Exception as e:
+        print(f"Error fetching Reddit wallpaper: {str(e)}")
+        return None
+
 def screensaver_worker():
     """Background worker that cycles through wallpaper images."""
     stop_event = screensaver_state['stop_event']
@@ -858,19 +921,35 @@ def screensaver_worker():
     
     while not stop_event.is_set():
         try:
-            # Get list of wallpaper images
-            images = get_wallpaper_images()
-            if not images:
-                print("No wallpaper images found in", screensaver_state['config']['gallery']['wallpapers_dir'])
+            image = None
+
+            if screensaver_state['type'] == 'gallery':
+                # Get list of wallpaper images
+                images = get_wallpaper_images()
+                if not images:
+                    print("No wallpaper images found in", screensaver_state['config']['gallery']['wallpapers_dir'])
+                    stop_event.wait(screensaver_state['interval'])
+                    continue
+
+                # Choose random image
+                image_path = random.choice(images)
+                print(f"Gallery screensaver: displaying {os.path.basename(image_path)}")
+
+                # Load image
+                image = PIL.Image.open(image_path)
+
+            elif screensaver_state['type'] == 'reddit':
+                # Fetch image from Reddit
+                image = get_reddit_wallpaper()
+                if not image:
+                    print("Failed to fetch Reddit wallpaper, waiting...")
+                    stop_event.wait(screensaver_state['interval'])
+                    continue
+
+            if not image:
+                print(f"No image available for screensaver type: {screensaver_state['type']}")
                 stop_event.wait(screensaver_state['interval'])
                 continue
-            
-            # Choose random image
-            image_path = random.choice(images)
-            print(f"Screensaver: displaying {os.path.basename(image_path)}")
-            
-            # Load and send image
-            image = PIL.Image.open(image_path)
             
             # Send to devices first
             controller.send_image(image)
@@ -896,15 +975,21 @@ def start_screensaver():
     if screensaver_state['active']:
         return jsonify({'error': 'Screensaver already active'}), 400
     
-    # Check if wallpapers directory exists and has images
-    wallpapers_dir = screensaver_state['config']['gallery']['wallpapers_dir']
-    if not os.path.exists(wallpapers_dir):
-        return jsonify({'error': f"Wallpapers directory '{wallpapers_dir}' not found"}), 400
+    # Validate screensaver type-specific requirements
+    image_count = 0
+    if screensaver_state['type'] == 'gallery':
+        wallpapers_dir = screensaver_state['config']['gallery']['wallpapers_dir']
+        if not os.path.exists(wallpapers_dir):
+            return jsonify({'error': f"Wallpapers directory '{wallpapers_dir}' not found"}), 400
 
-    images = get_wallpaper_images()
-    if not images:
-        return jsonify({'error': f"No wallpaper images found in '{wallpapers_dir}'"}), 400
-    
+        images = get_wallpaper_images()
+        if not images:
+            return jsonify({'error': f"No wallpaper images found in '{wallpapers_dir}'"}), 400
+        image_count = len(images)
+    elif screensaver_state['type'] == 'reddit':
+        # For Reddit, we'll validate connectivity when we actually try to fetch
+        image_count = screensaver_state['config']['reddit']['limit']
+
     try:
         # Start screensaver thread
         screensaver_state['stop_event'] = threading.Event()
@@ -912,11 +997,17 @@ def start_screensaver():
         screensaver_state['thread'].daemon = True
         screensaver_state['active'] = True
         screensaver_state['thread'].start()
-        
+
+        message = f'Screensaver started'
+        if screensaver_state['type'] == 'gallery':
+            message += f' with {image_count} wallpapers'
+        elif screensaver_state['type'] == 'reddit':
+            message += f' using Reddit r/{screensaver_state["config"]["reddit"]["subreddit"]}'
+
         return jsonify({
             'success': True,
-            'message': f'Screensaver started with {len(images)} wallpapers',
-            'image_count': len(images)
+            'message': message,
+            'image_count': image_count
         })
         
     except Exception as e:
@@ -952,16 +1043,27 @@ def stop_screensaver():
 @app.route('/screensaver/status')
 def screensaver_status():
     """Get screensaver status."""
-    images = get_wallpaper_images()
-    
-    return jsonify({
+    status = {
         'active': screensaver_state['active'],
         'type': screensaver_state['type'],
-        'interval': screensaver_state['interval'],
-        'wallpapers_dir': screensaver_state['config']['gallery']['wallpapers_dir'],
-        'image_count': len(images),
-        'has_images': len(images) > 0
-    })
+        'interval': screensaver_state['interval']
+    }
+
+    if screensaver_state['type'] == 'gallery':
+        images = get_wallpaper_images()
+        status.update({
+            'wallpapers_dir': screensaver_state['config']['gallery']['wallpapers_dir'],
+            'image_count': len(images),
+            'has_images': len(images) > 0
+        })
+    elif screensaver_state['type'] == 'reddit':
+        status.update({
+            'wallpapers_dir': f"r/{screensaver_state['config']['reddit']['subreddit']}",
+            'image_count': screensaver_state['config']['reddit']['limit'],
+            'has_images': True  # Assume Reddit is available
+        })
+
+    return jsonify(status)
 
 @app.route('/screensaver/wallpaper-dirs')
 def get_wallpaper_directories():
@@ -969,6 +1071,11 @@ def get_wallpaper_directories():
     return jsonify({
         'directories': ['wallpapers']
     })
+
+@app.route('/screensaver/config/reddit')
+def get_reddit_config():
+    """Get Reddit screensaver configuration."""
+    return jsonify(screensaver_state['config']['reddit'])
 
 @app.route('/screensaver/config', methods=['POST'])
 def update_screensaver_config():
@@ -1003,7 +1110,7 @@ def update_screensaver_config():
         # Update type
         if 'type' in data:
             screensaver_type = data['type']
-            if screensaver_type not in ['gallery']:  # Add more types as implemented
+            if screensaver_type not in ['gallery', 'reddit']:
                 return jsonify({'error': f'Unknown screensaver type: {screensaver_type}'}), 400
             screensaver_state['type'] = screensaver_type
 
@@ -1013,6 +1120,11 @@ def update_screensaver_config():
                 wallpapers_dir = data['wallpapers_dir'].strip()
                 if wallpapers_dir:
                     screensaver_state['config']['gallery']['wallpapers_dir'] = wallpapers_dir
+        elif screensaver_state['type'] == 'reddit':
+            if 'reddit_limit' in data:
+                limit = int(data['reddit_limit'])
+                if 1 <= limit <= 100:
+                    screensaver_state['config']['reddit']['limit'] = limit
 
         # Restart screensaver if it was active
         if was_active:
@@ -1022,14 +1134,17 @@ def update_screensaver_config():
             screensaver_state['active'] = True
             screensaver_state['thread'].start()
 
+        config_info = {'type': screensaver_state['type'], 'interval': screensaver_state['interval']}
+
+        if screensaver_state['type'] == 'gallery':
+            config_info['wallpapers_dir'] = screensaver_state['config']['gallery']['wallpapers_dir']
+        elif screensaver_state['type'] == 'reddit':
+            config_info['reddit_limit'] = screensaver_state['config']['reddit']['limit']
+
         return jsonify({
             'success': True,
             'message': 'Screensaver configuration updated successfully',
-            'config': {
-                'type': screensaver_state['type'],
-                'interval': screensaver_state['interval'],
-                'wallpapers_dir': screensaver_state['config']['gallery']['wallpapers_dir']
-            },
+            'config': config_info,
             'restarted': was_active
         })
 
