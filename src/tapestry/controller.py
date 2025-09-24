@@ -1,8 +1,10 @@
-import PIL.Image
 import threading
+
+import PIL.Image
+
+from .device import clear, draw
+from .geometry import Dimensions, Point, Rectangle
 from .models import Config, load_config
-from .geometry import Point, Dimensions, Rectangle
-from .device import draw, clear
 
 
 class TapestryController:

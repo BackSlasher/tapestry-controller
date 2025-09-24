@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import argparse
-import requests
 from typing import NamedTuple
+
 import PIL
 import PIL.Image
 import PIL.ImageOps
+import requests
+
 from .geometry import Dimensions
 
 
@@ -12,11 +14,11 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("hostname")
     subparsers = parser.add_subparsers(dest="command")
-    clear_parser = subparsers.add_parser("clear")
+    subparsers.add_parser("clear")
     draw_parser = subparsers.add_parser("draw")
     draw_parser.add_argument("-c", "--clear", action="store_true")
     draw_parser.add_argument("file")
-    info_praser = subparsers.add_parser("info")
+    subparsers.add_parser("info")
 
     return parser.parse_args()
 

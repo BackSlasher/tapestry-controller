@@ -1,11 +1,16 @@
 from typing import NamedTuple
+
 import yaml
-from PIL import Image, ImageDraw, ImageFont
-from .geometry import Point, Dimensions, Rectangle
-from .screen_types import SCREEN_TYPES
 
 # Import PIL modules unconditionally to fail early if missing dependencies
-from PIL import _imagingft  # This will fail immediately if FreeType support is missing
+from PIL import (
+    Image,
+    ImageDraw,
+    ImageFont,  # This will fail immediately if FreeType support is missing
+)
+
+from .geometry import Dimensions, Point, Rectangle
+from .screen_types import SCREEN_TYPES
 
 
 class Coordinates(NamedTuple):

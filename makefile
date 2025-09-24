@@ -16,6 +16,7 @@ test:
 	poetry run pytest
 
 lint:
+	poetry run ruff check --fix src/
 	poetry run black src/
 	poetry run autoflake8 -ri src/
 	poetry run flake8 src/

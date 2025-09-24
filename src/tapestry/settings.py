@@ -1,14 +1,15 @@
 """Settings management for Tapestry controller using Pydantic Settings."""
 
-import toml
 import logging
 from typing import Literal
+
+import toml
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import (
     BaseSettings,
+    PydanticBaseSettingsSource,
     SettingsConfigDict,
     TomlConfigSettingsSource,
-    PydanticBaseSettingsSource,
 )
 
 logger = logging.getLogger(__name__)

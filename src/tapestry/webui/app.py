@@ -1,35 +1,37 @@
 #!/usr/bin/env python3
-import os
-import io
 import argparse
-import hashlib
-import logging
-import random
 import glob
-import threading
-import subprocess
+import hashlib
+import io
+import logging
+import os
 import queue
+import random
+import subprocess
+import threading
+
+import PIL.Image
 from flask import (
     Flask,
+    Response,
+    flash,
+    jsonify,
+    redirect,
     render_template,
     request,
-    jsonify,
     send_file,
-    flash,
-    redirect,
     url_for,
-    Response,
 )
-import PIL.Image
 from PIL import ImageDraw, ImageFont
+
 from ..controller import TapestryController
-from ..geometry import Point, Dimensions, Rectangle
+from ..geometry import Dimensions, Point, Rectangle
 from ..screen_types import SCREEN_TYPES
 from ..settings import (
-    get_settings,
-    ScreensaverSettings,
     GallerySettings,
     RedditSettings,
+    ScreensaverSettings,
+    get_settings,
 )
 
 app = Flask(__name__)
@@ -222,7 +224,7 @@ def load_persisted_image():
 
 def save_last_image(image):
     """Save the last sent image for layout overlay."""
-    from ..geometry import Point, Dimensions, Rectangle
+    from ..geometry import Dimensions, Point, Rectangle
 
     # Calculate device rectangles and bounding rectangle (same as controller does)
     device_rectangles = {}
@@ -291,8 +293,8 @@ def positioning():
 def start_qr_positioning():
     """Start QR positioning mode - display QR codes on all discovered devices."""
     try:
-        from ..qr_generation import generate_all_positioning_qr_images
         from ..device import draw_unrotated
+        from ..qr_generation import generate_all_positioning_qr_images
 
         # Discover devices from DHCP and generate QR codes
         qr_images = generate_all_positioning_qr_images()
@@ -366,8 +368,8 @@ def analyze_positioning_photo():
 
     try:
         from ..position_detection import (
-            detect_qr_positions,
             calculate_physical_positions,
+            detect_qr_positions,
             generate_updated_config,
         )
 
@@ -541,8 +543,9 @@ def positioning_layout_preview():
         detected_config = json.loads(request.args.get("detected_config"))
 
         # Create temporary config from detected positions
-        from ..models import Config, Device, Coordinates, DetectedDimensions
         import io
+
+        from ..models import Config, Coordinates, DetectedDimensions, Device
 
         devices = []
         for device_data in detected_config.get("devices", []):
@@ -963,9 +966,10 @@ def get_wallpaper_images(wallpapers_dir):
 
 def get_reddit_wallpaper(subreddit, sort, time_period, limit):
     """Fetch a random wallpaper from Reddit."""
-    import requests
     import random
     from urllib.parse import urlparse
+
+    import requests
 
     url = f"https://www.reddit.com/r/{subreddit}/{sort}/.json"
     params = {"t": time_period, "limit": limit}
@@ -1095,7 +1099,6 @@ def start_screensaver_internal():
     config = get_screensaver_config()
 
     # Validate screensaver type-specific requirements
-    image_count = 0
     if config["type"] == "gallery":
         wallpapers_dir = config["gallery"]["wallpapers_dir"]
         if not os.path.exists(wallpapers_dir):
@@ -1104,10 +1107,9 @@ def start_screensaver_internal():
         images = get_wallpaper_images(wallpapers_dir)
         if not images:
             raise Exception(f"No wallpaper images found in '{wallpapers_dir}'")
-        image_count = len(images)
     elif config["type"] == "reddit":
         # For Reddit, we'll validate connectivity when we actually try to fetch
-        image_count = config["reddit"]["limit"]
+        pass
 
     # Start screensaver thread
     screensaver_runtime["stop_event"] = threading.Event()

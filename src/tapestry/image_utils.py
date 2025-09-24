@@ -1,7 +1,9 @@
 from typing import NamedTuple
+
 import PIL.Image
 import PIL.ImageOps
-from .geometry import Dimensions, Rectangle, Point
+
+from .geometry import Dimensions, Point, Rectangle
 
 
 class ResizeResult(NamedTuple):

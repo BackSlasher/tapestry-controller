@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import argparse
+
 import PIL.Image
+
 from .controller import TapestryController
 
 

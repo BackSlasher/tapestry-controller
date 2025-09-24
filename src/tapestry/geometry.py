@@ -22,9 +22,6 @@ class Rectangle(NamedTuple):
     dimensions: Dimensions
 
     def get_corners(self) -> list[Point]:
-        ret = []
-        x = self.start.x
-        y = self.start.y
         return [
             self.start,
             self.start + self.dimensions,
