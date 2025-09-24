@@ -47,6 +47,26 @@
                 <h5 class="card-title mb-0">Send Image</h5>
             </div>
             <div class="card-body">
+                <!-- Screensaver Active Message -->
+                <div id="screensaver-message" class="d-none">
+                    <div class="text-center py-4">
+                        <div class="mb-3">
+                            <i class="bi bi-display text-muted" style="font-size: 3rem;"></i>
+                            <h5 class="text-muted mt-3">Screensaver Active</h5>
+                            <p class="text-muted">Manual image sending is disabled while screensaver is running</p>
+                        </div>
+                        <div class="d-grid gap-2">
+                            <a href="{{ url_for('screensaver_config') }}" class="btn btn-outline-primary">
+                                <i class="bi bi-gear"></i> Configure Screensaver
+                            </a>
+                            <button type="button" class="btn btn-outline-danger" id="disable-screensaver">
+                                <i class="bi bi-stop"></i> Stop Screensaver
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upload Form -->
                 <form id="upload-form" action="{{ url_for('upload_image') }}" method="post" enctype="multipart/form-data">
                     <div class="mb-3">
                         <label for="image-input" class="form-label">Select Image</label>

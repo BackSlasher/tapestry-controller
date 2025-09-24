@@ -6,10 +6,13 @@ let layoutRefreshInterval = null;
 document.addEventListener('DOMContentLoaded', function() {
     // Load device information on page load
     loadDeviceInfo();
-    
+
     // Initialize canvas layout
     initializeCanvas();
-    
+
+    // Check screensaver status and update overlay
+    checkScreensaverStatus();
+
     // Image preview functionality
     const imageInput = document.getElementById('image-input');
     const imagePreview = document.getElementById('image-preview');
@@ -74,7 +77,15 @@ document.addEventListener('DOMContentLoaded', function() {
             restoreLastImage();
         });
     }
-    
+
+    // Screensaver overlay stop button
+    const disableScreensaverBtn = document.getElementById('disable-screensaver');
+    if (disableScreensaverBtn) {
+        disableScreensaverBtn.addEventListener('click', function() {
+            stopScreensaverFromOverlay();
+        });
+    }
+
 });
 
 function loadDeviceInfo() {
@@ -520,6 +531,63 @@ function showAlert(message, type = 'info') {
 
 
 
+
+function checkScreensaverStatus() {
+    const screensaverMessage = document.getElementById('screensaver-message');
+    const uploadForm = document.getElementById('upload-form');
+    if (!screensaverMessage || !uploadForm) return; // Not on main page
+
+    fetch('/screensaver/status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.active) {
+                screensaverMessage.classList.remove('d-none');
+                uploadForm.classList.add('d-none');
+            } else {
+                screensaverMessage.classList.add('d-none');
+                uploadForm.classList.remove('d-none');
+            }
+        })
+        .catch(error => {
+            console.error('Error checking screensaver status:', error);
+            // Show upload form on error
+            screensaverMessage.classList.add('d-none');
+            uploadForm.classList.remove('d-none');
+        });
+}
+
+function stopScreensaverFromOverlay() {
+    const disableBtn = document.getElementById('disable-screensaver');
+    if (!disableBtn) return;
+
+    // Show loading state
+    const originalText = disableBtn.innerHTML;
+    disableBtn.disabled = true;
+    disableBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Stopping...';
+
+    fetch('/screensaver/stop', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Screensaver stopped successfully', 'success');
+            // Update UI to show upload form
+            checkScreensaverStatus();
+        } else {
+            showAlert(data.error || 'Failed to stop screensaver', 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error stopping screensaver:', error);
+        showAlert('Failed to stop screensaver', 'danger');
+    })
+    .finally(() => {
+        // Restore button state
+        disableBtn.disabled = false;
+        disableBtn.innerHTML = originalText;
+    });
+}
 
 // Auto-dismiss alerts after 5 seconds
 document.addEventListener('DOMContentLoaded', function() {
