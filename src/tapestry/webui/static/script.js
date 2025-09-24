@@ -13,6 +13,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Check screensaver status and update overlay
     checkScreensaverStatus();
 
+    // Set up periodic screensaver status check and layout refresh
+    setInterval(() => {
+        checkScreensaverStatus();
+        refreshLayout(); // This will use ETag caching automatically
+    }, 5000); // Check every 5 seconds
+
     // Image preview functionality
     const imageInput = document.getElementById('image-input');
     const imagePreview = document.getElementById('image-preview');
@@ -588,6 +594,7 @@ function stopScreensaverFromOverlay() {
         disableBtn.innerHTML = originalText;
     });
 }
+
 
 // Auto-dismiss alerts after 5 seconds
 document.addEventListener('DOMContentLoaded', function() {

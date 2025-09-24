@@ -2,6 +2,7 @@
 import os
 import io
 import argparse
+import hashlib
 import logging
 import time
 import random
@@ -627,33 +628,59 @@ def layout_data():
         })
 
 
+
 @app.route('/current-image')
 def current_image():
-    """Serve the current image thumbnail for the canvas."""
+    """Serve the current image thumbnail for the canvas with caching support."""
     try:
+        # Get or create thumbnail
         thumbnail = get_or_create_thumbnail()
         if thumbnail is not None:
             # Convert thumbnail to bytes
             img_buffer = io.BytesIO()
             thumbnail.save(img_buffer, format='PNG')
-            img_buffer.seek(0)
-            return send_file(img_buffer, mimetype='image/png')
+            img_data = img_buffer.getvalue()
         else:
             # Return empty/placeholder image
             placeholder_img = PIL.Image.new('RGB', (400, 300), color='white')
             img_buffer = io.BytesIO()
             placeholder_img.save(img_buffer, format='PNG')
-            img_buffer.seek(0)
-            return send_file(img_buffer, mimetype='image/png')
-            
+            img_data = img_buffer.getvalue()
+
+        # Calculate MD5 hash of the image data
+        md5_hash = hashlib.md5(img_data).hexdigest()
+        etag = f'"{md5_hash}"'
+
+        # Check if client has the same version
+        client_etag = request.headers.get('If-None-Match')
+        if client_etag == etag:
+            return '', 304  # Not Modified
+
+        # Create new buffer for sending
+        img_buffer = io.BytesIO(img_data)
+        response = send_file(img_buffer, mimetype='image/png')
+
+        # Add caching headers
+        response.headers['ETag'] = etag
+        response.headers['Cache-Control'] = 'private, max-age=0, must-revalidate'
+        return response
+
     except Exception as e:
         logger.error(f"Error serving current image: {e}")
         # Return error placeholder
         error_img = PIL.Image.new('RGB', (400, 300), color='lightgray')
         img_buffer = io.BytesIO()
         error_img.save(img_buffer, format='PNG')
-        img_buffer.seek(0)
-        return send_file(img_buffer, mimetype='image/png')
+        img_data = img_buffer.getvalue()
+
+        # Hash the error image too
+        md5_hash = hashlib.md5(img_data).hexdigest()
+        etag = f'"{md5_hash}"'
+
+        img_buffer = io.BytesIO(img_data)
+        response = send_file(img_buffer, mimetype='image/png')
+        response.headers['ETag'] = etag
+        return response
 
 
 @app.route('/layout-image')
