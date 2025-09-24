@@ -7,9 +7,8 @@ import math
 import numpy as np
 from PIL import Image
 import cv2
-from typing import Dict, List, Tuple, NamedTuple, Optional
-from .models import Device, Config
-from .screen_types import SCREEN_TYPES
+from typing import Dict, List, NamedTuple, Tuple
+from .models import Config
 
 
 class QRPositionData(NamedTuple):

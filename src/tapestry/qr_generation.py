@@ -2,13 +2,12 @@
 QR code generation and device discovery for positioning system.
 """
 
-import io
 import json
 import qrcode
 import subprocess
 import requests
-from PIL import Image, ImageDraw
-from typing import Dict, List, Tuple, NamedTuple, Optional
+from PIL import Image
+from typing import Dict, List, NamedTuple, Optional
 from .screen_types import SCREEN_TYPES
 
 

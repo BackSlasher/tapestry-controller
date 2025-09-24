@@ -163,7 +163,6 @@ class Config(NamedTuple):
                 )
 
                 # Add orientation indicator (emoji)
-                import math
 
                 center_x = width // 2
                 center_y = height // 2

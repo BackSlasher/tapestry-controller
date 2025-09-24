@@ -2,7 +2,6 @@
 
 import toml
 import logging
-from pathlib import Path
 from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import (

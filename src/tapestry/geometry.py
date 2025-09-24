@@ -1,6 +1,4 @@
 from typing import NamedTuple
-import math
-import PIL.Image
 
 
 class Dimensions(NamedTuple):

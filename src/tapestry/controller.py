@@ -2,7 +2,6 @@ import PIL.Image
 import threading
 from .models import Config, load_config
 from .geometry import Point, Dimensions, Rectangle
-from .image_utils import image_refit, image_crop
 from .device import draw, clear
 
 

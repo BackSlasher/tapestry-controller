@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 import os
 import io
-import json
 import argparse
 import hashlib
 import logging
-import time
 import random
 import glob
 import threading
@@ -22,14 +20,11 @@ from flask import (
     url_for,
     Response,
 )
-from werkzeug.utils import secure_filename
 import PIL.Image
-from PIL import ExifTags, ImageDraw, ImageFont
+from PIL import ImageDraw, ImageFont
 from ..controller import TapestryController
 from ..geometry import Point, Dimensions, Rectangle
-from ..models import load_config
 from ..screen_types import SCREEN_TYPES
-from ..image_utils import image_refit, image_crop
 from ..settings import (
     get_settings,
     ScreensaverSettings,
@@ -202,7 +197,6 @@ def fix_image_orientation(image):
     except Exception as e:
         logger.warning(f"Could not fix image orientation: {e}")
         # Return original image if EXIF processing fails
-        pass
 
     return image
 
@@ -229,7 +223,6 @@ def load_persisted_image():
 def save_last_image(image):
     """Save the last sent image for layout overlay."""
     from ..geometry import Point, Dimensions, Rectangle
-    from ..image_utils import image_refit
 
     # Calculate device rectangles and bounding rectangle (same as controller does)
     device_rectangles = {}
@@ -549,7 +542,6 @@ def positioning_layout_preview():
 
         # Create temporary config from detected positions
         from ..models import Config, Device, Coordinates, DetectedDimensions
-        from ..geometry import Point, Dimensions, Rectangle
         import io
 
         devices = []
