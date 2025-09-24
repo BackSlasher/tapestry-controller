@@ -1,0 +1,319 @@
+{% extends "base.html" %}
+
+{% block title %}Screensaver Configuration - Tapestry Controller{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title mb-0">
+                    <i class="bi bi-display"></i> Screensaver Configuration
+                </h3>
+            </div>
+            <div class="card-body">
+                <!-- Screensaver Status -->
+                <div id="screensaver-status" class="mb-4">
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border spinner-border-sm" role="status">
+                            <span class="visually-hidden">Loading status...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Screensaver Configuration Form -->
+                <form id="screensaver-config-form">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="screensaver-type" class="form-label">Type</label>
+                            <select class="form-select" id="screensaver-type" name="type">
+                                <option value="gallery">Gallery - Random wallpapers</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="screensaver-interval" class="form-label">Interval (seconds)</label>
+                            <input type="number" class="form-control" id="screensaver-interval" name="interval" min="1" max="3600" value="60">
+                        </div>
+                    </div>
+
+                    <!-- Gallery Type Settings -->
+                    <div id="gallery-settings" class="screensaver-type-settings">
+                        <h6>Gallery Settings</h6>
+                        <div class="mb-3">
+                            <label for="wallpapers-dir" class="form-label">Wallpapers Directory</label>
+                            <select class="form-select" id="wallpapers-dir" name="wallpapers_dir">
+                                <option value="">Loading...</option>
+                            </select>
+                            <div class="form-text">Directory containing wallpaper images</div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check2"></i> Update Configuration
+                        </button>
+                    </div>
+                </form>
+
+                <hr>
+
+                <!-- Screensaver Control -->
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-success" id="start-screensaver" style="display: none;">
+                        <i class="bi bi-play-fill"></i> Start Screensaver
+                    </button>
+                    <button type="button" class="btn btn-danger" id="stop-screensaver" style="display: none;">
+                        <i class="bi bi-stop-fill"></i> Stop Screensaver
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Current Screensaver Info -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Current Configuration</h5>
+            </div>
+            <div class="card-body" id="current-config">
+                <div class="d-flex justify-content-center">
+                    <div class="spinner-border spinner-border-sm" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadScreensaverStatus();
+    loadScreensaverConfig();
+    loadWallpaperDirectories();
+
+    // Form submission
+    document.getElementById('screensaver-config-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        updateScreensaverConfig();
+    });
+
+    // Control buttons
+    document.getElementById('start-screensaver').addEventListener('click', startScreensaver);
+    document.getElementById('stop-screensaver').addEventListener('click', stopScreensaver);
+
+    // Type selection change
+    document.getElementById('screensaver-type').addEventListener('change', function() {
+        showTypeSettings(this.value);
+    });
+});
+
+function loadScreensaverStatus() {
+    const statusDiv = document.getElementById('screensaver-status');
+    const startBtn = document.getElementById('start-screensaver');
+    const stopBtn = document.getElementById('stop-screensaver');
+
+    fetch('/screensaver/status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.active) {
+                statusDiv.innerHTML = `
+                    <div class="alert alert-success mb-0">
+                        <i class="bi bi-play-circle-fill"></i>
+                        <strong>Screensaver Active</strong>
+                        <br>Type: Gallery | Interval: ${data.interval}s | Directory: ${data.wallpapers_dir}
+                    </div>
+                `;
+                startBtn.style.display = 'none';
+                stopBtn.style.display = 'block';
+            } else {
+                statusDiv.innerHTML = `
+                    <div class="alert alert-secondary mb-0">
+                        <i class="bi bi-stop-circle"></i>
+                        <strong>Screensaver Inactive</strong>
+                    </div>
+                `;
+                startBtn.style.display = 'block';
+                stopBtn.style.display = 'none';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading screensaver status:', error);
+            statusDiv.innerHTML = '<div class="alert alert-danger mb-0">Failed to load screensaver status</div>';
+        });
+}
+
+function loadScreensaverConfig() {
+    fetch('/screensaver/status')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('screensaver-interval').value = data.interval || 60;
+
+            // Update current config display
+            document.getElementById('current-config').innerHTML = `
+                <div class="row">
+                    <div class="col-md-4">
+                        <strong>Type:</strong><br>
+                        Gallery
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Interval:</strong><br>
+                        ${data.interval || 60} seconds
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Directory:</strong><br>
+                        ${data.wallpapers_dir || 'wallpapers'}
+                    </div>
+                </div>
+            `;
+        })
+        .catch(error => {
+            console.error('Error loading screensaver config:', error);
+        });
+}
+
+function loadWallpaperDirectories() {
+    const wallpaperDirSelect = document.getElementById('wallpapers-dir');
+
+    fetch('/screensaver/wallpaper-dirs')
+        .then(response => response.json())
+        .then(data => {
+            // Clear loading option
+            wallpaperDirSelect.innerHTML = '';
+
+            // Add options for each directory
+            data.directories.forEach(dir => {
+                const option = document.createElement('option');
+                option.value = dir;
+                option.textContent = dir;
+                wallpaperDirSelect.appendChild(option);
+            });
+
+            // Set current value from status
+            fetch('/screensaver/status')
+                .then(response => response.json())
+                .then(statusData => {
+                    wallpaperDirSelect.value = statusData.wallpapers_dir || 'wallpapers';
+                })
+                .catch(error => {
+                    console.error('Error loading current wallpapers dir:', error);
+                    wallpaperDirSelect.value = 'wallpapers'; // fallback
+                });
+        })
+        .catch(error => {
+            console.error('Error loading wallpaper directories:', error);
+            // Fallback to hardcoded option
+            wallpaperDirSelect.innerHTML = '<option value="wallpapers">wallpapers</option>';
+            wallpaperDirSelect.value = 'wallpapers';
+        });
+}
+
+function updateScreensaverConfig() {
+    const formData = new FormData(document.getElementById('screensaver-config-form'));
+
+    fetch('/screensaver/config', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Screensaver configuration updated successfully', 'success');
+            loadScreensaverStatus();
+            loadScreensaverConfig();
+        } else {
+            showAlert(data.error || 'Failed to update screensaver configuration', 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error updating screensaver config:', error);
+        showAlert('Failed to update screensaver configuration', 'danger');
+    });
+}
+
+function startScreensaver() {
+    const startBtn = document.getElementById('start-screensaver');
+    const originalText = startBtn.innerHTML;
+
+    startBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Starting...';
+    startBtn.disabled = true;
+
+    fetch('/screensaver/start', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Screensaver started successfully', 'success');
+            loadScreensaverStatus();
+        } else {
+            showAlert(data.error || 'Failed to start screensaver', 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error starting screensaver:', error);
+        showAlert('Failed to start screensaver', 'danger');
+    })
+    .finally(() => {
+        startBtn.innerHTML = originalText;
+        startBtn.disabled = false;
+    });
+}
+
+function stopScreensaver() {
+    const stopBtn = document.getElementById('stop-screensaver');
+    const originalText = stopBtn.innerHTML;
+
+    stopBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Stopping...';
+    stopBtn.disabled = true;
+
+    fetch('/screensaver/stop', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Screensaver stopped successfully', 'success');
+            loadScreensaverStatus();
+        } else {
+            showAlert(data.error || 'Failed to stop screensaver', 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error stopping screensaver:', error);
+        showAlert('Failed to stop screensaver', 'danger');
+    })
+    .finally(() => {
+        stopBtn.innerHTML = originalText;
+        stopBtn.disabled = false;
+    });
+}
+
+function showTypeSettings(type) {
+    // Hide all type settings
+    document.querySelectorAll('.screensaver-type-settings').forEach(el => {
+        el.style.display = 'none';
+    });
+
+    // Show selected type settings
+    const settingsEl = document.getElementById(type + '-settings');
+    if (settingsEl) {
+        settingsEl.style.display = 'block';
+    }
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    document.querySelector('.container').insertBefore(alertDiv, document.querySelector('.row'));
+
+    setTimeout(() => {
+        alertDiv.remove();
+    }, 5000);
+}
+</script>
+{% endblock %}

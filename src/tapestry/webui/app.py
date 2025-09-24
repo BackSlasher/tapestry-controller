@@ -30,8 +30,13 @@ screensaver_state = {
     'active': False,
     'thread': None,
     'stop_event': None,
-    'wallpapers_dir': 'wallpapers',
-    'interval': 60  # seconds
+    'type': 'gallery',  # screensaver type
+    'interval': 60,  # seconds
+    'config': {
+        'gallery': {
+            'wallpapers_dir': 'wallpapers'
+        }
+    }
 }
 
 # Last image state
@@ -228,6 +233,11 @@ def index():
     """Main page showing layout and upload form."""
     device_count = len(controller.config.devices) if controller else 0
     return render_template('index.html', device_count=device_count)
+
+@app.route('/screensaver')
+def screensaver_config():
+    """Screensaver configuration page."""
+    return render_template('screensaver.html')
 
 @app.route('/flash')
 def flash_firmware():
@@ -836,8 +846,9 @@ def get_wallpaper_images():
     """Get list of wallpaper images from wallpapers directory."""
     patterns = ['*.png', '*.jpg', '*.jpeg', '*.gif', '*.bmp', '*.tiff', '*.webp']
     images = []
+    wallpapers_dir = screensaver_state['config']['gallery']['wallpapers_dir']
     for pattern in patterns:
-        images.extend(glob.glob(os.path.join(screensaver_state['wallpapers_dir'], pattern)))
+        images.extend(glob.glob(os.path.join(wallpapers_dir, pattern)))
     return images
 
 def screensaver_worker():
@@ -850,7 +861,7 @@ def screensaver_worker():
             # Get list of wallpaper images
             images = get_wallpaper_images()
             if not images:
-                print("No wallpaper images found in", screensaver_state['wallpapers_dir'])
+                print("No wallpaper images found in", screensaver_state['config']['gallery']['wallpapers_dir'])
                 stop_event.wait(screensaver_state['interval'])
                 continue
             
@@ -886,12 +897,13 @@ def start_screensaver():
         return jsonify({'error': 'Screensaver already active'}), 400
     
     # Check if wallpapers directory exists and has images
-    if not os.path.exists(screensaver_state['wallpapers_dir']):
-        return jsonify({'error': f"Wallpapers directory '{screensaver_state['wallpapers_dir']}' not found"}), 400
-    
+    wallpapers_dir = screensaver_state['config']['gallery']['wallpapers_dir']
+    if not os.path.exists(wallpapers_dir):
+        return jsonify({'error': f"Wallpapers directory '{wallpapers_dir}' not found"}), 400
+
     images = get_wallpaper_images()
     if not images:
-        return jsonify({'error': f"No wallpaper images found in '{screensaver_state['wallpapers_dir']}'"}), 400
+        return jsonify({'error': f"No wallpaper images found in '{wallpapers_dir}'"}), 400
     
     try:
         # Start screensaver thread
@@ -944,59 +956,87 @@ def screensaver_status():
     
     return jsonify({
         'active': screensaver_state['active'],
+        'type': screensaver_state['type'],
         'interval': screensaver_state['interval'],
-        'wallpapers_dir': screensaver_state['wallpapers_dir'],
+        'wallpapers_dir': screensaver_state['config']['gallery']['wallpapers_dir'],
         'image_count': len(images),
         'has_images': len(images) > 0
+    })
+
+@app.route('/screensaver/wallpaper-dirs')
+def get_wallpaper_directories():
+    """Get available wallpaper directories."""
+    return jsonify({
+        'directories': ['wallpapers']
     })
 
 @app.route('/screensaver/config', methods=['POST'])
 def update_screensaver_config():
     """Update screensaver configuration."""
-    data = request.get_json()
-    
+    # Handle both form data and JSON data
+    if request.content_type and 'application/json' in request.content_type:
+        data = request.get_json()
+    else:
+        data = request.form.to_dict()
+
     if not data:
         return jsonify({'error': 'No data provided'}), 400
-    
-    # Validate interval
-    if 'interval' in data:
-        try:
+
+    try:
+        was_active = screensaver_state['active']
+
+        # Stop screensaver if active (we'll restart if needed)
+        if was_active:
+            if screensaver_state['stop_event']:
+                screensaver_state['stop_event'].set()
+            if screensaver_state['thread'] and screensaver_state['thread'].is_alive():
+                screensaver_state['thread'].join(timeout=2)
+            screensaver_state['active'] = False
+
+        # Update interval
+        if 'interval' in data:
             interval = int(data['interval'])
-            if interval < 5 or interval > 3600:  # 5 seconds to 1 hour
-                return jsonify({'error': 'Interval must be between 5 and 3600 seconds'}), 400
-            
-            # If screensaver is currently active, we need to restart it with new interval
-            was_active = screensaver_state['active']
-            if was_active:
-                # Stop current screensaver
-                if screensaver_state['stop_event']:
-                    screensaver_state['stop_event'].set()
-                if screensaver_state['thread'] and screensaver_state['thread'].is_alive():
-                    screensaver_state['thread'].join(timeout=2)
-                screensaver_state['active'] = False
-            
-            # Update interval
+            if interval < 1 or interval > 3600:
+                return jsonify({'error': 'Interval must be between 1 and 3600 seconds'}), 400
             screensaver_state['interval'] = interval
-            
-            # Restart screensaver if it was active
-            if was_active:
-                screensaver_state['stop_event'] = threading.Event()
-                screensaver_state['thread'] = threading.Thread(target=screensaver_worker)
-                screensaver_state['thread'].daemon = True
-                screensaver_state['active'] = True
-                screensaver_state['thread'].start()
-            
-            return jsonify({
-                'success': True,
-                'message': f'Screensaver interval updated to {interval} seconds',
-                'interval': interval,
-                'restarted': was_active
-            })
-            
-        except ValueError:
-            return jsonify({'error': 'Invalid interval value'}), 400
-    
-    return jsonify({'error': 'No valid configuration provided'}), 400
+
+        # Update type
+        if 'type' in data:
+            screensaver_type = data['type']
+            if screensaver_type not in ['gallery']:  # Add more types as implemented
+                return jsonify({'error': f'Unknown screensaver type: {screensaver_type}'}), 400
+            screensaver_state['type'] = screensaver_type
+
+        # Update type-specific config
+        if screensaver_state['type'] == 'gallery':
+            if 'wallpapers_dir' in data:
+                wallpapers_dir = data['wallpapers_dir'].strip()
+                if wallpapers_dir:
+                    screensaver_state['config']['gallery']['wallpapers_dir'] = wallpapers_dir
+
+        # Restart screensaver if it was active
+        if was_active:
+            screensaver_state['stop_event'] = threading.Event()
+            screensaver_state['thread'] = threading.Thread(target=screensaver_worker)
+            screensaver_state['thread'].daemon = True
+            screensaver_state['active'] = True
+            screensaver_state['thread'].start()
+
+        return jsonify({
+            'success': True,
+            'message': 'Screensaver configuration updated successfully',
+            'config': {
+                'type': screensaver_state['type'],
+                'interval': screensaver_state['interval'],
+                'wallpapers_dir': screensaver_state['config']['gallery']['wallpapers_dir']
+            },
+            'restarted': was_active
+        })
+
+    except ValueError as e:
+        return jsonify({'error': f'Invalid configuration value: {str(e)}'}), 400
+    except Exception as e:
+        return jsonify({'error': f'Failed to update configuration: {str(e)}'}), 500
 
 # Global state for flash process
 flash_processes = {}
