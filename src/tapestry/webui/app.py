@@ -1368,8 +1368,10 @@ def stop_flash(process_id):
 def create_app(devices_file="devices.yaml"):
     """Create Flask app with configuration."""
     global controller, screensaver_manager
-    controller = TapestryController.from_config_file(devices_file)
-    screensaver_manager = ScreensaverManager(controller.send_image)
+    if controller is None:
+        controller = TapestryController.from_config_file(devices_file)
+    if screensaver_manager is None:
+        screensaver_manager = ScreensaverManager(controller.send_image)
     return app
 
 
@@ -1401,9 +1403,8 @@ def main():
 
     settings = get_settings()
 
-    global controller, screensaver_manager
-    controller = TapestryController.from_config_file(args.devices_file)
-    screensaver_manager = ScreensaverManager(controller.send_image)
+    # Initialize via create_app to avoid duplication
+    create_app(args.devices_file)
 
     settings = get_settings()
 
