@@ -27,6 +27,7 @@ from PIL import ImageDraw, ImageFont
 from ..controller import TapestryController
 from ..geometry import Dimensions, Point, Rectangle
 from ..screen_types import SCREEN_TYPES
+from ..screensaver import ScreensaverManager
 from ..settings import (
     GallerySettings,
     PixabaySettings,
@@ -45,8 +46,8 @@ logger = logging.getLogger(__name__)
 # Global controller instance
 controller = None
 
-# Runtime screensaver state (not persisted)
-screensaver_runtime = {"active": False, "thread": None, "stop_event": None}
+# Screensaver manager instance
+screensaver_manager = None
 
 
 def get_screensaver_config():
@@ -970,203 +971,21 @@ def get_wallpaper_images(wallpapers_dir):
     return images
 
 
-def get_reddit_wallpaper(subreddit, sort, time_period, limit):
-    """Fetch a random wallpaper from Reddit."""
-    import random
-    from urllib.parse import urlparse
-
-    import requests
-
-    url = f"https://www.reddit.com/r/{subreddit}/{sort}/.json"
-    params = {"t": time_period, "limit": limit}
-
-    headers = {"User-Agent": "Tapestry:v1.0 (by /u/tapestry_user)"}
-
-    try:
-        response = requests.get(url, params=params, headers=headers, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-
-        # Filter posts that have valid image URLs
-        image_posts = []
-        for post in data["data"]["children"]:
-            post_data = post["data"]
-            url = post_data.get("url", "")
-
-            # Skip deleted/removed posts or posts without URLs
-            if (
-                not url
-                or post_data.get("removed_by_category")
-                or post_data.get("is_self")
-            ):
-                continue
-
-            # Check if it's a direct image URL
-            parsed_url = urlparse(url)
-            if parsed_url.path.lower().endswith(
-                (".png", ".jpg", ".jpeg", ".gif", ".webp")
-            ):
-                image_posts.append(
-                    {"url": url, "title": post_data.get("title", "Reddit Wallpaper")}
-                )
-            # Also check for common image hosting sites
-            elif any(
-                domain in parsed_url.netloc.lower()
-                for domain in ["i.imgur.com", "i.redd.it"]
-            ):
-                image_posts.append(
-                    {"url": url, "title": post_data.get("title", "Reddit Wallpaper")}
-                )
-
-        if not image_posts:
-            raise Exception("No valid image posts found")
-
-        # Select random image
-        selected = random.choice(image_posts)
-
-        # Download the image
-        img_response = requests.get(selected["url"], headers=headers, timeout=30)
-        img_response.raise_for_status()
-
-        # Open as PIL Image
-        from io import BytesIO
-
-        image = PIL.Image.open(BytesIO(img_response.content))
-        logger.info(f"Reddit screensaver: displaying '{selected['title']}'")
-
-        return image
-
-    except Exception as e:
-        logger.error(f"Error fetching Reddit wallpaper: {str(e)}")
-        return None
+# Reddit wallpaper fetching moved to ScreensaverManager class
 
 
-def get_pixabay_wallpaper(api_key, keywords, per_page):
-    """Fetch a random wallpaper from Pixabay."""
-    import random
-
-    import requests
-
-    if not api_key:
-        raise Exception("Pixabay API key is required")
-
-    url = "https://pixabay.com/api/"
-    params = {
-        "key": api_key,
-        "q": keywords,
-        "image_type": "photo",
-        "orientation": "all",
-        "min_width": 1200,
-        "min_height": 800,
-        "per_page": min(per_page, 200),  # API limit is 200
-        "safesearch": "true",
-    }
-
-    try:
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-
-        if not data.get("hits"):
-            raise Exception(f"No images found for keywords: {keywords}")
-
-        # Select random image
-        selected = random.choice(data["hits"])
-
-        # Get the largest available image
-        image_url = (
-            selected.get("fullHDURL")
-            or selected.get("webformatURL")
-            or selected.get("largeImageURL")
-        )
-
-        if not image_url:
-            raise Exception("No suitable image URL found")
-
-        # Download the image
-        img_response = requests.get(image_url, timeout=30)
-        img_response.raise_for_status()
-
-        # Open as PIL Image
-        from io import BytesIO
-
-        image = PIL.Image.open(BytesIO(img_response.content))
-        logger.info(
-            f"Pixabay screensaver: displaying image by {selected.get('user', 'unknown')} "
-            f"(tags: {selected.get('tags', 'none')})"
-        )
-
-        return image
-
-    except Exception as e:
-        logger.error(f"Error fetching Pixabay wallpaper: {str(e)}")
-        return None
+# Pixabay wallpaper fetching moved to ScreensaverManager class
 
 
-def screensaver_worker():
-    """Background worker that cycles through wallpaper images."""
-    stop_event = screensaver_runtime["stop_event"]
-
-    while not stop_event.is_set():
-        try:
-            config = get_screensaver_config()
-            image = None
-
-            if config["type"] == "gallery":
-                images = get_wallpaper_images(config["gallery"]["wallpapers_dir"])
-                if not images:
-                    logger.warning(
-                        f"No wallpaper images found in {config['gallery']['wallpapers_dir']}"
-                    )
-                    continue
-                image_path = random.choice(images)
-                logger.info(
-                    f"Gallery screensaver: displaying {os.path.basename(image_path)}"
-                )
-                image = PIL.Image.open(image_path)
-
-            elif config["type"] == "reddit":
-                image = get_reddit_wallpaper(
-                    config["reddit"]["subreddit"],
-                    config["reddit"]["sort"],
-                    config["reddit"]["time_period"],
-                    config["reddit"]["limit"],
-                )
-                if not image:
-                    logger.warning("Failed to fetch Reddit wallpaper, waiting...")
-                    continue
-
-            elif config["type"] == "pixabay":
-                image = get_pixabay_wallpaper(
-                    config["pixabay"]["api_key"],
-                    config["pixabay"]["keywords"],
-                    config["pixabay"]["per_page"],
-                )
-                if not image:
-                    logger.warning("Failed to fetch Pixabay wallpaper, waiting...")
-                    continue
-
-            if not image:
-                logger.warning(
-                    f"No image available for screensaver type: {config['type']}"
-                )
-                continue
-
-            controller.send_image(image)
-            save_last_image(image)
-
-        except Exception as e:
-            logger.error(f"Screensaver error: {e}")
-
-        stop_event.wait(config["interval"])
+# Screensaver worker moved to ScreensaverManager class
 
 
 def start_screensaver_internal():
     """Start the screensaver (internal version for startup)."""
-    if not controller:
-        raise Exception("Controller not initialized")
+    if not controller or not screensaver_manager:
+        raise Exception("Controller or screensaver manager not initialized")
 
-    if screensaver_runtime["active"]:
+    if screensaver_manager.is_active:
         raise Exception("Screensaver already active")
 
     # Starting screensaver automatically enables it
@@ -1175,29 +994,7 @@ def start_screensaver_internal():
     settings.save_to_file()
 
     config = get_screensaver_config()
-
-    # Validate screensaver type-specific requirements
-    if config["type"] == "gallery":
-        wallpapers_dir = config["gallery"]["wallpapers_dir"]
-        if not os.path.exists(wallpapers_dir):
-            raise Exception(f"Wallpapers directory '{wallpapers_dir}' not found")
-
-        images = get_wallpaper_images(wallpapers_dir)
-        if not images:
-            raise Exception(f"No wallpaper images found in '{wallpapers_dir}'")
-    elif config["type"] == "reddit":
-        # For Reddit, we'll validate connectivity when we actually try to fetch
-        pass
-    elif config["type"] == "pixabay":
-        # Pixabay validation is handled by the settings model
-        pass
-
-    # Start screensaver thread
-    screensaver_runtime["stop_event"] = threading.Event()
-    screensaver_runtime["thread"] = threading.Thread(target=screensaver_worker)
-    screensaver_runtime["thread"].daemon = True
-    screensaver_runtime["active"] = True
-    screensaver_runtime["thread"].start()
+    screensaver_manager.start(config)
 
     return f'Screensaver started with {config["type"]} type'
 
@@ -1205,10 +1002,10 @@ def start_screensaver_internal():
 @app.route("/screensaver/start", methods=["POST"])
 def start_screensaver():
     """Start the screensaver."""
-    if not controller:
-        return jsonify({"error": "Controller not initialized"}), 500
+    if not controller or not screensaver_manager:
+        return jsonify({"error": "Controller or screensaver manager not initialized"}), 500
 
-    if screensaver_runtime["active"]:
+    if screensaver_manager.is_active:
         return jsonify({"error": "Screensaver already active"}), 400
 
     try:
@@ -1221,20 +1018,11 @@ def start_screensaver():
 @app.route("/screensaver/stop", methods=["POST"])
 def stop_screensaver():
     """Stop the screensaver."""
-    if not screensaver_runtime["active"]:
+    if not screensaver_manager or not screensaver_manager.is_active:
         return jsonify({"error": "Screensaver not active"}), 400
 
     try:
-        # Stop the screensaver thread
-        if screensaver_runtime["stop_event"]:
-            screensaver_runtime["stop_event"].set()
-
-        if screensaver_runtime["thread"] and screensaver_runtime["thread"].is_alive():
-            screensaver_runtime["thread"].join(timeout=2)
-
-        screensaver_runtime["active"] = False
-        screensaver_runtime["thread"] = None
-        screensaver_runtime["stop_event"] = None
+        screensaver_manager.stop()
 
         # Stopping screensaver automatically disables it
         settings = get_settings()
@@ -1252,7 +1040,7 @@ def screensaver_status():
     """Get screensaver status."""
     config = get_screensaver_config()
     status = {
-        "active": screensaver_runtime["active"],
+        "active": screensaver_manager.is_active if screensaver_manager else False,
         "enabled": config["enabled"],
         "type": config["type"],
         "interval": config["interval"],
@@ -1322,18 +1110,11 @@ def update_screensaver_config():
 
     try:
         settings = get_settings()
-        was_active = screensaver_runtime["active"]
+        was_active = screensaver_manager.is_active if screensaver_manager else False
 
         # Stop screensaver if active (we'll restart if needed)
         if was_active:
-            if screensaver_runtime["stop_event"]:
-                screensaver_runtime["stop_event"].set()
-            if (
-                screensaver_runtime["thread"]
-                and screensaver_runtime["thread"].is_alive()
-            ):
-                screensaver_runtime["thread"].join(timeout=2)
-            screensaver_runtime["active"] = False
+            screensaver_manager.stop()
 
         # Create updated screensaver settings
         current = settings.screensaver
@@ -1393,11 +1174,8 @@ def update_screensaver_config():
 
         # Restart screensaver if it was active
         if was_active:
-            screensaver_runtime["stop_event"] = threading.Event()
-            screensaver_runtime["thread"] = threading.Thread(target=screensaver_worker)
-            screensaver_runtime["thread"].daemon = True
-            screensaver_runtime["active"] = True
-            screensaver_runtime["thread"].start()
+            config = get_screensaver_config()
+            screensaver_manager.start(config)
 
         # Build response config info
         config_info = {
@@ -1589,8 +1367,9 @@ def stop_flash(process_id):
 
 def create_app(devices_file="devices.yaml"):
     """Create Flask app with configuration."""
-    global controller
+    global controller, screensaver_manager
     controller = TapestryController.from_config_file(devices_file)
+    screensaver_manager = ScreensaverManager(controller.send_image)
     return app
 
 
@@ -1622,8 +1401,9 @@ def main():
 
     settings = get_settings()
 
-    global controller
+    global controller, screensaver_manager
     controller = TapestryController.from_config_file(args.devices_file)
+    screensaver_manager = ScreensaverManager(controller.send_image)
 
     settings = get_settings()
 
