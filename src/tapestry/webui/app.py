@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import io
+import json
 import argparse
 import hashlib
 import logging
@@ -552,10 +553,8 @@ def layout_data():
     """Get screen layout data as JSON for canvas operations."""
     try:
         # Get the current image if available
-        current_image = None
         image_size = None
         if last_image_state['refit_image'] is not None:
-            current_image = "/current-image"  # Endpoint to serve current image
             image_size = {
                 'width': last_image_state['refit_image'].size[0],
                 'height': last_image_state['refit_image'].size[1]
@@ -609,18 +608,30 @@ def layout_data():
                     }
                     screens.append(screen_info)
         
-        return jsonify({
-            'current_image': current_image,
+        response_data = {
             'image_size': image_size,
             'screens': screens,
             'scale_factor': last_image_state.get('px_in_unit', 1.0),
             'use_server_rendering': USE_SERVER_SIDE_RENDERING
-        })
+        }
+
+        # Create ETag by hashing the dict representation
+        md5_hash = hashlib.md5(f"{response_data}".encode('utf-8')).hexdigest()
+        etag = f'"{md5_hash}"'
+
+        # Check if client has the same version
+        client_etag = request.headers.get('If-None-Match')
+        if client_etag == etag:
+            return '', 304  # Not Modified
+
+        response = jsonify(response_data)
+        response.headers['ETag'] = etag
+        response.headers['Cache-Control'] = 'private, max-age=0, must-revalidate'
+        return response
         
     except Exception as e:
         logger.error(f"Error getting layout data: {e}")
         return jsonify({
-            'current_image': None,
             'image_size': None,
             'screens': [],
             'scale_factor': 1.0,
@@ -635,17 +646,14 @@ def current_image():
     try:
         # Get or create thumbnail
         thumbnail = get_or_create_thumbnail()
-        if thumbnail is not None:
-            # Convert thumbnail to bytes
-            img_buffer = io.BytesIO()
-            thumbnail.save(img_buffer, format='PNG')
-            img_data = img_buffer.getvalue()
-        else:
-            # Return empty/placeholder image
-            placeholder_img = PIL.Image.new('RGB', (400, 300), color='white')
-            img_buffer = io.BytesIO()
-            placeholder_img.save(img_buffer, format='PNG')
-            img_data = img_buffer.getvalue()
+        if thumbnail is None:
+            # No image available - return 204 No Content
+            return '', 204
+
+        # Convert thumbnail to bytes
+        img_buffer = io.BytesIO()
+        thumbnail.save(img_buffer, format='PNG')
+        img_data = img_buffer.getvalue()
 
         # Calculate MD5 hash of the image data
         md5_hash = hashlib.md5(img_data).hexdigest()
@@ -667,20 +675,7 @@ def current_image():
 
     except Exception as e:
         logger.error(f"Error serving current image: {e}")
-        # Return error placeholder
-        error_img = PIL.Image.new('RGB', (400, 300), color='lightgray')
-        img_buffer = io.BytesIO()
-        error_img.save(img_buffer, format='PNG')
-        img_data = img_buffer.getvalue()
-
-        # Hash the error image too
-        md5_hash = hashlib.md5(img_data).hexdigest()
-        etag = f'"{md5_hash}"'
-
-        img_buffer = io.BytesIO(img_data)
-        response = send_file(img_buffer, mimetype='image/png')
-        response.headers['ETag'] = etag
-        return response
+        return jsonify({'error': 'Failed to generate image'}), 500
 
 
 @app.route('/layout-image')

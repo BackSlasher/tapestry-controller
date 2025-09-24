@@ -14,10 +14,7 @@ document.addEventListener('DOMContentLoaded', function() {
     checkScreensaverStatus();
 
     // Set up periodic screensaver status check and layout refresh
-    setInterval(() => {
-        checkScreensaverStatus();
-        refreshLayout(); // This will use ETag caching automatically
-    }, 5000); // Check every 5 seconds
+    schedulePeriodicUpdates();
 
     // Image preview functionality
     const imageInput = document.getElementById('image-input');
@@ -146,24 +143,166 @@ function initializeCanvas() {
     drawLayoutCanvas();
 }
 
-function refreshLayout() {
-    // Refresh the canvas layout
-    drawLayoutCanvas();
+async function refreshLayout() {
+    // Check for changes using ETags and only redraw if necessary
+    try {
+        // Fetch layout data and image in parallel
+        const [layoutResponse, imageResponse] = await Promise.all([
+            fetch('/layout-data'),
+            fetch('/current-image')
+        ]);
+
+        // Check if either response indicates changes (not 304)
+        const layoutChanged = layoutResponse.status !== 304;
+        const imageChanged = imageResponse.status !== 304;
+
+        if (layoutChanged || imageChanged) {
+            console.log('Canvas update needed:', { layoutChanged, imageChanged });
+
+            // Get layout data if it changed
+            let layoutData;
+            if (layoutChanged) {
+                layoutData = await layoutResponse.json();
+            } else {
+                // Layout didn't change, but we still need the data for rendering
+                // Make a fresh request to get the actual data (this should be cached)
+                const freshLayoutResponse = await fetch('/layout-data');
+                layoutData = await freshLayoutResponse.json();
+            }
+
+            // Redraw the canvas
+            await drawCanvas(layoutData, imageResponse);
+        } else {
+            console.log('No changes detected (both 304), skipping canvas redraw');
+        }
+
+    } catch (error) {
+        console.error('Error checking for canvas updates:', error);
+        // On error, force a redraw
+        await drawLayoutCanvas();
+    }
 }
 
-function drawLayoutCanvas() {
+async function drawCanvas(layoutData, imageResponse) {
     const canvas = document.getElementById('layout-canvas');
     if (!canvas) return;
-    
+
     const ctx = canvas.getContext('2d');
-    
+
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+
+    // Use the provided layout data instead of fetching
+    const data = layoutData;
+
+    // Update device count
+    const deviceCountSpan = document.getElementById('device-count');
+    if (deviceCountSpan) {
+        deviceCountSpan.textContent = data.screens.length;
+    }
+
+    if (data.screens.length === 0) {
+        // No screens, show placeholder
+        canvas.width = 400;
+        canvas.height = 300;
+        ctx.fillStyle = '#f8f9fa';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#6c757d';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('No devices configured', canvas.width/2, canvas.height/2);
+        return;
+    }
+
+    // Check if we should use server-side rendering
+    if (data.use_server_rendering) {
+        drawServerSideLayout(canvas, ctx);
+        return;
+    }
+
+    // Calculate canvas size and scaling (same logic as before)
+    let canvasWidth, canvasHeight;
+    if (data.image_size) {
+        canvasWidth = data.image_size.width;
+        canvasHeight = data.image_size.height;
+    } else {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        data.screens.forEach(screen => {
+            minX = Math.min(minX, screen.x);
+            minY = Math.min(minY, screen.y);
+            maxX = Math.max(maxX, screen.x + screen.width);
+            maxY = Math.max(maxY, screen.y + screen.height);
+        });
+        canvasWidth = maxX - minX;
+        canvasHeight = maxY - minY;
+    }
+
+    const maxDisplayWidth = 800;
+    const maxDisplayHeight = 600;
+    const displayScale = Math.min(
+        maxDisplayWidth / canvasWidth,
+        maxDisplayHeight / canvasHeight,
+        1
+    );
+
+    canvas.width = canvasWidth * displayScale;
+    canvas.height = canvasHeight * displayScale;
+
+    // Handle image loading using the provided response
+    if (imageResponse.ok) {
+        try {
+            const blob = await imageResponse.blob();
+            const img = new Image();
+
+            img.onload = function() {
+                const imgWidth = canvas.width;
+                const imgHeight = canvas.height;
+
+                ctx.globalAlpha = 0.5;
+                ctx.drawImage(img, 0, 0, imgWidth, imgHeight);
+
+                ctx.globalAlpha = 1.0;
+                data.screens.forEach(screen => {
+                    const x = screen.x * displayScale;
+                    const y = screen.y * displayScale;
+                    const width = screen.width * displayScale;
+                    const height = screen.height * displayScale;
+
+                    ctx.save();
+                    ctx.rect(x, y, width, height);
+                    ctx.clip();
+                    ctx.drawImage(img, 0, 0, imgWidth, imgHeight);
+                    ctx.restore();
+                });
+
+                drawScreens(ctx, data.screens, displayScale);
+                URL.revokeObjectURL(img.src);
+            };
+
+            img.src = URL.createObjectURL(blob);
+        } catch (error) {
+            console.error('Error loading background image:', error);
+            drawScreens(ctx, data.screens, displayScale);
+        }
+    } else {
+        // No image or error - just draw screen borders
+        drawScreens(ctx, data.screens, displayScale);
+    }
+}
+
+async function drawLayoutCanvas() {
+    const canvas = document.getElementById('layout-canvas');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
     // Load layout data
-    fetch('/layout-data')
-        .then(response => response.json())
-        .then(data => {
+    try {
+        const response = await fetch('/layout-data');
+        const data = await response.json();
             // Update device count
             const deviceCountSpan = document.getElementById('device-count');
             if (deviceCountSpan) {
@@ -223,58 +362,75 @@ function drawLayoutCanvas() {
             canvas.width = canvasWidth * displayScale;
             canvas.height = canvasHeight * displayScale;
             
-            // Draw background image if available
-            if (data.current_image && data.image_size) {
-                const img = new Image();
-                img.onload = function() {
-                    // The scaled image fills the entire canvas
-                    const imgWidth = canvas.width;
-                    const imgHeight = canvas.height;
-                    
-                    // Draw image at half opacity everywhere
-                    ctx.globalAlpha = 0.5;
-                    ctx.drawImage(img, 0, 0, imgWidth, imgHeight);
-                    
-                    // Draw image at full opacity only in screen areas
-                    ctx.globalAlpha = 1.0;
-                    data.screens.forEach(screen => {
-                        // Scale screen coordinates to match canvas display size
-                        const x = screen.x * displayScale;
-                        const y = screen.y * displayScale;
-                        const width = screen.width * displayScale;
-                        const height = screen.height * displayScale;
-                        
-                        // Create a clipping region for this screen
-                        ctx.save();
-                        ctx.rect(x, y, width, height);
-                        ctx.clip();
-                        
-                        // Draw the full-opacity image within the clipped region
+            // Try to fetch background image with proper ETag handling
+            try {
+                const response = await fetch('/current-image');
+
+                if (response.ok) {
+                    // Image available - convert to blob and display
+                    const blob = await response.blob();
+                    const img = new Image();
+
+                    img.onload = function() {
+                        // The scaled image fills the entire canvas
+                        const imgWidth = canvas.width;
+                        const imgHeight = canvas.height;
+
+                        // Draw image at half opacity everywhere
+                        ctx.globalAlpha = 0.5;
                         ctx.drawImage(img, 0, 0, imgWidth, imgHeight);
-                        
-                        ctx.restore();
-                    });
-                    
-                    // Draw screen borders, labels and arrows on top
+
+                        // Draw image at full opacity only in screen areas
+                        ctx.globalAlpha = 1.0;
+                        data.screens.forEach(screen => {
+                            // Scale screen coordinates to match canvas display size
+                            const x = screen.x * displayScale;
+                            const y = screen.y * displayScale;
+                            const width = screen.width * displayScale;
+                            const height = screen.height * displayScale;
+
+                            // Create a clipping region for this screen
+                            ctx.save();
+                            ctx.rect(x, y, width, height);
+                            ctx.clip();
+
+                            // Draw the full-opacity image within the clipped region
+                            ctx.drawImage(img, 0, 0, imgWidth, imgHeight);
+
+                            ctx.restore();
+                        });
+
+                        // Draw screen borders, labels and arrows on top
+                        drawScreens(ctx, data.screens, displayScale);
+
+                        // Clean up blob URL
+                        URL.revokeObjectURL(img.src);
+                    };
+
+                    img.src = URL.createObjectURL(blob);
+                } else if (response.status === 204) {
+                    // No image available - just draw screen borders
                     drawScreens(ctx, data.screens, displayScale);
-                };
-                img.src = data.current_image;
-            } else {
-                // No image, just draw screen borders and labels
+                } else {
+                    // Error - just draw screen borders
+                    drawScreens(ctx, data.screens, displayScale);
+                }
+            } catch (error) {
+                console.error('Error loading background image:', error);
+                // Error - just draw screen borders
                 drawScreens(ctx, data.screens, displayScale);
             }
-        })
-        .catch(error => {
-            console.error('Error loading layout data:', error);
-            canvas.width = 400;
-            canvas.height = 300;
-            ctx.fillStyle = '#f8f9fa';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#dc3545';
-            ctx.font = '16px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Error loading layout', canvas.width/2, canvas.height/2);
-        });
+    } catch (error) {
+        console.error('Error loading layout data:', error);
+        canvas.width = 400;
+        canvas.height = 300;
+        ctx.fillStyle = '#f8f9fa';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#dc3545';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Error loading layout', canvas.width/2, canvas.height/2);
+    }
 }
 
 function drawServerSideLayout(canvas, ctx) {
@@ -531,6 +687,21 @@ function showAlert(message, type = 'info') {
         const bsAlert = new bootstrap.Alert(alertDiv);
         bsAlert.close();
     }, 5000);
+}
+
+async function schedulePeriodicUpdates() {
+    try {
+        // Run both updates and wait for completion
+        await Promise.all([
+            checkScreensaverStatus(),
+            refreshLayout()
+        ]);
+    } catch (error) {
+        console.error('Error during periodic update:', error);
+    }
+
+    // Schedule next update only after current one finishes
+    setTimeout(schedulePeriodicUpdates, 5000);
 }
 
 
