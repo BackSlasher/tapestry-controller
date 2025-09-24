@@ -720,6 +720,54 @@ def upload_image():
         flash(f'Error processing image: {str(e)}')
         return redirect(url_for('index'))
 
+@app.route('/api/upload', methods=['POST'])
+def api_upload_image():
+    """API endpoint for uploading and displaying images on screens."""
+    try:
+        # Check if image file is present
+        if 'image' not in request.files:
+            return jsonify({'error': 'No image file provided'}), 400
+
+        file = request.files['image']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+
+        if not allowed_file(file.filename):
+            return jsonify({'error': 'Invalid file type. Please upload an image file.'}), 400
+
+        if not controller:
+            return jsonify({'error': 'Controller not initialized'}), 500
+
+        # Open and fix EXIF orientation
+        image = PIL.Image.open(file.stream)
+        image = fix_image_orientation(image)
+
+        # Send to devices
+        controller.send_image(image)
+
+        # Save for layout overlay
+        save_last_image(image)
+
+        # Return success response with device info
+        response_data = {
+            'success': True,
+            'message': f'Successfully sent image to {len(controller.config.devices)} devices',
+            'devices_updated': len(controller.config.devices),
+            'filename': file.filename,
+            'image_size': {
+                'width': image.size[0],
+                'height': image.size[1]
+            }
+        }
+
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        return jsonify({
+            'error': 'Failed to process and send image',
+            'details': str(e)
+        }), 500
+
 @app.route('/devices')
 def devices_info():
     """Return device information as JSON."""
