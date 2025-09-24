@@ -27,7 +27,7 @@ from PIL import ImageDraw, ImageFont
 from ..controller import TapestryController
 from ..geometry import Dimensions, Point, Rectangle
 from ..screen_types import SCREEN_TYPES
-from ..screensaver import ScreensaverManager
+from .screensaver import ScreensaverManager
 from ..settings import (
     GallerySettings,
     PixabaySettings,
@@ -1371,7 +1371,12 @@ def create_app(devices_file="devices.yaml"):
     if controller is None:
         controller = TapestryController.from_config_file(devices_file)
     if screensaver_manager is None:
-        screensaver_manager = ScreensaverManager(controller.send_image)
+        def send_and_save_image(image):
+            """Send image to displays and save for current-image endpoint."""
+            controller.send_image(image)
+            save_last_image(image)
+
+        screensaver_manager = ScreensaverManager(send_and_save_image)
     return app
 
 
