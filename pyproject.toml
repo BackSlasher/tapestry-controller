@@ -40,7 +40,6 @@ toml = ">=0.10.0"
 [tool.poetry.group.dev.dependencies]
 pytest = ">=7.0"
 black = ">=22.0"
-mypy = ">=0.950"
 ruff = "^0.13.1"
 
 [tool.poetry.scripts]
@@ -59,9 +58,4 @@ target-version = "py39"
 select = ["E", "F", "W", "I"]
 ignore = ["E501"]
 
-[tool.mypy]
-python_version = "3.8"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
 

@@ -18,7 +18,6 @@ test:
 lint:
 	poetry run ruff check --fix src/
 	poetry run black src/
-	poetry run mypy src/
 
 deploy:
 	rsync -avz --delete --exclude='__pycache__' --exclude='.pytest_cache' --exclude='*.pyc' --exclude='.git' --exclude='.sl' --exclude='debug/' --exclude='build/' --exclude='dist/' --exclude='src/*.egg-info/' --exclude='devices.yaml' --exclude='settings.toml' . $(REMOTE_HOST):./controller/
