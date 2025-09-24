@@ -1,9 +1,12 @@
 """Settings management for Tapestry controller using Pydantic Settings."""
 import toml
+import logging
 from pathlib import Path
 from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict, TomlConfigSettingsSource, PydanticBaseSettingsSource
+
+logger = logging.getLogger(__name__)
 
 
 class GallerySettings(BaseModel):
@@ -77,7 +80,7 @@ class TapestrySettings(BaseSettings):
         """Save settings to TOML file."""
         with open(file_path, 'w') as f:
             toml.dump(self.model_dump(), f)
-        print(f"Settings saved to {file_path}")
+        logger.info(f"Settings saved to {file_path}")
 
 
 

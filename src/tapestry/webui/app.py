@@ -2,6 +2,7 @@
 import os
 import io
 import argparse
+import logging
 import time
 import random
 import glob
@@ -22,6 +23,9 @@ from ..settings import get_settings, ScreensaverSettings, GallerySettings, Reddi
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'tapestry-webui-secret-key'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 # Global controller instance
 controller = None
@@ -114,7 +118,7 @@ def create_layout_visualization(scaled_image, device_rectangles, mm_to_px_ratio)
             )
             draw.text((text_bg_x + 2, text_bg_y + 2), label, fill='black', font=font)
         except Exception as e:
-            print(f"Error drawing label for {device.host}: {e}")
+            logger.error(f"Error drawing label for {device.host}: {e}")
     
     return layout_canvas
 
@@ -175,7 +179,7 @@ def fix_image_orientation(image):
                 image = image.rotate(90, expand=True)
                 
     except Exception as e:
-        print(f"Warning: Could not fix image orientation: {e}")
+        logger.warning(f"Could not fix image orientation: {e}")
         # Return original image if EXIF processing fails
         pass
     
@@ -191,10 +195,10 @@ def load_persisted_image():
         if os.path.exists(persist_path):
             image = PIL.Image.open(persist_path)
             save_last_image(image)  # This will recalculate layout and save to memory
-            print(f"Restored last image from {persist_path}")
+            logger.info(f"Restored last image from {persist_path}")
             return True
     except Exception as e:
-        print(f"Warning: Could not load persisted image: {e}")
+        logger.warning(f"Could not load persisted image: {e}")
     
     return False
 
@@ -238,7 +242,7 @@ def save_last_image(image):
         persist_path = os.path.join(persist_dir, "last_image.png")
         image.save(persist_path, "PNG")
     except Exception as e:
-        print(f"Warning: Could not persist image: {e}")
+        logger.warning(f"Could not persist image: {e}")
 
 @app.route('/')
 def index():
@@ -334,7 +338,7 @@ def analyze_positioning_photo():
         import datetime
         debug_filename = f"/tmp/qr_analysis_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
         corrected_image.save(debug_filename, quality=95)
-        print(f"Debug: Saved QR analysis image to {debug_filename}")
+        logger.debug(f"Saved QR analysis image to {debug_filename}")
         
         # Get DHCP discovered devices for comparison
         from ..qr_generation import discover_devices_from_dhcp
@@ -442,9 +446,9 @@ def apply_positioning_config():
             try:
                 controller.send_image(last_image_state['image'])
                 restored_image = True
-                print("Restored saved image after applying positioning configuration")
+                logger.info("Restored saved image after applying positioning configuration")
             except Exception as e:
-                print(f"Warning: Could not restore saved image: {e}")
+                logger.warning(f"Could not restore saved image: {e}")
         
         message = f'Configuration updated with {len(updated_config["devices"])} devices'
         if restored_image:
@@ -496,7 +500,7 @@ def positioning_layout_preview():
                 )
                 devices.append(device)
             except KeyError as e:
-                print(f"Unknown screen type in preview: {e}")
+                logger.error(f"Unknown screen type in preview: {e}")
                 continue
         
         if not devices:
@@ -517,7 +521,7 @@ def positioning_layout_preview():
         )
         
     except Exception as e:
-        print(f"Error generating layout preview: {e}")
+        logger.error(f"Error generating layout preview: {e}")
         return f"Error generating layout preview: {str(e)}", 500
 
 @app.route('/layout')
@@ -613,7 +617,7 @@ def layout_data():
         })
         
     except Exception as e:
-        print(f"Error getting layout data: {e}")
+        logger.error(f"Error getting layout data: {e}")
         return jsonify({
             'current_image': None,
             'image_size': None,
@@ -643,7 +647,7 @@ def current_image():
             return send_file(img_buffer, mimetype='image/png')
             
     except Exception as e:
-        print(f"Error serving current image: {e}")
+        logger.error(f"Error serving current image: {e}")
         # Return error placeholder
         error_img = PIL.Image.new('RGB', (400, 300), color='lightgray')
         img_buffer = io.BytesIO()
@@ -704,7 +708,7 @@ def layout_image():
         return send_file(img_buffer, mimetype='image/png')
         
     except Exception as e:
-        print(f"Error serving layout image: {e}")
+        logger.error(f"Error serving layout image: {e}")
         return '', 500
 
 
@@ -923,12 +927,12 @@ def get_reddit_wallpaper():
         # Open as PIL Image
         from io import BytesIO
         image = PIL.Image.open(BytesIO(img_response.content))
-        print(f"Reddit screensaver: displaying '{selected['title']}'")
+        logger.info(f"Reddit screensaver: displaying '{selected['title']}'")
 
         return image
 
     except Exception as e:
-        print(f"Error fetching Reddit wallpaper: {str(e)}")
+        logger.error(f"Error fetching Reddit wallpaper: {str(e)}")
         return None
 
 def screensaver_worker():
@@ -945,13 +949,13 @@ def screensaver_worker():
                 # Get list of wallpaper images
                 images = get_wallpaper_images()
                 if not images:
-                    print("No wallpaper images found in", config['gallery']['wallpapers_dir'])
+                    logger.warning(f"No wallpaper images found in {config['gallery']['wallpapers_dir']}")
                     stop_event.wait(config['interval'])
                     continue
 
                 # Choose random image
                 image_path = random.choice(images)
-                print(f"Gallery screensaver: displaying {os.path.basename(image_path)}")
+                logger.info(f"Gallery screensaver: displaying {os.path.basename(image_path)}")
 
                 # Load image
                 image = PIL.Image.open(image_path)
@@ -960,12 +964,12 @@ def screensaver_worker():
                 # Fetch image from Reddit
                 image = get_reddit_wallpaper()
                 if not image:
-                    print("Failed to fetch Reddit wallpaper, waiting...")
+                    logger.warning("Failed to fetch Reddit wallpaper, waiting...")
                     stop_event.wait(config['interval'])
                     continue
 
             if not image:
-                print(f"No image available for screensaver type: {config['type']}")
+                logger.warning(f"No image available for screensaver type: {config['type']}")
                 stop_event.wait(config['interval'])
                 continue
             
@@ -976,7 +980,7 @@ def screensaver_worker():
             save_last_image(image)
             
         except Exception as e:
-            print(f"Screensaver error: {e}")
+            logger.error(f"Screensaver error: {e}")
         
         # Wait for next cycle or stop signal
         # For first iteration, don't wait - show image immediately
@@ -1390,8 +1394,14 @@ def main():
     """Main entry point for web UI."""
     args = parse_args()
 
+    # Set up logging
+    logging.basicConfig(
+        level=logging.DEBUG if args.debug else logging.INFO,
+        format='[%(levelname)s] %(message)s'
+    )
+
     # Initialize settings
-    print("Initializing settings...")
+    logger.info("Initializing settings...")
     get_settings()
 
     # Initialize controller
@@ -1401,20 +1411,20 @@ def main():
     # Auto-start screensaver if enabled in settings
     settings = get_settings()
     if settings.screensaver.enabled:
-        print("Screensaver is enabled in settings, starting automatically...")
+        logger.info("Screensaver is enabled in settings, starting automatically...")
         try:
             message = start_screensaver_internal()
-            print(f"Screensaver started successfully: {message}")
+            logger.info(f"Screensaver started successfully: {message}")
         except Exception as e:
-            print(f"Failed to auto-start screensaver: {e}")
+            logger.error(f"Failed to auto-start screensaver: {e}")
 
     # Start image loading in background thread
     # Automatic image loading on startup has been removed
     # Use the "Restore Last Image" button on the main page instead
 
-    print(f"Starting Tapestry Web UI with {len(controller.config.devices)} devices")
-    print(f"Access at http://{args.host}:{args.port}")
-    print("Use 'Restore Last Image' button to load previous image")
+    logger.info(f"Starting Tapestry Web UI with {len(controller.config.devices)} devices")
+    logger.info(f"Access at http://{args.host}:{args.port}")
+    logger.info("Use 'Restore Last Image' button to load previous image")
 
     app.run(host=args.host, port=args.port, debug=args.debug)
 
