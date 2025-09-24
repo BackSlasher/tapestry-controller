@@ -986,33 +986,23 @@ def screensaver_worker():
 
 def start_screensaver_internal():
     """Start the screensaver (internal version for startup)."""
-    print("DEBUG: start_screensaver_internal() called")
-
     if not controller:
-        print("DEBUG: Controller not initialized, raising exception")
         raise Exception('Controller not initialized')
 
     if screensaver_runtime['active']:
-        print("DEBUG: Screensaver already active, raising exception")
         raise Exception('Screensaver already active')
-
-    print("DEBUG: Starting screensaver process...")
 
     # Starting screensaver automatically enables it
     settings = get_settings()
-    print(f"DEBUG: Current screensaver enabled setting: {settings.screensaver.enabled}")
     settings.screensaver.enabled = True
     settings.save_to_file()
-    print("DEBUG: Settings saved with enabled=True")
 
     config = get_screensaver_config()
-    print(f"DEBUG: Got screensaver config: type={config['type']}, interval={config['interval']}")
 
     # Validate screensaver type-specific requirements
     image_count = 0
     if config['type'] == 'gallery':
         wallpapers_dir = config['gallery']['wallpapers_dir']
-        print(f"DEBUG: Checking wallpapers directory: {wallpapers_dir}")
         if not os.path.exists(wallpapers_dir):
             raise Exception(f"Wallpapers directory '{wallpapers_dir}' not found")
 
@@ -1020,20 +1010,16 @@ def start_screensaver_internal():
         if not images:
             raise Exception(f"No wallpaper images found in '{wallpapers_dir}'")
         image_count = len(images)
-        print(f"DEBUG: Found {image_count} wallpaper images")
     elif config['type'] == 'reddit':
         # For Reddit, we'll validate connectivity when we actually try to fetch
         image_count = config['reddit']['limit']
-        print(f"DEBUG: Using Reddit mode with limit {image_count}")
 
-    print("DEBUG: About to start screensaver thread...")
     # Start screensaver thread
     screensaver_runtime['stop_event'] = threading.Event()
     screensaver_runtime['thread'] = threading.Thread(target=screensaver_worker)
     screensaver_runtime['thread'].daemon = True
     screensaver_runtime['active'] = True
     screensaver_runtime['thread'].start()
-    print(f"DEBUG: Screensaver thread started successfully, active={screensaver_runtime['active']}")
 
     return f'Screensaver started with {config["type"]} type'
 
@@ -1414,16 +1400,13 @@ def main():
 
     # Auto-start screensaver if enabled in settings
     settings = get_settings()
-    print(f"DEBUG: Checking screensaver settings: enabled={settings.screensaver.enabled}")
     if settings.screensaver.enabled:
-        print("DEBUG: Screensaver is enabled in settings, starting automatically...")
+        print("Screensaver is enabled in settings, starting automatically...")
         try:
             message = start_screensaver_internal()
-            print(f"DEBUG: Screensaver started successfully: {message}")
+            print(f"Screensaver started successfully: {message}")
         except Exception as e:
-            print(f"DEBUG: Failed to auto-start screensaver: {e}")
-    else:
-        print(f"DEBUG: Screensaver not enabled in settings (enabled={settings.screensaver.enabled})")
+            print(f"Failed to auto-start screensaver: {e}")
 
     # Start image loading in background thread
     # Automatic image loading on startup has been removed
