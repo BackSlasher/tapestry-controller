@@ -885,9 +885,19 @@ def get_reddit_wallpaper():
             post_data = post['data']
             url = post_data.get('url', '')
 
+            # Skip deleted/removed posts or posts without URLs
+            if not url or post_data.get('removed_by_category') or post_data.get('is_self'):
+                continue
+
             # Check if it's a direct image URL
             parsed_url = urlparse(url)
             if parsed_url.path.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')):
+                image_posts.append({
+                    'url': url,
+                    'title': post_data.get('title', 'Reddit Wallpaper')
+                })
+            # Also check for common image hosting sites
+            elif any(domain in parsed_url.netloc.lower() for domain in ['i.imgur.com', 'i.redd.it']):
                 image_posts.append({
                     'url': url,
                     'title': post_data.get('title', 'Reddit Wallpaper')
@@ -1125,6 +1135,10 @@ def update_screensaver_config():
                 limit = int(data['reddit_limit'])
                 if 1 <= limit <= 100:
                     screensaver_state['config']['reddit']['limit'] = limit
+            if 'reddit_subreddit' in data:
+                subreddit = data['reddit_subreddit'].strip()
+                if subreddit and subreddit.replace('_', '').replace('-', '').isalnum():
+                    screensaver_state['config']['reddit']['subreddit'] = subreddit
 
         # Restart screensaver if it was active
         if was_active:

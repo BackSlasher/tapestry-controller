@@ -52,10 +52,17 @@
                     <!-- Reddit Type Settings -->
                     <div id="reddit-settings" class="screensaver-type-settings" style="display: none;">
                         <h6>Reddit Settings</h6>
-                        <div class="mb-3">
-                            <label for="reddit-limit" class="form-label">Number of top posts to consider</label>
-                            <input type="number" class="form-control" id="reddit-limit" name="reddit_limit" min="1" max="100" value="30">
-                            <div class="form-text">Random selection from top N posts in r/aiwallpapers</div>
+                        <div class="row">
+                            <div class="col-md-8">
+                                <label for="reddit-subreddit" class="form-label">Subreddit</label>
+                                <input type="text" class="form-control" id="reddit-subreddit" name="reddit_subreddit" value="aiwallpapers" placeholder="earthporn">
+                                <div class="form-text">Subreddit name (without r/)</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="reddit-limit" class="form-label">Top posts limit</label>
+                                <input type="number" class="form-control" id="reddit-limit" name="reddit_limit" min="1" max="100" value="30">
+                                <div class="form-text">Random from top N</div>
+                            </div>
                         </div>
                     </div>
 
@@ -130,8 +137,8 @@ function loadScreensaverStatus() {
         .then(response => response.json())
         .then(data => {
             if (data.active) {
-                const typeInfo = data.type === 'reddit'
-                    ? 'Reddit r/aiwallpapers'
+                let typeInfo = data.type === 'reddit'
+                    ? `Reddit ${data.wallpapers_dir}`
                     : `Gallery (${data.wallpapers_dir})`;
 
                 statusDiv.innerHTML = `
@@ -174,10 +181,12 @@ function loadScreensaverConfig() {
                     .then(response => response.json())
                     .then(redditData => {
                         document.getElementById('reddit-limit').value = redditData.limit || 30;
+                        document.getElementById('reddit-subreddit').value = redditData.subreddit || 'aiwallpapers';
                     })
                     .catch(error => {
                         console.error('Error loading Reddit config:', error);
                         document.getElementById('reddit-limit').value = 30;
+                        document.getElementById('reddit-subreddit').value = 'aiwallpapers';
                     });
             }
 
@@ -186,9 +195,36 @@ function loadScreensaverConfig() {
 
             // Update current config display
             const typeDisplay = data.type === 'reddit' ? 'Reddit' : 'Gallery';
-            const extraInfo = data.type === 'reddit'
-                ? `r/aiwallpapers (top 30)`
-                : data.wallpapers_dir || 'wallpapers';
+            let extraInfo = data.wallpapers_dir || 'wallpapers';
+
+            if (data.type === 'reddit') {
+                // Load Reddit config for display
+                fetch('/screensaver/config/reddit')
+                    .then(response => response.json())
+                    .then(redditData => {
+                        const subreddit = redditData.subreddit || 'aiwallpapers';
+                        const limit = redditData.limit || 30;
+                        extraInfo = `r/${subreddit} (top ${limit})`;
+
+                        document.getElementById('current-config').innerHTML = `
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <strong>Type:</strong><br>
+                                    ${typeDisplay}
+                                </div>
+                                <div class="col-md-4">
+                                    <strong>Interval:</strong><br>
+                                    ${data.interval || 60} seconds
+                                </div>
+                                <div class="col-md-4">
+                                    <strong>Source:</strong><br>
+                                    ${extraInfo}
+                                </div>
+                            </div>
+                        `;
+                    });
+                return; // Skip the regular update below
+            }
 
             document.getElementById('current-config').innerHTML = `
                 <div class="row">
