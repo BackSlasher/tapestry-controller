@@ -42,7 +42,9 @@ class EpdInfo(NamedTuple):
                 screen_model=data["screen_model"],
             )
         except (KeyError, ValueError) as e:
-            raise ValueError(f"Device response missing required field or invalid JSON: {e}. Response: {resp.text}")
+            raise ValueError(
+                f"Device response missing required field or invalid JSON: {e}. Response: {resp.text}"
+            )
 
 
 def info(hostname):
@@ -81,7 +83,7 @@ def draw_unrotated(hostname, img: PIL.Image, clear: bool):
         img = image_refit(img, Dimensions(width=inf.width, height=inf.height))
         img = img.resize((inf.width, inf.height))
         img = img.convert("L")
-        
+
         # NO rotation applied - image goes to screen as-is
         img_bytes = convert_8bit_to_4bit(img.tobytes())
         requests.post(
@@ -106,11 +108,13 @@ def draw(hostname, img: PIL.Image, clear: bool, rotation: int = 0):
         img = image_refit(img, Dimensions(width=inf.width, height=inf.height))
         img = img.resize((inf.width, inf.height))
         img = img.convert("L")
-        
+
         # Apply device-specific rotation (in addition to any base rotation)
         if rotation != 0:
-            img = img.rotate(-rotation, expand=False, fillcolor=255)  # negative for clockwise rotation
-        
+            img = img.rotate(
+                -rotation, expand=False, fillcolor=255
+            )  # negative for clockwise rotation
+
         img_bytes = convert_8bit_to_4bit(img.tobytes())
         requests.post(
             f"http://{hostname}/draw",

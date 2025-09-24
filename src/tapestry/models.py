@@ -35,21 +35,22 @@ class Config(NamedTuple):
             start = Point(x=device.coordinates.x, y=device.coordinates.y)
             # Use detected dimensions
             import math
+
             angle_rad = math.radians(abs(device.rotation))
             w, h = device.detected_dimensions.width, device.detected_dimensions.height
-            
+
             # Bounding box calculation works for all rotation angles
             cos_a = abs(math.cos(angle_rad))
             sin_a = abs(math.sin(angle_rad))
-            
+
             new_width = w * cos_a + h * sin_a
             new_height = w * sin_a + h * cos_a
-            
+
             dimensions = Dimensions(
                 width=int(new_width),
                 height=int(new_height),
             )
-            
+
             device_rectangles[device] = Rectangle(
                 start=start,
                 dimensions=dimensions,
@@ -60,47 +61,50 @@ class Config(NamedTuple):
         """Generate the layout visualization image with optional overlay."""
         device_rectangles = self.to_rectangles()
         bounding_rectangle = Rectangle.bounding_rectangle(device_rectangles.values())
-        
+
         # Add margin around the bounding box for labels
         margin = 50  # pixels
         canvas_width = int(bounding_rectangle.dimensions.width) + (2 * margin)
         canvas_height = int(bounding_rectangle.dimensions.height) + (2 * margin)
-        background_image = Image.new('RGB', (canvas_width, canvas_height), (0,0,0))
-        
+        background_image = Image.new("RGB", (canvas_width, canvas_height), (0, 0, 0))
+
         # Offset for positioning screens within the margin
         margin_offset_x = margin - int(bounding_rectangle.start.x)
         margin_offset_y = margin - int(bounding_rectangle.start.y)
-        
+
         # If overlay image is provided, show it first (faded for non-screen areas)
         if overlay_image and overlay_px_in_unit:
             # Resize overlay to fit the layout (within the margin)
             overlay_width = int(bounding_rectangle.dimensions.width)
             overlay_height = int(bounding_rectangle.dimensions.height)
             overlay_resized = overlay_image.resize((overlay_width, overlay_height))
-            
+
             # Create a faded version for the background
             overlay_faded = overlay_resized.copy()
             overlay_faded.putalpha(128)  # 50% transparency
-            
+
             # Paste faded overlay as background with margin offset
-            if overlay_faded.mode == 'RGBA':
+            if overlay_faded.mode == "RGBA":
                 background_image.paste(overlay_faded, (margin, margin), overlay_faded)
             else:
                 # Convert to RGBA for blending
-                bg_rgba = background_image.convert('RGBA')
-                overlay_rgba = overlay_faded.convert('RGBA')
+                bg_rgba = background_image.convert("RGBA")
+                overlay_rgba = overlay_faded.convert("RGBA")
                 blended = Image.blend(bg_rgba, overlay_rgba, 0.3)
-                background_image = blended.convert('RGB')
-        
+                background_image = blended.convert("RGB")
+
         for device, rectangle in device_rectangles.items():
-            width, height = int(rectangle.dimensions.width), int(rectangle.dimensions.height)
-            
+            width, height = int(rectangle.dimensions.width), int(
+                rectangle.dimensions.height
+            )
+
             if overlay_image and overlay_px_in_unit:
                 # Extract the portion of the image that corresponds to this screen
                 r = rectangle.ratioed(overlay_px_in_unit)
                 try:
                     # Crop the overlay image for this screen
                     from .image_utils import image_crop
+
                     screen_image = image_crop(overlay_image, r)
                     # Resize to exact screen dimensions
                     screen_image = screen_image.resize((width, height))
@@ -108,111 +112,145 @@ class Config(NamedTuple):
                 except Exception as e:
                     # Fallback to white background if cropping fails
                     print(f"Error cropping image for device {device.host}: {e}")
-                    foreground_image = Image.new('RGB', (width, height), (255, 255, 255))
+                    foreground_image = Image.new(
+                        "RGB", (width, height), (255, 255, 255)
+                    )
             else:
                 # Create a blank white image
-                foreground_image = Image.new('RGB', (width, height), (255, 255, 255))
-            
+                foreground_image = Image.new("RGB", (width, height), (255, 255, 255))
+
             # Add device hostname as overlay text
             try:
                 font_size = 16
                 try:
-                    font = ImageFont.truetype('Roboto-Black', font_size)
+                    font = ImageFont.truetype("Roboto-Black", font_size)
                 except (OSError, IOError):
                     try:
-                        font = ImageFont.truetype('/System/Library/Fonts/Arial.ttf', font_size)
+                        font = ImageFont.truetype(
+                            "/System/Library/Fonts/Arial.ttf", font_size
+                        )
                     except (OSError, IOError):
                         try:
-                            font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', font_size)
+                            font = ImageFont.truetype(
+                                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                                font_size,
+                            )
                         except (OSError, IOError):
                             font = ImageFont.load_default()
 
                 # Create a semi-transparent overlay for text
-                text_overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+                text_overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
                 text_draw = ImageDraw.Draw(text_overlay)
-                
+
                 text = device.host
                 text_width = text_draw.textlength(text, font=font)
                 text_height = font_size
                 text_x = (width - text_width) / 2
                 text_y = height - text_height - 5  # Bottom of screen
-                
+
                 # Draw text background
-                text_draw.rectangle([text_x-2, text_y-2, text_x+text_width+2, text_y+text_height+2], 
-                                  fill=(0, 0, 0, 180))
-                text_draw.text((text_x, text_y), text, font=font, fill=(255, 255, 255, 255))
-                
+                text_draw.rectangle(
+                    [
+                        text_x - 2,
+                        text_y - 2,
+                        text_x + text_width + 2,
+                        text_y + text_height + 2,
+                    ],
+                    fill=(0, 0, 0, 180),
+                )
+                text_draw.text(
+                    (text_x, text_y), text, font=font, fill=(255, 255, 255, 255)
+                )
+
                 # Add orientation indicator (emoji)
                 import math
+
                 center_x = width // 2
                 center_y = height // 2
-                
+
                 # Use emoji size relative to screen size
                 emoji_size = min(width, height) // 4
-                
+
                 # Try to get a larger font for the emoji
                 try:
-                    emoji_font = ImageFont.truetype('/System/Library/Fonts/Apple Color Emoji.ttc', emoji_size)
+                    emoji_font = ImageFont.truetype(
+                        "/System/Library/Fonts/Apple Color Emoji.ttc", emoji_size
+                    )
                 except (OSError, IOError):
                     try:
                         # Try common emoji fonts on Linux
-                        emoji_font = ImageFont.truetype('/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf', emoji_size)
+                        emoji_font = ImageFont.truetype(
+                            "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
+                            emoji_size,
+                        )
                     except (OSError, IOError):
                         try:
-                            emoji_font = ImageFont.truetype('/usr/share/fonts/TTF/NotoColorEmoji.ttf', emoji_size)
+                            emoji_font = ImageFont.truetype(
+                                "/usr/share/fonts/TTF/NotoColorEmoji.ttf", emoji_size
+                            )
                         except (OSError, IOError):
                             try:
                                 # Fallback to regular font with larger size for emoji
-                                emoji_font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', emoji_size)
+                                emoji_font = ImageFont.truetype(
+                                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                                    emoji_size,
+                                )
                             except (OSError, IOError):
                                 emoji_font = ImageFont.load_default()
-                
+
                 # Choose orientation indicator based on rotation
                 # Normalize rotation to 0-360 range
                 normalized_rotation = device.rotation % 360
                 if normalized_rotation < 0:
                     normalized_rotation += 360
-                
+
                 # Choose arrow character based on rotation
                 if 315 <= normalized_rotation or normalized_rotation < 45:
                     orientation_indicator = "^"  # Up
                 elif 45 <= normalized_rotation < 135:
-                    orientation_indicator = ">"  # Right  
+                    orientation_indicator = ">"  # Right
                 elif 135 <= normalized_rotation < 225:
                     orientation_indicator = "v"  # Down
                 else:  # 225 <= normalized_rotation < 315
                     orientation_indicator = "<"  # Left
-                
+
                 # Position indicator at center of screen
                 emoji_x = center_x
                 emoji_y = center_y
-                
+
                 # Get orientation indicator dimensions for centering
-                bbox = text_draw.textbbox((0, 0), orientation_indicator, font=emoji_font)
+                bbox = text_draw.textbbox(
+                    (0, 0), orientation_indicator, font=emoji_font
+                )
                 indicator_width = bbox[2] - bbox[0]
                 indicator_height = bbox[3] - bbox[1]
-                
+
                 # Center the indicator at the calculated position
                 final_x = emoji_x - indicator_width // 2
                 final_y = emoji_y - indicator_height // 2
-                
+
                 # Draw orientation indicator (use black color to be visible on white background)
-                text_draw.text((final_x, final_y), orientation_indicator, font=emoji_font, fill=(0, 0, 0, 255))
-                
+                text_draw.text(
+                    (final_x, final_y),
+                    orientation_indicator,
+                    font=emoji_font,
+                    fill=(0, 0, 0, 255),
+                )
+
                 # Composite text overlay onto screen image
-                if foreground_image.mode != 'RGBA':
-                    foreground_image = foreground_image.convert('RGBA')
+                if foreground_image.mode != "RGBA":
+                    foreground_image = foreground_image.convert("RGBA")
                 foreground_image = Image.alpha_composite(foreground_image, text_overlay)
-                foreground_image = foreground_image.convert('RGB')
-                
+                foreground_image = foreground_image.convert("RGB")
+
             except Exception as e:
                 print(f"Error adding text overlay for device {device.host}: {e}")
 
             x = int(rectangle.start.x) + margin_offset_x
             y = int(rectangle.start.y) + margin_offset_y
-            
+
             background_image.paste(foreground_image, (x, y))
-        
+
         return background_image
 
     def draw_rectangles(self, filename):
@@ -220,10 +258,12 @@ class Config(NamedTuple):
         image = self._generate_layout_image()
         image.save(filename)
 
-    def draw_rectangles_to_buffer(self, buffer, overlay_image=None, overlay_px_in_unit=None):
+    def draw_rectangles_to_buffer(
+        self, buffer, overlay_image=None, overlay_px_in_unit=None
+    ):
         """Save layout visualization to a buffer with optional overlay."""
         image = self._generate_layout_image(overlay_image, overlay_px_in_unit)
-        image.save(buffer, format='PNG')
+        image.save(buffer, format="PNG")
 
 
 def load_config(devices_file):
@@ -234,32 +274,34 @@ def load_config(devices_file):
         # If devices.yaml doesn't exist, treat as empty configuration
         print(f"No {devices_file} found, starting with empty configuration")
         return Config(devices=[])
-    
+
     # Handle empty or null YAML file
-    if not y or 'devices' not in y or not y['devices']:
+    if not y or "devices" not in y or not y["devices"]:
         return Config(devices=[])
-    
+
     devices = []
-    for d in y['devices']:
-        screen_type_name = d['screen_type']
+    for d in y["devices"]:
+        screen_type_name = d["screen_type"]
         if screen_type_name not in SCREEN_TYPES:
             raise ValueError(f"Unknown screen type: {screen_type_name}")
-        
+
         # Parse detected dimensions (required)
         detected_dims = DetectedDimensions(
-            width=int(d['detected_dimensions']['width']),
-            height=int(d['detected_dimensions']['height'])
+            width=int(d["detected_dimensions"]["width"]),
+            height=int(d["detected_dimensions"]["height"]),
         )
-        
-        devices.append(Device(
-            host=d['host'],
-            screen_type=screen_type_name,
-            coordinates=Coordinates(
-                x=int(d['coordinates']['x']),
-                y=int(d['coordinates']['y']),
-            ),
-            detected_dimensions=detected_dims,
-            rotation=d.get('rotation', 0)  # default to 0 if not specified
-        ))
-    
+
+        devices.append(
+            Device(
+                host=d["host"],
+                screen_type=screen_type_name,
+                coordinates=Coordinates(
+                    x=int(d["coordinates"]["x"]),
+                    y=int(d["coordinates"]["y"]),
+                ),
+                detected_dimensions=detected_dims,
+                rotation=d.get("rotation", 0),  # default to 0 if not specified
+            )
+        )
+
     return Config(devices=devices)
