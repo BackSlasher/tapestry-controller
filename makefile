@@ -17,6 +17,7 @@ test:
 
 lint:
 	poetry run black src/
+	poetry run autoflake8 -ri src/
 	poetry run flake8 src/
 	poetry run mypy src/
 

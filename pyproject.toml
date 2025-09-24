@@ -42,6 +42,7 @@ pytest = ">=7.0"
 black = ">=22.0"
 flake8 = ">=4.0"
 mypy = ">=0.950"
+autoflake8 = "^0.4.1"
 
 [tool.poetry.scripts]
 tapestry = "tapestry.cli:main"
@@ -50,6 +51,10 @@ tapestry-webui = "tapestry.webui.app:main"
 [tool.black]
 line-length = 88
 target-version = ['py38']
+
+[tool.flake8]
+max-line-length = 88
+ignore = ["E501"]
 
 [tool.mypy]
 python_version = "3.8"
