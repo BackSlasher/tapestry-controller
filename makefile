@@ -20,7 +20,7 @@ lint:
 	poetry run black src/
 
 deploy:
-	rsync -avz --delete --exclude='__pycache__' --exclude='.pytest_cache' --exclude='*.pyc' --exclude='.git' --exclude='.sl' --exclude='debug/' --exclude='build/' --exclude='dist/' --exclude='src/*.egg-info/' --exclude='devices.yaml' --exclude='settings.toml' . $(REMOTE_HOST):./controller/
+	rsync -avz --delete --filter=':- .gitignore' --filter='- .sl/' --filter='- .git/' --exclude='devices.yaml' --exclude='settings.toml' . $(REMOTE_HOST):./controller/
 
 remote-install:
 	@echo "Installing dependencies on $(REMOTE_HOST)..."
