@@ -4,7 +4,7 @@ import logging
 from typing import Literal
 
 import toml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -60,11 +60,32 @@ class RedditSettings(BaseModel):
         return cleaned
 
 
+class PixabaySettings(BaseModel):
+    """Pixabay screensaver settings."""
+
+    api_key: str = Field(
+        default="", description="Pixabay API key"
+    )
+    keywords: str = Field(
+        default="wallpaper", description="Keywords for image search"
+    )
+    per_page: int = Field(
+        default=20, ge=3, le=200, description="Number of images per request"
+    )
+
+    @field_validator("keywords")
+    @classmethod
+    def validate_keywords(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("keywords cannot be empty")
+        return v.strip()
+
+
 class ScreensaverSettings(BaseModel):
     """Screensaver configuration."""
 
     enabled: bool = Field(default=False, description="Whether screensaver is enabled")
-    type: Literal["gallery", "reddit"] = Field(
+    type: Literal["gallery", "reddit", "pixabay"] = Field(
         default="gallery", description="Screensaver type"
     )
     interval: int = Field(
@@ -76,6 +97,15 @@ class ScreensaverSettings(BaseModel):
     reddit: RedditSettings = Field(
         default_factory=RedditSettings, description="Reddit screensaver settings"
     )
+    pixabay: PixabaySettings = Field(
+        default_factory=PixabaySettings, description="Pixabay screensaver settings"
+    )
+
+    @model_validator(mode='after')
+    def validate_screensaver_config(self):
+        if self.type == "pixabay" and not self.pixabay.api_key.strip():
+            raise ValueError("Pixabay API key is required when using Pixabay screensaver")
+        return self
 
 
 class TapestrySettings(BaseSettings):

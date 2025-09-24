@@ -29,6 +29,7 @@ from ..geometry import Dimensions, Point, Rectangle
 from ..screen_types import SCREEN_TYPES
 from ..settings import (
     GallerySettings,
+    PixabaySettings,
     RedditSettings,
     ScreensaverSettings,
     get_settings,
@@ -61,6 +62,11 @@ def get_screensaver_config():
             "time_period": settings.screensaver.reddit.time_period,
             "sort": settings.screensaver.reddit.sort,
             "limit": settings.screensaver.reddit.limit,
+        },
+        "pixabay": {
+            "api_key": settings.screensaver.pixabay.api_key,
+            "keywords": settings.screensaver.pixabay.keywords,
+            "per_page": settings.screensaver.pixabay.per_page,
         },
     }
 
@@ -1035,6 +1041,68 @@ def get_reddit_wallpaper(subreddit, sort, time_period, limit):
         return None
 
 
+def get_pixabay_wallpaper(api_key, keywords, per_page):
+    """Fetch a random wallpaper from Pixabay."""
+    import random
+
+    import requests
+
+    if not api_key:
+        raise Exception("Pixabay API key is required")
+
+    url = "https://pixabay.com/api/"
+    params = {
+        "key": api_key,
+        "q": keywords,
+        "image_type": "photo",
+        "orientation": "all",
+        "min_width": 1200,
+        "min_height": 800,
+        "per_page": min(per_page, 200),  # API limit is 200
+        "safesearch": "true",
+    }
+
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        if not data.get("hits"):
+            raise Exception(f"No images found for keywords: {keywords}")
+
+        # Select random image
+        selected = random.choice(data["hits"])
+
+        # Get the largest available image
+        image_url = (
+            selected.get("fullHDURL")
+            or selected.get("webformatURL")
+            or selected.get("largeImageURL")
+        )
+
+        if not image_url:
+            raise Exception("No suitable image URL found")
+
+        # Download the image
+        img_response = requests.get(image_url, timeout=30)
+        img_response.raise_for_status()
+
+        # Open as PIL Image
+        from io import BytesIO
+
+        image = PIL.Image.open(BytesIO(img_response.content))
+        logger.info(
+            f"Pixabay screensaver: displaying image by {selected.get('user', 'unknown')} "
+            f"(tags: {selected.get('tags', 'none')})"
+        )
+
+        return image
+
+    except Exception as e:
+        logger.error(f"Error fetching Pixabay wallpaper: {str(e)}")
+        return None
+
+
 def screensaver_worker():
     """Background worker that cycles through wallpaper images."""
     stop_event = screensaver_runtime["stop_event"]
@@ -1066,6 +1134,16 @@ def screensaver_worker():
                 )
                 if not image:
                     logger.warning("Failed to fetch Reddit wallpaper, waiting...")
+                    continue
+
+            elif config["type"] == "pixabay":
+                image = get_pixabay_wallpaper(
+                    config["pixabay"]["api_key"],
+                    config["pixabay"]["keywords"],
+                    config["pixabay"]["per_page"],
+                )
+                if not image:
+                    logger.warning("Failed to fetch Pixabay wallpaper, waiting...")
                     continue
 
             if not image:
@@ -1109,6 +1187,9 @@ def start_screensaver_internal():
             raise Exception(f"No wallpaper images found in '{wallpapers_dir}'")
     elif config["type"] == "reddit":
         # For Reddit, we'll validate connectivity when we actually try to fetch
+        pass
+    elif config["type"] == "pixabay":
+        # Pixabay validation is handled by the settings model
         pass
 
     # Start screensaver thread
@@ -1194,6 +1275,15 @@ def screensaver_status():
                 "has_images": True,  # Assume Reddit is available
             }
         )
+    elif config["type"] == "pixabay":
+        status.update(
+            {
+                "wallpapers_dir": f"Pixabay: {config['pixabay']['keywords']}",
+                "image_count": config["pixabay"]["per_page"],
+                "has_images": bool(config["pixabay"]["api_key"]),
+                "has_api_key": bool(config["pixabay"]["api_key"]),
+            }
+        )
 
     return jsonify(status)
 
@@ -1209,6 +1299,13 @@ def get_reddit_config():
     """Get Reddit screensaver configuration."""
     settings = get_settings()
     return jsonify(settings.screensaver.reddit.model_dump())
+
+
+@app.route("/screensaver/config/pixabay")
+def get_pixabay_config():
+    """Get Pixabay screensaver configuration."""
+    settings = get_settings()
+    return jsonify(settings.screensaver.pixabay.model_dump())
 
 
 @app.route("/screensaver/config", methods=["POST"])
@@ -1266,6 +1363,23 @@ def update_screensaver_config():
         else:
             new_reddit = current.reddit
 
+        # Update pixabay settings
+        new_pixabay_data = {}
+        if "pixabay_api_key" in data:
+            new_pixabay_data["api_key"] = data["pixabay_api_key"].strip()
+        if "pixabay_keywords" in data:
+            new_pixabay_data["keywords"] = data["pixabay_keywords"].strip()
+        if "pixabay_per_page" in data:
+            new_pixabay_data["per_page"] = int(data["pixabay_per_page"])
+
+        if new_pixabay_data:
+            # Merge with current pixabay settings
+            current_pixabay = current.pixabay.model_dump()
+            current_pixabay.update(new_pixabay_data)
+            new_pixabay = PixabaySettings(**current_pixabay)
+        else:
+            new_pixabay = current.pixabay
+
         # Create new screensaver settings
         settings.screensaver = ScreensaverSettings(
             enabled=current.enabled,
@@ -1273,6 +1387,7 @@ def update_screensaver_config():
             interval=new_interval,
             gallery=new_gallery,
             reddit=new_reddit,
+            pixabay=new_pixabay,
         )
         settings.save_to_file()
 

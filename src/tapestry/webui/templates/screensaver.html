@@ -29,6 +29,7 @@
                             <select class="form-select" id="screensaver-type" name="type">
                                 <option value="gallery">Gallery - Random wallpapers</option>
                                 <option value="reddit">Reddit - AI Wallpapers</option>
+                                <option value="pixabay">Pixabay - Stock photos</option>
                             </select>
                         </div>
                         <div class="col-md-6">
@@ -62,6 +63,28 @@
                                 <label for="reddit-limit" class="form-label">Top posts limit</label>
                                 <input type="number" class="form-control" id="reddit-limit" name="reddit_limit" min="1" max="100" value="30">
                                 <div class="form-text">Random from top N</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pixabay Type Settings -->
+                    <div id="pixabay-settings" class="screensaver-type-settings" style="display: none;">
+                        <h6>Pixabay Settings</h6>
+                        <div class="mb-3">
+                            <label for="pixabay-api-key" class="form-label">API Key</label>
+                            <input type="password" class="form-control" id="pixabay-api-key" name="pixabay_api_key" placeholder="Your Pixabay API key">
+                            <div class="form-text">Get your free API key from <a href="https://pixabay.com/accounts/register/" target="_blank">Pixabay</a></div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-8">
+                                <label for="pixabay-keywords" class="form-label">Keywords</label>
+                                <input type="text" class="form-control" id="pixabay-keywords" name="pixabay_keywords" value="wallpaper" placeholder="landscape, nature, abstract">
+                                <div class="form-text">Search terms for images (comma-separated)</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="pixabay-per-page" class="form-label">Images to fetch</label>
+                                <input type="number" class="form-control" id="pixabay-per-page" name="pixabay_per_page" min="3" max="200" value="20">
+                                <div class="form-text">Random from top N results</div>
                             </div>
                         </div>
                     </div>
@@ -188,13 +211,28 @@ function loadScreensaverConfig() {
                         document.getElementById('reddit-limit').value = 30;
                         document.getElementById('reddit-subreddit').value = 'aiwallpapers';
                     });
+            } else if (data.type === 'pixabay') {
+                // Load Pixabay config
+                fetch('/screensaver/config/pixabay')
+                    .then(response => response.json())
+                    .then(pixabayData => {
+                        document.getElementById('pixabay-api-key').value = pixabayData.api_key || '';
+                        document.getElementById('pixabay-keywords').value = pixabayData.keywords || 'wallpaper';
+                        document.getElementById('pixabay-per-page').value = pixabayData.per_page || 20;
+                    })
+                    .catch(error => {
+                        console.error('Error loading Pixabay config:', error);
+                        document.getElementById('pixabay-api-key').value = '';
+                        document.getElementById('pixabay-keywords').value = 'wallpaper';
+                        document.getElementById('pixabay-per-page').value = 20;
+                    });
             }
 
             // Show appropriate settings
             showTypeSettings(data.type || 'gallery');
 
             // Update current config display
-            const typeDisplay = data.type === 'reddit' ? 'Reddit' : 'Gallery';
+            const typeDisplay = data.type === 'reddit' ? 'Reddit' : data.type === 'pixabay' ? 'Pixabay' : 'Gallery';
             let extraInfo = data.wallpapers_dir || 'wallpapers';
 
             if (data.type === 'reddit') {
