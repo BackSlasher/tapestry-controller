@@ -102,7 +102,7 @@ def generate_positioning_qr_image(
 
     # Create JSON data to encode in QR
     qr_json_data = {
-        "host": hostname,  # hostname only (no IP needed)
+        "host": ip,  # IP address for consistent identification
         "screen_type": screen_type_name,
         "screen_width_px": width,
         "screen_height_px": height,
