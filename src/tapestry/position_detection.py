@@ -149,10 +149,8 @@ def detect_qr_positions(pil_image: Image.Image) -> List[QRPositionData]:
             screen_corners = []
 
             # Calculate screen dimensions in image pixels
-            # Add correction factor of 1.22 based on measurement discrepancy
-            correction_factor = 1.22
-            screen_width_img = screen_width_px * pixel_ratio * correction_factor
-            screen_height_img = screen_height_px * pixel_ratio * correction_factor
+            screen_width_img = screen_width_px * pixel_ratio
+            screen_height_img = screen_height_px * pixel_ratio
 
             # Use the actual measured QR size from bounding box (already calculated above)
             # qr_size_img was calculated as (qr_width_img + qr_height_img) / 2

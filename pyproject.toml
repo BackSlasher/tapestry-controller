@@ -46,6 +46,7 @@ ruff = "^0.13.1"
 tapestry = "tapestry.cli:main"
 tapestry-webui = "tapestry.webui.app:main"
 tapestry-qr-debug = "tapestry.qr_debug_cli:main"
+tapestry-qr-generate = "tapestry.qr_generation_cli:main"
 
 [tool.black]
 line-length = 88

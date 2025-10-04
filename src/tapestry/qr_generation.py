@@ -82,7 +82,7 @@ def get_device_screen_type(ip: str, timeout: int = 5) -> Optional[str]:
 
 
 def generate_positioning_qr_image(
-    ip: str, hostname: str, screen_type_name: str
+    ip: str, screen_type_name: str, width: int, height: int
 ) -> Image.Image:
     """Generate QR positioning image for a specific device."""
 
@@ -90,15 +90,8 @@ def generate_positioning_qr_image(
     if screen_type_name not in SCREEN_TYPES:
         raise ValueError(f"Unknown screen type: {screen_type_name}")
 
-    # Get actual pixel dimensions from device
-    response = requests.get(f"http://{ip}/", timeout=5)
-    response.raise_for_status()
-    device_data = response.json()
-    width = int(device_data["width"])
-    height = int(device_data["height"])
-
     # Pre-calculate QR code size (75% of screen size)
-    target_size = min(width, height) * 0.75
+    target_size = int(min(width, height) * 0.75)
 
     # Create JSON data to encode in QR
     qr_json_data = {
@@ -106,7 +99,7 @@ def generate_positioning_qr_image(
         "screen_type": screen_type_name,
         "screen_width_px": width,
         "screen_height_px": height,
-        "qr_size_px": int(target_size),
+        "qr_size_px": target_size,
     }
     qr_data = f"DIGINK:{json.dumps(qr_json_data)}"
 
@@ -115,7 +108,7 @@ def generate_positioning_qr_image(
         version=None,  # Auto-size based on data
         error_correction=qrcode.constants.ERROR_CORRECT_M,  # Medium error correction (15%)
         box_size=1,  # Will be scaled later
-        border=4,  # Standard quiet zone
+        border=0,  # Entire image is white
     )
     qr.add_data(qr_data)
     qr.make(fit=True)
@@ -129,24 +122,21 @@ def generate_positioning_qr_image(
     if target_size < min_qr_size:
         raise Exception(f"QR code too small for {ip}")
 
-    scale_factor = target_size / max(qr_width, qr_height)
-    new_width = int(qr_width * scale_factor)
-    new_height = int(qr_height * scale_factor)
-    qr_img = qr_img.resize((new_width, new_height), Image.LANCZOS)
+    qr_img = qr_img.resize((target_size, target_size), Image.LANCZOS)
 
     # Create white background
     img = Image.new("1", (width, height), 1)  # '1' mode for 1-bit black/white
 
     # Center the QR code
-    qr_x = (width - new_width) // 2
-    qr_y = (height - new_height) // 2
+    qr_x = (width - target_size) // 2
+    qr_y = (height - target_size) // 2
 
     # Convert to same mode and paste
     qr_img_bw = qr_img.convert("1")
     img.paste(qr_img_bw, (qr_x, qr_y))
 
     print(
-        f"Generated QR code for {ip}: {new_width}x{new_height}px at ({qr_x},{qr_y}), data: {qr_json_data}"
+        f"Generated QR code for {ip}: {target_size}x{target_size}px at ({qr_x},{qr_y}), data: {qr_json_data}"
     )
 
     return img
@@ -166,12 +156,23 @@ def generate_all_positioning_qr_images() -> Dict[str, Image.Image]:
     print(f"Found {len(devices)} devices, generating QR codes...")
 
     for device in devices:
-        qr_img = generate_positioning_qr_image(
-            device.ip, device.hostname, device.screen_type
-        )
-        qr_images[device.ip] = qr_img
-        print(
-            f"Generated QR code for {device.hostname} ({device.ip}) - {device.screen_type}"
-        )
+        try:
+            # Get actual pixel dimensions from device
+            response = requests.get(f"http://{device.ip}/", timeout=5)
+            response.raise_for_status()
+            device_data = response.json()
+            width = int(device_data["width"])
+            height = int(device_data["height"])
+
+            qr_img = generate_positioning_qr_image(
+                device.ip, device.screen_type, width, height
+            )
+            qr_images[device.ip] = qr_img
+            print(
+                f"Generated QR code for {device.hostname} ({device.ip}) - {device.screen_type}"
+            )
+        except Exception as e:
+            print(f"Failed to generate QR code for {device.hostname} ({device.ip}): {e}")
+            continue
 
     return qr_images
