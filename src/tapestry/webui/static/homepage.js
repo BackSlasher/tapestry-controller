@@ -80,15 +80,60 @@ function loadDeviceInfo() {
     fetch('/devices')
         .then(response => response.json())
         .then(data => {
-            if (data.devices) {
-                const deviceCountSpan = document.getElementById('device-count');
+            const deviceInfoDiv = document.getElementById('device-info');
+            const deviceCountSpan = document.getElementById('device-count');
+
+            if (data.screens) {
+                // Update device count
                 if (deviceCountSpan) {
-                    deviceCountSpan.textContent = data.devices.length;
+                    deviceCountSpan.textContent = data.screens.length;
+                }
+
+                // Update device info section
+                if (deviceInfoDiv) {
+                    if (data.screens.length === 0) {
+                        deviceInfoDiv.innerHTML = '<p class="text-muted">No devices configured. Use QR Positioning to discover devices.</p>';
+                    } else {
+                        let deviceHtml = '<div class="row">';
+                        data.screens.forEach(screen => {
+                            const hostname = screen.hostname || 'Unknown';
+                            const screenType = screen.screen_type || 'Unknown';
+                            const x = screen.x ?? 'Unknown';
+                            const y = screen.y ?? 'Unknown';
+                            const width = screen.width ?? 'Unknown';
+                            const height = screen.height ?? 'Unknown';
+                            const rotation = screen.rotation ?? 'Unknown';
+
+                            deviceHtml += `
+                                <div class="col-md-6 mb-3">
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <h6 class="card-title">${hostname}</h6>
+                                            <p class="card-text">
+                                                <small class="text-muted">
+                                                    Type: ${screenType}<br>
+                                                    Position: (${x}, ${y})<br>
+                                                    Size: ${width}×${height}<br>
+                                                    Rotation: ${rotation}°
+                                                </small>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        deviceHtml += '</div>';
+                        deviceInfoDiv.innerHTML = deviceHtml;
+                    }
                 }
             }
         })
         .catch(error => {
             console.error('Error loading device info:', error);
+            const deviceInfoDiv = document.getElementById('device-info');
+            if (deviceInfoDiv) {
+                deviceInfoDiv.innerHTML = '<div class="alert alert-danger">Error loading device information</div>';
+            }
         });
 }
 
