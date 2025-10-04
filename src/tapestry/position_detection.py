@@ -149,22 +149,22 @@ def detect_qr_positions(pil_image: Image.Image) -> List[QRPositionData]:
             screen_corners = []
 
             # Calculate screen dimensions in image pixels
-            screen_width_img = screen_width_px * pixel_ratio
-            screen_height_img = screen_height_px * pixel_ratio
+            # Add correction factor of 1.22 based on measurement discrepancy
+            correction_factor = 1.22
+            screen_width_img = screen_width_px * pixel_ratio * correction_factor
+            screen_height_img = screen_height_px * pixel_ratio * correction_factor
 
-            # QR code dimensions in image pixels
-            qr_size_img = qr_size_px * pixel_ratio
+            # Use the actual measured QR size from bounding box (already calculated above)
+            # qr_size_img was calculated as (qr_width_img + qr_height_img) / 2
 
             for qr_corner in corners:
-                # 1. Calculate relative position of QR corner from QR center (normalized to -0.5 to +0.5)
-                rel_x = (qr_corner[0] - center_x) / qr_size_img
-                rel_y = (qr_corner[1] - center_y) / qr_size_img
+                # 1. Calculate displacement from QR center to QR corner
+                qr_offset_x = qr_corner[0] - center_x
+                qr_offset_y = qr_corner[1] - center_y
 
-                # 2. Scale to screen dimensions
-                # rel_x, rel_y are now in the range [-0.5, +0.5] for the QR corners
-                # Scale them to screen dimensions
-                screen_offset_x = rel_x * screen_width_img
-                screen_offset_y = rel_y * screen_height_img
+                # 2. Scale displacement by the ratio of screen size to QR size
+                screen_offset_x = qr_offset_x * (screen_width_img / qr_size_img)
+                screen_offset_y = qr_offset_y * (screen_height_img / qr_size_img)
 
                 # 3. Calculate screen corner position
                 screen_corner_x = center_x + screen_offset_x
