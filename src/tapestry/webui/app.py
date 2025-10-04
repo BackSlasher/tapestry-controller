@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import base64
 import glob
 import hashlib
 import io
@@ -294,6 +295,84 @@ def flash_firmware():
 def positioning():
     """QR-based positioning page."""
     return render_template("positioning.html")
+
+
+@app.route("/qr-debug")
+def qr_debug():
+    """QR code debug page."""
+    return render_template("qr_debug.html")
+
+
+@app.route("/qr-debug/analyze", methods=["POST"])
+def analyze_qr_debug():
+    """Analyze uploaded QR image and return debug visualization."""
+    if "image" not in request.files:
+        return jsonify({"error": "No image file provided"}), 400
+
+    file = request.files["image"]
+    if file.filename == "":
+        return jsonify({"error": "No file selected"}), 400
+
+    try:
+        # Read the uploaded image
+        image_data = file.read()
+        image = PIL.Image.open(io.BytesIO(image_data))
+
+        # Import QR detection function
+        from ..position_detection import detect_qr_positions
+
+        # Detect QR codes and get their positions
+        qr_data = detect_qr_positions(image)
+
+        # Create debug visualization
+        debug_image = image.copy()
+        draw = ImageDraw.Draw(debug_image)
+
+        debug_info = []
+
+        for i, qr in enumerate(qr_data):
+            # Draw bounding box (qr.bounding_box is (min_x, min_y, max_x, max_y))
+            min_x, min_y, max_x, max_y = qr.bounding_box
+            draw.rectangle(
+                [(min_x, min_y), (max_x, max_y)],
+                outline="red",
+                width=3
+            )
+
+            # Add label
+            label = f"QR{i+1}"
+            draw.text((min_x, min_y - 20), label, fill="red")
+
+            # Collect debug info
+            debug_info.append({
+                "id": i + 1,
+                "hostname": qr.hostname,
+                "screen_type": qr.screen_type,
+                "center": qr.center,
+                "rotation": qr.rotation,
+                "bbox": {
+                    "x": min_x,
+                    "y": min_y,
+                    "width": max_x - min_x,
+                    "height": max_y - min_y
+                }
+            })
+
+        # Convert debug image to base64
+        buffer = io.BytesIO()
+        debug_image.save(buffer, format="PNG")
+        debug_image_b64 = base64.b64encode(buffer.getvalue()).decode()
+
+        return jsonify({
+            "success": True,
+            "debug_image": f"data:image/png;base64,{debug_image_b64}",
+            "qr_codes": debug_info,
+            "total_found": len(qr_data)
+        })
+
+    except Exception as e:
+        logger.error(f"Error analyzing QR debug image: {e}")
+        return jsonify({"error": f"Failed to analyze image: {str(e)}"}), 500
 
 
 @app.route("/positioning/qr-mode", methods=["POST"])
