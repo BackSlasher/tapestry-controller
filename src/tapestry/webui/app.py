@@ -27,7 +27,6 @@ from PIL import ImageDraw, ImageFont
 
 from ..controller import TapestryController
 from ..geometry import Dimensions, Point, Rectangle
-from ..qr_debug import analyze_qr_image
 from ..screen_types import SCREEN_TYPES
 from .screensaver import ScreensaverManager
 from ..settings import (
@@ -298,45 +297,6 @@ def positioning():
     return render_template("positioning.html")
 
 
-@app.route("/qr-debug")
-def qr_debug():
-    """QR code debug page."""
-    return render_template("qr_debug.html")
-
-
-@app.route("/qr-debug/analyze", methods=["POST"])
-def analyze_qr_debug():
-    """Analyze uploaded QR image and return debug visualization."""
-    if "image" not in request.files:
-        return jsonify({"error": "No image file provided"}), 400
-
-    file = request.files["image"]
-    if file.filename == "":
-        return jsonify({"error": "No file selected"}), 400
-
-    try:
-        # Read the uploaded image
-        image_data = file.read()
-        image = PIL.Image.open(io.BytesIO(image_data))
-
-        # Call QR debug analysis function
-        debug_image, debug_info = analyze_qr_image(image)
-
-        # Convert debug image to base64
-        buffer = io.BytesIO()
-        debug_image.save(buffer, format="PNG")
-        debug_image_b64 = base64.b64encode(buffer.getvalue()).decode()
-
-        return jsonify({
-            "success": True,
-            "debug_image": f"data:image/png;base64,{debug_image_b64}",
-            "qr_codes": debug_info,
-            "total_found": len(debug_info)
-        })
-
-    except Exception as e:
-        logger.error(f"Error analyzing QR debug image: {e}")
-        return jsonify({"error": f"Failed to analyze image: {str(e)}"}), 500
 
 
 @app.route("/positioning/qr-mode", methods=["POST"])
