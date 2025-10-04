@@ -106,9 +106,9 @@ def generate_positioning_qr_image(
     # Generate QR code with medium error correction
     qr = qrcode.QRCode(
         version=None,  # Auto-size based on data
-        error_correction=qrcode.constants.ERROR_CORRECT_M,  # Medium error correction (15%)
+        error_correction=qrcode.constants.ERROR_CORRECT_L,  # Low correction for easier QR
         box_size=1,  # Will be scaled later
-        border=0,  # Entire image is white
+        border=0,  # Entire image is white, no border needed
     )
     qr.add_data(qr_data)
     qr.make(fit=True)
