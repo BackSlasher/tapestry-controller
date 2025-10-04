@@ -37,6 +37,27 @@ def analyze_qr_image(image: PIL.Image.Image) -> tuple[PIL.Image.Image, List[Dict
             width=3
         )
 
+        # Draw QR corner markers - highlight first corner with bold circle
+        if hasattr(qr, 'corners') and qr.corners and len(qr.corners) >= 4:
+            for j, (x, y) in enumerate(qr.corners):
+                # Make the first QR corner bold (larger and different color)
+                if j == 0:
+                    radius = 8
+                    draw.ellipse(
+                        [(x - radius, y - radius), (x + radius, y + radius)],
+                        outline="red",
+                        fill="yellow",
+                        width=3
+                    )
+                else:
+                    radius = 4
+                    draw.ellipse(
+                        [(x - radius, y - radius), (x + radius, y + radius)],
+                        outline="red",
+                        fill="pink",
+                        width=1
+                    )
+
         # Draw screen area if available
         if hasattr(qr, 'screen_corners') and qr.screen_corners and len(qr.screen_corners) >= 4:
             # Draw screen boundary as thick polygon
@@ -56,16 +77,17 @@ def analyze_qr_image(image: PIL.Image.Image) -> tuple[PIL.Image.Image, List[Dict
 
             # Draw corner markers with numbers
             for j, (x, y) in enumerate(qr.screen_corners):
-                # Draw larger circle at each corner
-                radius = 6
+                # Make the first corner (j=0) twice as large
+                radius = 12 if j == 0 else 6
                 draw.ellipse(
                     [(x - radius, y - radius), (x + radius, y + radius)],
                     outline="blue",
                     fill="lightblue",
                     width=2
                 )
-                # Add corner number
-                draw.text((x + 8, y - 8), str(j+1), fill="blue")
+                # Add corner number (adjust text position for larger first corner)
+                text_offset = 14 if j == 0 else 8
+                draw.text((x + text_offset, y - text_offset), str(j+1), fill="blue")
 
             # Add screen type label near the screen center
             if len(screen_points) >= 4:
