@@ -29,13 +29,14 @@ def analyze_qr_image(image: PIL.Image.Image) -> tuple[PIL.Image.Image, List[Dict
     debug_info = []
 
     for i, qr in enumerate(qr_data):
-        # Draw bounding box (qr.bounding_box is (min_x, min_y, max_x, max_y))
-        min_x, min_y, max_x, max_y = qr.bounding_box
-        draw.rectangle(
-            [(min_x, min_y), (max_x, max_y)],
-            outline="red",
-            width=3
-        )
+        # Draw QR outline by connecting corner points
+        if hasattr(qr, 'corners') and qr.corners and len(qr.corners) >= 4:
+            # Draw lines connecting the QR corners to form the actual detected shape
+            corners = qr.corners
+            for j in range(len(corners)):
+                start_point = corners[j]
+                end_point = corners[(j + 1) % len(corners)]  # Connect to next corner, wrap to first
+                draw.line([start_point, end_point], fill="red", width=3)
 
         # Draw QR corner markers - highlight first corner with bold circle
         if hasattr(qr, 'corners') and qr.corners and len(qr.corners) >= 4:
@@ -96,7 +97,8 @@ def analyze_qr_image(image: PIL.Image.Image) -> tuple[PIL.Image.Image, List[Dict
                 screen_label = f"Screen: {qr.screen_type}"
                 draw.text((center_x - 30, center_y), screen_label, fill="blue")
 
-        # Add label
+        # Add label using bounding box for positioning
+        min_x, min_y, max_x, max_y = qr.bounding_box
         label = f"QR{i+1}"
         draw.text((min_x, min_y - 20), label, fill="red")
 

@@ -124,17 +124,6 @@ def detect_qr_positions(pil_image: Image.Image) -> List[QRPositionData]:
             # Step 3: Get rotation from QR code
             rotation = calculate_qr_rotation_from_corners(corners)
 
-            # Map raw rotation to standard orientations (0°, 90°, 180°, 270°)
-            normalized = rotation % 360
-            if normalized < 45 or normalized >= 315:
-                rotation = 0
-            elif 45 <= normalized < 135:
-                rotation = 90
-            elif 135 <= normalized < 225:
-                rotation = 180
-            else:  # 225 <= normalized < 315
-                rotation = 270
-
             # Step 4: Calculate screen corners from QR bounding box and JSON data
 
             # Step 4.1: Measure bounding box of QR code
@@ -156,29 +145,32 @@ def detect_qr_positions(pil_image: Image.Image) -> List[QRPositionData]:
                 f"QR {i} ({hostname}): QR size in image: {qr_size_img:.1f}px, expected: {qr_size_px}px, ratio: {pixel_ratio:.4f}"
             )
 
-            # Step 4.4: Calculate screen corners using ratio and screen dimensions
+            # Step 4.4: Calculate screen corners based on QR corner positions and screen dimensions
+            screen_corners = []
+
+            # Calculate screen dimensions in image pixels
             screen_width_img = screen_width_px * pixel_ratio
             screen_height_img = screen_height_px * pixel_ratio
 
-            # Calculate screen corners relative to QR center
-            screen_corners = [
-                (
-                    center_x - screen_width_img / 2,
-                    center_y - screen_height_img / 2,
-                ),  # top-left
-                (
-                    center_x + screen_width_img / 2,
-                    center_y - screen_height_img / 2,
-                ),  # top-right
-                (
-                    center_x + screen_width_img / 2,
-                    center_y + screen_height_img / 2,
-                ),  # bottom-right
-                (
-                    center_x - screen_width_img / 2,
-                    center_y + screen_height_img / 2,
-                ),  # bottom-left
-            ]
+            # QR code dimensions in image pixels
+            qr_size_img = qr_size_px * pixel_ratio
+
+            for qr_corner in corners:
+                # 1. Calculate relative position of QR corner from QR center (normalized to -0.5 to +0.5)
+                rel_x = (qr_corner[0] - center_x) / qr_size_img
+                rel_y = (qr_corner[1] - center_y) / qr_size_img
+
+                # 2. Scale to screen dimensions
+                # rel_x, rel_y are now in the range [-0.5, +0.5] for the QR corners
+                # Scale them to screen dimensions
+                screen_offset_x = rel_x * screen_width_img
+                screen_offset_y = rel_y * screen_height_img
+
+                # 3. Calculate screen corner position
+                screen_corner_x = center_x + screen_offset_x
+                screen_corner_y = center_y + screen_offset_y
+
+                screen_corners.append((screen_corner_x, screen_corner_y))
 
             # Create position data
             qr_data = QRPositionData(
