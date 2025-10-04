@@ -101,7 +101,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: formData
             });
 
+            console.log("aaaaa", response.status);
             const data = await response.json();
+            console.log("bbbbb", data);
 
             if (data.success) {
                 displayResults(data);
@@ -143,6 +145,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <small class="text-muted">
                             Center: (${qr.center[0].toFixed(1)}, ${qr.center[1].toFixed(1)})<br>
                             Bbox: (${qr.bbox.x.toFixed(0)}, ${qr.bbox.y.toFixed(0)}) ${qr.bbox.width.toFixed(0)}×${qr.bbox.height.toFixed(0)}
+                            ${qr.screen_corners ? `<br>Screen area: ${qr.screen_corners.length} corners detected` : ''}
                         </small>
                     </div>
                 `;
@@ -160,7 +163,7 @@ document.addEventListener('DOMContentLoaded', function() {
             debugImageContainer.innerHTML = `
                 <img src="${data.debug_image}" class="img-fluid border" alt="Debug visualization">
                 <p class="mt-2 text-muted">
-                    <small>Red boxes show detected QR code bounding boxes</small>
+                    <small>Red boxes show QR code bounding boxes, blue polygons show detected screen areas</small>
                 </p>
             `;
         } else {

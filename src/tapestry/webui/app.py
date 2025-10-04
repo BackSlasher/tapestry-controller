@@ -339,12 +339,49 @@ def analyze_qr_debug():
                 width=3
             )
 
+            # Draw screen area if available
+            if hasattr(qr, 'screen_corners') and qr.screen_corners and len(qr.screen_corners) >= 4:
+                # Draw screen boundary as thick polygon
+                screen_points = [(x, y) for x, y in qr.screen_corners]
+                draw.polygon(screen_points, outline="blue", width=4)
+
+                # Draw semi-transparent fill to highlight screen area
+                try:
+                    # Create a temporary image for the fill
+                    overlay = PIL.Image.new('RGBA', debug_image.size, (0, 0, 0, 0))
+                    overlay_draw = ImageDraw.Draw(overlay)
+                    overlay_draw.polygon(screen_points, fill=(0, 0, 255, 30))  # Semi-transparent blue
+                    debug_image = PIL.Image.alpha_composite(debug_image.convert('RGBA'), overlay).convert('RGB')
+                    draw = ImageDraw.Draw(debug_image)  # Recreate draw object
+                except:
+                    pass  # Fallback if alpha blending fails
+
+                # Draw corner markers with numbers
+                for j, (x, y) in enumerate(qr.screen_corners):
+                    # Draw larger circle at each corner
+                    radius = 6
+                    draw.ellipse(
+                        [(x - radius, y - radius), (x + radius, y + radius)],
+                        outline="blue",
+                        fill="lightblue",
+                        width=2
+                    )
+                    # Add corner number
+                    draw.text((x + 8, y - 8), str(j+1), fill="blue")
+
+                # Add screen type label near the screen center
+                if len(screen_points) >= 4:
+                    center_x = sum(x for x, y in screen_points) / len(screen_points)
+                    center_y = sum(y for x, y in screen_points) / len(screen_points)
+                    screen_label = f"Screen: {qr.screen_type}"
+                    draw.text((center_x - 30, center_y), screen_label, fill="blue")
+
             # Add label
             label = f"QR{i+1}"
             draw.text((min_x, min_y - 20), label, fill="red")
 
             # Collect debug info
-            debug_info.append({
+            qr_info = {
                 "id": i + 1,
                 "hostname": qr.hostname,
                 "screen_type": qr.screen_type,
@@ -356,7 +393,13 @@ def analyze_qr_debug():
                     "width": max_x - min_x,
                     "height": max_y - min_y
                 }
-            })
+            }
+
+            # Add screen corners if available
+            if hasattr(qr, 'screen_corners') and qr.screen_corners:
+                qr_info["screen_corners"] = qr.screen_corners
+
+            debug_info.append(qr_info)
 
         # Convert debug image to base64
         buffer = io.BytesIO()
