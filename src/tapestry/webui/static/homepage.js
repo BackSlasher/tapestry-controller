@@ -522,7 +522,7 @@ function drawPreviewCanvas(imageSrc) {
     const ctx = canvas.getContext('2d');
     const img = new Image();
 
-    img.onload = function() {
+    img.onload = async function() {
         // Set canvas size
         const maxWidth = 400;
         const maxHeight = 300;
@@ -544,50 +544,54 @@ function drawPreviewCanvas(imageSrc) {
         ctx.drawImage(img, 0, 0, width, height);
 
         // Fetch and overlay screen positions
-        fetch('/layout-data')
-            .then(response => {
-                if (response.status === 204) return null;
-                return response.json();
-            })
-            .then(data => {
-                if (!data || !data.screens) return;
+        try {
+            const response = await fetch('/layout-data');
 
-                // Calculate scale factor from original image to canvas
-                const scaleX = width / img.naturalWidth;
-                const scaleY = height / img.naturalHeight;
+            if (response.status === 204) return;
 
-                // Draw screen overlays
-                data.screens.forEach(screen => {
-                    const x = screen.x * scaleX;
-                    const y = screen.y * scaleY;
-                    const w = screen.width * scaleX;
-                    const h = screen.height * scaleY;
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
 
-                    // Draw outline
-                    ctx.strokeStyle = '#ff6b6b';
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(x, y, w, h);
+            const data = await response.json();
 
-                    // Draw label background
-                    ctx.fillStyle = 'rgba(255, 107, 107, 0.8)';
-                    ctx.fillRect(x, y - 20, w, 20);
+            if (!data || !data.screens) return;
 
-                    // Draw label text
-                    ctx.fillStyle = 'white';
-                    ctx.font = '12px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(screen.label, x + w/2, y - 6);
-                });
-            })
-            .catch(error => {
-                console.error('Error loading screen layout for preview:', error);
+            // Calculate scale factor from original image to canvas
+            const scaleX = width / img.naturalWidth;
+            const scaleY = height / img.naturalHeight;
+
+            // Draw screen overlays
+            data.screens.forEach(screen => {
+                const x = screen.x * scaleX;
+                const y = screen.y * scaleY;
+                const w = screen.width * scaleX;
+                const h = screen.height * scaleY;
+
+                // Draw outline
+                ctx.strokeStyle = '#ff6b6b';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, w, h);
+
+                // Draw label background
+                ctx.fillStyle = 'rgba(255, 107, 107, 0.8)';
+                ctx.fillRect(x, y - 20, w, 20);
+
+                // Draw label text
+                ctx.fillStyle = 'white';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(screen.label, x + w/2, y - 6);
             });
+        } catch (error) {
+            console.error('Error loading screen layout for preview:', error);
+        }
     };
 
     img.src = imageSrc;
 }
 
-function clearAllScreens() {
+async function clearAllScreens() {
     const clearBtn = document.getElementById('clear-screens');
     if (!clearBtn) return;
 
@@ -601,14 +605,20 @@ function clearAllScreens() {
     clearBtn.disabled = true;
     clearBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Clearing...';
 
-    fetch('/clear-all-screens', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
+    try {
+        const response = await fetch('/clear-all-screens', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-    })
-    .then(response => response.json())
-    .then(data => {
+
+        const data = await response.json();
+
         if (data.success) {
             showAlert('All screens cleared successfully', 'success');
             // Refresh layout after clearing
@@ -616,19 +626,17 @@ function clearAllScreens() {
         } else {
             showAlert('Error clearing screens: ' + (data.error || 'Unknown error'), 'danger');
         }
-    })
-    .catch(error => {
+    } catch (error) {
         console.error('Error clearing screens:', error);
         showAlert('Failed to clear screens: ' + error.message, 'danger');
-    })
-    .finally(() => {
+    } finally {
         // Reset button state
         clearBtn.disabled = false;
         clearBtn.innerHTML = originalText;
-    });
+    }
 }
 
-function restoreLastImage() {
+async function restoreLastImage() {
     const restoreBtn = document.getElementById('restore-image');
     if (!restoreBtn) return;
 
@@ -637,14 +645,20 @@ function restoreLastImage() {
     restoreBtn.disabled = true;
     restoreBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Restoring...';
 
-    fetch('/restore-last-image', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
+    try {
+        const response = await fetch('/restore-image', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-    })
-    .then(response => response.json())
-    .then(data => {
+
+        const data = await response.json();
+
         if (data.success) {
             showAlert('Last image restored successfully', 'success');
             // Refresh layout after restoring
@@ -652,43 +666,46 @@ function restoreLastImage() {
         } else {
             showAlert('Error restoring image: ' + (data.error || 'Unknown error'), 'danger');
         }
-    })
-    .catch(error => {
+    } catch (error) {
         console.error('Error restoring image:', error);
         showAlert('Failed to restore image: ' + error.message, 'danger');
-    })
-    .finally(() => {
+    } finally {
         // Reset button state
         restoreBtn.disabled = false;
         restoreBtn.innerHTML = originalText;
-    });
+    }
 }
 
-function checkScreensaverStatus() {
+async function checkScreensaverStatus() {
     const screensaverMessage = document.getElementById('screensaver-message');
     const uploadForm = document.getElementById('upload-form');
     if (!screensaverMessage || !uploadForm) return; // Not on main page
 
-    fetch('/screensaver/status')
-        .then(response => response.json())
-        .then(data => {
-            if (data.active) {
-                screensaverMessage.classList.remove('d-none');
-                uploadForm.classList.add('d-none');
-            } else {
-                screensaverMessage.classList.add('d-none');
-                uploadForm.classList.remove('d-none');
-            }
-        })
-        .catch(error => {
-            console.error('Error checking screensaver status:', error);
-            // On error, hide screensaver message and show upload form
+    try {
+        const response = await fetch('/screensaver/status');
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        if (data.active) {
+            screensaverMessage.classList.remove('d-none');
+            uploadForm.classList.add('d-none');
+        } else {
             screensaverMessage.classList.add('d-none');
             uploadForm.classList.remove('d-none');
-        });
+        }
+    } catch (error) {
+        console.error('Error checking screensaver status:', error);
+        // On error, hide screensaver message and show upload form
+        screensaverMessage.classList.add('d-none');
+        uploadForm.classList.remove('d-none');
+    }
 }
 
-function stopScreensaverFromOverlay() {
+async function stopScreensaverFromOverlay() {
     const disableBtn = document.getElementById('disable-screensaver');
     if (!disableBtn) return;
 
@@ -697,30 +714,34 @@ function stopScreensaverFromOverlay() {
     disableBtn.disabled = true;
     disableBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Stopping...';
 
-    fetch('/screensaver/stop', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
+    try {
+        const response = await fetch('/screensaver/stop', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-    })
-    .then(response => response.json())
-    .then(data => {
+
+        const data = await response.json();
+
         if (data.success) {
             showAlert('Screensaver stopped', 'success');
             checkScreensaverStatus(); // Update UI
         } else {
             showAlert('Error stopping screensaver: ' + (data.error || 'Unknown error'), 'danger');
         }
-    })
-    .catch(error => {
+    } catch (error) {
         console.error('Error stopping screensaver:', error);
         showAlert('Failed to stop screensaver: ' + error.message, 'danger');
-    })
-    .finally(() => {
+    } finally {
         // Reset button state
         disableBtn.disabled = false;
         disableBtn.innerHTML = originalText;
-    });
+    }
 }
 
 async function schedulePeriodicUpdates() {

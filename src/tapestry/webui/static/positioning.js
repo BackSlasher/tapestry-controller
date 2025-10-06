@@ -15,18 +15,24 @@ document.addEventListener('DOMContentLoaded', function() {
     let detectedConfig = null;
 
     // Start QR mode
-    startQRBtn.addEventListener('click', function() {
+    startQRBtn.addEventListener('click', async function() {
         startQRBtn.disabled = true;
         startQRBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Displaying QR codes...';
 
-        fetch('/positioning/qr-mode', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
+        try {
+            const response = await fetch('/positioning/qr-mode', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-        })
-        .then(response => response.json())
-        .then(data => {
+
+            const data = await response.json();
+
             if (data.success) {
                 qrStatus.style.display = 'block';
                 startQRBtn.innerHTML = '<i class="bi bi-qr-code"></i> QR Codes Displayed';
@@ -35,12 +41,11 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 throw new Error(data.error || 'Failed to display QR codes');
             }
-        })
-        .catch(error => {
+        } catch (error) {
             alert('Error displaying QR codes: ' + error.message);
             startQRBtn.disabled = false;
             startQRBtn.innerHTML = '<i class="bi bi-qr-code"></i> Show QR Codes on Screens';
-        });
+        }
     });
 
     // Enable analyze button when photo is selected
@@ -49,7 +54,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Analyze photo
-    analyzeBtn.addEventListener('click', function() {
+    analyzeBtn.addEventListener('click', async function() {
         const file = photoInput.files[0];
         if (!file) {
             alert('Please select a photo first');
@@ -62,26 +67,30 @@ document.addEventListener('DOMContentLoaded', function() {
         const formData = new FormData();
         formData.append('photo', file);
 
-        fetch('/positioning/analyze', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
+        try {
+            const response = await fetch('/positioning/analyze', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+
             if (data.success) {
                 displayResults(data);
                 resultsSection.style.display = 'block';
             } else {
                 throw new Error(data.error || 'Failed to analyze photo');
             }
-        })
-        .catch(error => {
+        } catch (error) {
             alert('Error analyzing photo: ' + error.message);
-        })
-        .finally(() => {
+        } finally {
             analyzeBtn.disabled = false;
             analyzeBtn.innerHTML = '<i class="bi bi-search"></i> Analyze Positions';
-        });
+        }
     });
 
     function displayResults(data) {
@@ -204,7 +213,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Apply configuration
-    applyConfigBtn.addEventListener('click', function() {
+    applyConfigBtn.addEventListener('click', async function() {
         if (!detectedConfig) {
             alert('No configuration to apply');
             return;
@@ -213,13 +222,13 @@ document.addEventListener('DOMContentLoaded', function() {
         // Check for missing devices and require additional confirmation
         let confirmMessage = `Apply New Configuration?\n\n` +
             `This will update devices.yaml with the detected positions for ${detectedConfig.detected_devices.length} devices.\n\n`;
-        
+
         if (detectedConfig.has_missing_devices) {
             confirmMessage += `⚠️  WARNING: ${detectedConfig.missing_devices.length} DHCP devices were not detected in the photo:\n` +
                 `${detectedConfig.missing_devices.join(', ')}\n\n` +
                 `These devices will NOT be included in the configuration.\n\n`;
         }
-        
+
         confirmMessage += `Changes will take effect immediately and update your device layout.\n\n` +
             `Do you want to continue?`;
 
@@ -236,29 +245,33 @@ document.addEventListener('DOMContentLoaded', function() {
             confirmed: true  // User has confirmed they want to proceed
         };
 
-        fetch('/positioning/apply', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestData)
-        })
-        .then(response => response.json())
-        .then(data => {
+        try {
+            const response = await fetch('/positioning/apply', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+
             if (data.success) {
                 // Redirect to homepage where flash message will be shown
                 window.location.href = '/';
             } else {
                 throw new Error(data.error || 'Failed to apply configuration');
             }
-        })
-        .catch(error => {
+        } catch (error) {
             alert('Error applying configuration: ' + error.message);
-        })
-        .finally(() => {
+        } finally {
             applyConfigBtn.disabled = false;
             applyConfigBtn.innerHTML = '<i class="bi bi-check2-all"></i> Apply Configuration';
-        });
+        }
     });
 
     // Download configuration

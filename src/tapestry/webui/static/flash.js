@@ -56,14 +56,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-function startFlashProcess(screenType) {
+async function startFlashProcess(screenType) {
     const flashBtn = document.getElementById('flash-btn');
     const stopBtn = document.getElementById('stop-btn');
     const outputTextarea = document.getElementById('output-textarea');
     const flashStatus = document.getElementById('flash-status');
     const statusText = document.getElementById('status-text');
     const screenTypeSelect = document.getElementById('screen-type-select');
-    
+
     // Update UI state
     flashBtn.style.display = 'none';
     stopBtn.style.display = 'inline-block';
@@ -71,19 +71,25 @@ function startFlashProcess(screenType) {
     flashStatus.style.display = 'block';
     statusText.textContent = `Starting flash process for ${screenType}...`;
     outputTextarea.value = '';
-    
-    // Start the flash process
-    fetch('/flash/start', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            screen_type: screenType
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
+
+    try {
+        // Start the flash process
+        const response = await fetch('/flash/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                screen_type: screenType
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
         if (data.success) {
             currentProcessId = data.process_id;
             statusText.textContent = `Flashing ${screenType} firmware...`;
@@ -93,38 +99,42 @@ function startFlashProcess(screenType) {
             showAlert(data.error || 'Failed to start flash process', 'danger');
             resetUI();
         }
-    })
-    .catch(error => {
+    } catch (error) {
         console.error('Error starting flash process:', error);
         showAlert('Failed to start flash process', 'danger');
         resetUI();
-    });
+    }
 }
 
-function stopFlashProcess() {
+async function stopFlashProcess() {
     if (!currentProcessId) return;
-    
+
     const statusText = document.getElementById('status-text');
     statusText.textContent = 'Stopping process...';
-    
-    fetch(`/flash/stop/${currentProcessId}`, {
-        method: 'POST'
-    })
-    .then(response => response.json())
-    .then(data => {
+
+    try {
+        const response = await fetch(`/flash/stop/${currentProcessId}`, {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
         if (data.success) {
             appendOutput('Process stopped by user\n');
             showAlert(data.message, 'info');
         } else {
             showAlert(data.error || 'Failed to stop process', 'danger');
         }
-        resetUI();
-    })
-    .catch(error => {
+    } catch (error) {
         console.error('Error stopping flash process:', error);
         showAlert('Failed to stop process', 'danger');
+    } finally {
         resetUI();
-    });
+    }
 }
 
 function startOutputStreaming() {
