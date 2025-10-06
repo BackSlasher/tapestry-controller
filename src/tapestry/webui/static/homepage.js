@@ -161,43 +161,51 @@ function initializeCanvas() {
     refreshLayout();
 }
 
+// Cache ETags to detect changes
+let lastLayoutETag = null;
+let lastImageETag = null;
+
+function updateDeviceCount(layoutData) {
+    const deviceCountSpan = document.getElementById('device-count');
+    if (deviceCountSpan && layoutData.screens) {
+        deviceCountSpan.textContent = layoutData.screens.length;
+    }
+}
+
 async function refreshLayout() {
     const canvas = document.getElementById('layout-canvas');
     if (!canvas) return;
 
     try {
-        // Fetch layout data
-        const layoutResponse = await fetch('/layout-data');
+        // Fetch both endpoints in parallel
+        const [layoutResponse, imageResponse] = await Promise.all([
+            fetch('/layout-data'),
+            fetch('/current-image')
+        ]);
 
-        if (layoutResponse.status === 204) {
-            // No content
-            const ctx = canvas.getContext('2d');
-            canvas.width = 400;
-            canvas.height = 300;
-            ctx.fillStyle = '#f8f9fa';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#6c757d';
-            ctx.font = '16px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('No devices configured', canvas.width / 2, canvas.height / 2);
+        if (!layoutResponse.ok) {
+            console.error(`Layout fetch failed: ${layoutResponse.status} ${layoutResponse.statusText}`);
+            return;
+        }
+        if (!imageResponse.ok) {
+            console.warn(`Image fetch failed: ${imageResponse.status} ${imageResponse.statusText}`);
             return;
         }
 
-        const layoutData = await layoutResponse.json();
-        const deviceCountSpan = document.getElementById('device-count');
-        if (deviceCountSpan && layoutData.screens) {
-            deviceCountSpan.textContent = layoutData.screens.length;
+        const currentLayoutETag = layoutResponse.headers.get('etag');
+        const currentImageETag = imageResponse.headers.get('etag');
+
+        if (currentLayoutETag && currentLayoutETag === lastLayoutETag &&
+            currentImageETag && currentImageETag === lastImageETag) {
+            return;
         }
 
-        // Try to fetch current image
-        const imageResponse = await fetch('/current-image');
+        [lastLayoutETag, lastImageETag]  = [currentLayoutETag, currentImageETag];
 
-        if (imageResponse.ok && imageResponse.status !== 204) {
-            const imageBlob = await imageResponse.blob();
-            await drawCanvas(layoutData, imageBlob);
-        } else {
-            await drawLayoutCanvas();
-        }
+        const layoutData =  layoutResponse.status === 204 ? null : await layoutResponse.json();
+        const imageBlob = imageResponse.status === 204 ? null : await imageResponse.blob();
+        updateDeviceCount(layoutData);
+        await drawCanvas(layoutData, imageBlob);
 
     } catch (error) {
         console.error('Error refreshing layout:', error);
@@ -219,6 +227,19 @@ async function drawCanvas(layoutData, imageBlob) {
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
+
+    // Handle case with no devices/screens
+    if (!layoutData || !layoutData.screens || layoutData.screens.length === 0) {
+        canvas.width = 400;
+        canvas.height = 300;
+        ctx.fillStyle = '#f8f9fa';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#6c757d';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('No devices configured', canvas.width / 2, canvas.height / 2);
+        return;
+    }
 
     // Calculate canvas size based on layout data
     let canvasWidth, canvasHeight;
@@ -289,176 +310,6 @@ async function drawCanvas(layoutData, imageBlob) {
     }
 }
 
-async function drawLayoutCanvas() {
-    const canvas = document.getElementById('layout-canvas');
-    if (!canvas) return;
-
-    try {
-        const response = await fetch('/layout-data');
-
-        if (response.status === 204) {
-            // No content
-            const ctx = canvas.getContext('2d');
-            canvas.width = 400;
-            canvas.height = 300;
-            ctx.fillStyle = '#f8f9fa';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#6c757d';
-            ctx.font = '16px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('No devices configured', canvas.width / 2, canvas.height / 2);
-            return;
-        }
-
-        const data = await response.json();
-
-        if (!data.screens || data.screens.length === 0) {
-            // No screens, show placeholder
-            const ctx = canvas.getContext('2d');
-            canvas.width = 400;
-            canvas.height = 300;
-            ctx.fillStyle = '#f8f9fa';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#6c757d';
-            ctx.font = '16px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('No devices configured', canvas.width / 2, canvas.height / 2);
-
-            const deviceCountSpan = document.getElementById('device-count');
-            if (deviceCountSpan) {
-                deviceCountSpan.textContent = '0';
-            }
-            return;
-        }
-
-        // Determine canvas size based on image size if available, otherwise screen bounds
-        let canvasWidth, canvasHeight;
-        if (data.image_size) {
-            // Use the scaled image dimensions directly
-            canvasWidth = data.image_size.width;
-            canvasHeight = data.image_size.height;
-        } else {
-            // Fallback: calculate from screen bounds
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            data.screens.forEach(screen => {
-                minX = Math.min(minX, screen.x);
-                minY = Math.min(minY, screen.y);
-                maxX = Math.max(maxX, screen.x + screen.width);
-                maxY = Math.max(maxY, screen.y + screen.height);
-            });
-            canvasWidth = maxX - minX;
-            canvasHeight = maxY - minY;
-        }
-
-        // Scale canvas to fit nicely in the UI while maintaining aspect ratio
-        // Get the actual available space in the container
-        const canvas = document.getElementById('layout-canvas');
-        const canvasContainer = canvas.parentElement;
-        const containerRect = canvasContainer.getBoundingClientRect();
-
-        // Use container width minus padding, with reasonable height limits
-        const maxDisplayWidth = Math.max(400, containerRect.width - 40); // Min 400px, minus padding
-        const maxDisplayHeight = Math.min(600, window.innerHeight * 0.6); // Max 60% of viewport height
-
-        const displayScale = Math.min(
-            maxDisplayWidth / canvasWidth,
-            maxDisplayHeight / canvasHeight,
-            1 // Don't scale up
-        );
-
-        canvas.width = canvasWidth * displayScale;
-        canvas.height = canvasHeight * displayScale;
-
-        // Update device count
-        const deviceCountSpan = document.getElementById('device-count');
-        if (deviceCountSpan) {
-            deviceCountSpan.textContent = data.screens.length;
-        }
-
-        // Try to fetch background image with proper ETag handling
-        try {
-            const imageResponse = await fetch('/current-image');
-            if (imageResponse.ok && imageResponse.status !== 204) {
-                const blob = await imageResponse.blob();
-                const img = new Image();
-                img.onload = function() {
-                    const ctx = canvas.getContext('2d');
-                    // Clear canvas and set white background
-                    ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                    // Calculate image scaling and positioning
-                    const imageAspectRatio = img.width / img.height;
-                    const canvasAspectRatio = canvas.width / canvas.height;
-
-                    let scale, offsetX = 0, offsetY = 0;
-
-                    if (imageAspectRatio > canvasAspectRatio) {
-                        // Image is wider - fit to canvas width
-                        scale = canvas.width / img.width;
-                        offsetY = (canvas.height - img.height * scale) / 2;
-                    } else {
-                        // Image is taller - fit to canvas height
-                        scale = canvas.height / img.height;
-                        offsetX = (canvas.width - img.width * scale) / 2;
-                    }
-
-                    // Draw the background image
-                    ctx.drawImage(img, offsetX, offsetY, img.width * scale, img.height * scale);
-
-                    // Draw screen overlays with transparency
-                    ctx.globalAlpha = 0.8;
-                    data.screens.forEach(screen => {
-                        const x = screen.x * displayScale;
-                        const y = screen.y * displayScale;
-                        const width = screen.width * displayScale;
-                        const height = screen.height * displayScale;
-
-                        // Create a clipping region for this screen
-                        ctx.save();
-                        ctx.rect(x, y, width, height);
-                        ctx.clip();
-
-                        // Fill with semi-transparent white to show screen bounds
-                        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-                        ctx.fillRect(x, y, width, height);
-
-                        ctx.restore();
-                    });
-
-                    // Reset alpha and draw screen borders, labels and arrows on top
-                    ctx.globalAlpha = 1.0;
-                    drawScreens(ctx, data.screens, displayScale);
-
-                    // Clean up blob URL
-                    URL.revokeObjectURL(img.src);
-                };
-                img.src = URL.createObjectURL(blob);
-            } else if (response.status === 204) {
-                // No image available - just draw screen borders
-                drawScreens(ctx, data.screens, displayScale);
-            } else {
-                // Error - just draw screen borders
-                drawScreens(ctx, data.screens, displayScale);
-            }
-        } catch (error) {
-            console.error('Error loading background image:', error);
-            // Error - just draw screen borders
-            drawScreens(ctx, data.screens, displayScale);
-        }
-    } catch (error) {
-        console.error('Error loading layout data:', error);
-        const ctx = canvas.getContext('2d');
-        canvas.width = 400;
-        canvas.height = 300;
-        ctx.fillStyle = '#f8f9fa';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#dc3545';
-        ctx.font = '16px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('Error loading layout', canvas.width / 2, canvas.height / 2);
-    }
-}
 
 function drawServerSideLayout(canvas, ctx) {
     // Load server-side rendered image and display it
