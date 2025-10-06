@@ -45,10 +45,15 @@ app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max file size
 logger = logging.getLogger(__name__)
 
 # Global controller instance
-controller TapestryController | None = None
+controller: TapestryController | None = None
+
+def get_controller() -> TapestryController:
+    if controller is None:
+        raise Exception("No controller")
+    return controller
 
 # Screensaver manager instance
-screensaver_manager = None
+screensaver_manager: ScreensaverManager | None = None
 
 
 def get_screensaver_config():
@@ -236,7 +241,7 @@ def save_last_image(image):
 
     # Calculate device rectangles and bounding rectangle (same as controller does)
     device_rectangles = {}
-    for device in controller.config.devices:
+    for device in get_controller().config.devices:
         start = Point(x=device.coordinates.x, y=device.coordinates.y)
         # Use detected dimensions from YAML
         dimensions = Dimensions(
@@ -250,7 +255,7 @@ def save_last_image(image):
 
     # Process image using the new controller approach
     bounding_rectangle = Rectangle.bounding_rectangle(list(device_rectangles.values()))
-    scaled_image, mm_to_px_ratio = controller._scale_image_to_layout(
+    scaled_image, mm_to_px_ratio = get_controller()._scale_image_to_layout(
         image, bounding_rectangle.dimensions
     )
 
@@ -514,13 +519,13 @@ def apply_positioning_config():
         from ..models import load_config
 
         new_config = load_config(devices_file)
-        controller.config = new_config
+        get_controller().config = new_config
 
         # Restore saved image if available
         restored_image = False
         if last_image_state["image"] is not None:
             try:
-                controller.send_image(last_image_state["image"])
+                get_controller().send_image(last_image_state["image"])
                 restored_image = True
                 logger.info(
                     "Restored saved image after applying positioning configuration"
@@ -832,12 +837,12 @@ def upload_image():
         image = fix_image_orientation(image)
 
         # Send to devices first
-        controller.send_image(image)
+        get_controller().send_image(image)
 
         # Only save for layout overlay if send was successful
         save_last_image(image)
 
-        flash(f"Successfully sent image to {len(controller.config.devices)} devices!")
+        flash(f"Successfully sent image to {len(get_controller().config.devices)} devices!")
         return redirect(url_for("index"))
 
     except Exception as e:
@@ -1114,6 +1119,9 @@ def update_screensaver_config():
     try:
         settings = get_settings()
         was_active = screensaver_manager.is_active if screensaver_manager else False
+
+        if not screensaver_manager:
+            return jsonify({"error": "Screensaver manager not initialized"}), 400
 
         # Stop screensaver if active (we'll restart if needed)
         if was_active:
@@ -1426,7 +1434,7 @@ def main():
             logger.error(f"Failed to auto-start screensaver: {e}")
 
     logger.info(
-        f"Starting Tapestry Web UI with {len(controller.config.devices)} devices"
+        f"Starting Tapestry Web UI with {len(get_controller().config.devices)} devices"
     )
     logger.info(f"Access at http://{args.host}:{args.port}")
     logger.info("Use 'Restore Last Image' button to load previous image")
