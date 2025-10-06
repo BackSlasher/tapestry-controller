@@ -74,6 +74,16 @@ document.addEventListener('DOMContentLoaded', function() {
             stopScreensaverFromOverlay();
         });
     }
+
+    // Handle window resize to redraw canvas with new dimensions
+    let resizeTimeout;
+    window.addEventListener('resize', function() {
+        // Debounce resize events
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(function() {
+            refreshLayout();
+        }, 250);
+    });
 });
 
 async function loadDeviceInfo() {
@@ -227,8 +237,14 @@ async function drawCanvas(layoutData, imageBlob) {
         canvasHeight = maxY - minY;
     }
 
-    const maxDisplayWidth = 800;
-    const maxDisplayHeight = 600;
+    // Get the actual available space in the container
+    const canvasContainer = canvas.parentElement;
+    const containerRect = canvasContainer.getBoundingClientRect();
+
+    // Use container width minus padding, with reasonable height limits
+    const maxDisplayWidth = Math.max(400, containerRect.width - 40); // Min 400px, minus padding
+    const maxDisplayHeight = Math.min(600, window.innerHeight * 0.6); // Max 60% of viewport height
+
     const displayScale = Math.min(
         maxDisplayWidth / canvasWidth,
         maxDisplayHeight / canvasHeight,
@@ -335,8 +351,15 @@ async function drawLayoutCanvas() {
         }
 
         // Scale canvas to fit nicely in the UI while maintaining aspect ratio
-        const maxDisplayWidth = 800;
-        const maxDisplayHeight = 600;
+        // Get the actual available space in the container
+        const canvas = document.getElementById('layout-canvas');
+        const canvasContainer = canvas.parentElement;
+        const containerRect = canvasContainer.getBoundingClientRect();
+
+        // Use container width minus padding, with reasonable height limits
+        const maxDisplayWidth = Math.max(400, containerRect.width - 40); // Min 400px, minus padding
+        const maxDisplayHeight = Math.min(600, window.innerHeight * 0.6); // Max 60% of viewport height
+
         const displayScale = Math.min(
             maxDisplayWidth / canvasWidth,
             maxDisplayHeight / canvasHeight,
