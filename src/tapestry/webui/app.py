@@ -1043,6 +1043,22 @@ def stop_screensaver():
         return jsonify({"error": f"Failed to stop screensaver: {str(e)}"}), 500
 
 
+@app.route("/screensaver/next", methods=["POST"])
+def screensaver_next_image():
+    """Display the next screensaver image immediately."""
+    if not screensaver_manager:
+        return jsonify({"error": "Screensaver manager not initialized"}), 500
+
+    try:
+        success = screensaver_manager.next_image()
+        if success:
+            return jsonify({"success": True, "message": "Next image displayed"})
+        else:
+            return jsonify({"error": "Failed to display next image"}), 400
+    except Exception as e:
+        return jsonify({"error": f"Failed to display next image: {str(e)}"}), 500
+
+
 @app.route("/screensaver/status")
 def screensaver_status():
     """Get screensaver status."""

@@ -103,9 +103,18 @@
                     <button type="button" class="btn btn-success" id="start-screensaver" style="display: none;">
                         <i class="bi bi-play-fill"></i> Start Screensaver
                     </button>
-                    <button type="button" class="btn btn-danger" id="stop-screensaver" style="display: none;">
-                        <i class="bi bi-stop-fill"></i> Stop Screensaver
-                    </button>
+                    <div class="row" id="active-screensaver-controls" style="display: none;">
+                        <div class="col-md-6">
+                            <button type="button" class="btn btn-info w-100" id="next-image-screensaver">
+                                <i class="bi bi-skip-forward-fill"></i> Next Image
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <button type="button" class="btn btn-danger w-100" id="stop-screensaver">
+                                <i class="bi bi-stop-fill"></i> Stop Screensaver
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -141,6 +150,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Control buttons
     document.getElementById('start-screensaver').addEventListener('click', startScreensaver);
     document.getElementById('stop-screensaver').addEventListener('click', stopScreensaver);
+    document.getElementById('next-image-screensaver').addEventListener('click', nextScreensaverImage);
 
     // Type selection change
     document.getElementById('screensaver-type').addEventListener('change', function() {
@@ -154,7 +164,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function loadScreensaverStatus() {
     const statusDiv = document.getElementById('screensaver-status');
     const startBtn = document.getElementById('start-screensaver');
-    const stopBtn = document.getElementById('stop-screensaver');
+    const activeControls = document.getElementById('active-screensaver-controls');
 
     fetch('/screensaver/status')
         .then(response => response.json())
@@ -172,7 +182,7 @@ function loadScreensaverStatus() {
                     </div>
                 `;
                 startBtn.style.display = 'none';
-                stopBtn.style.display = 'block';
+                activeControls.style.display = 'block';
             } else {
                 statusDiv.innerHTML = `
                     <div class="alert alert-secondary mb-0">
@@ -181,7 +191,7 @@ function loadScreensaverStatus() {
                     </div>
                 `;
                 startBtn.style.display = 'block';
-                stopBtn.style.display = 'none';
+                activeControls.style.display = 'none';
             }
         })
         .catch(error => {
@@ -400,6 +410,34 @@ function stopScreensaver() {
     .finally(() => {
         stopBtn.innerHTML = originalText;
         stopBtn.disabled = false;
+    });
+}
+
+function nextScreensaverImage() {
+    const nextBtn = document.getElementById('next-image-screensaver');
+    const originalText = nextBtn.innerHTML;
+
+    nextBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Loading...';
+    nextBtn.disabled = true;
+
+    fetch('/screensaver/next', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Next image displayed successfully', 'success');
+        } else {
+            showAlert(data.error || 'Failed to display next image', 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error displaying next image:', error);
+        showAlert('Failed to display next image', 'danger');
+    })
+    .finally(() => {
+        nextBtn.innerHTML = originalText;
+        nextBtn.disabled = false;
     });
 }
 

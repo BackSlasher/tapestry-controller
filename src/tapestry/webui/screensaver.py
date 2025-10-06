@@ -28,6 +28,7 @@ class ScreensaverManager:
         self._thread: Optional[threading.Thread] = None
         self._stop_event: Optional[threading.Event] = None
         self._active = False
+        self._current_config: Optional[dict] = None
 
     @property
     def is_active(self) -> bool:
@@ -48,6 +49,9 @@ class ScreensaverManager:
 
         # Validate configuration
         self._validate_config(config)
+
+        # Store current config for next_image functionality
+        self._current_config = config.copy()
 
         # Start screensaver thread
         self._stop_event = threading.Event()
@@ -79,8 +83,32 @@ class ScreensaverManager:
         self._active = False
         self._thread = None
         self._stop_event = None
+        self._current_config = None
 
         logger.info("Screensaver stopped")
+
+    def next_image(self) -> bool:
+        """Display the next image immediately.
+
+        Returns:
+            bool: True if an image was successfully displayed, False otherwise
+        """
+        if not self._current_config:
+            logger.warning("Cannot display next image: no screensaver configuration available")
+            return False
+
+        try:
+            image = self._get_next_image(self._current_config)
+            if image:
+                self.image_sender(image)
+                logger.info("Next image displayed successfully")
+                return True
+            else:
+                logger.warning("No image retrieved for next image request")
+                return False
+        except Exception as e:
+            logger.error(f"Error displaying next image: {e}")
+            return False
 
     def _validate_config(self, config: dict) -> None:
         """Validate screensaver configuration."""

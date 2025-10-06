@@ -67,11 +67,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Screensaver overlay stop button
+    // Screensaver overlay buttons
     const disableScreensaverBtn = document.getElementById('disable-screensaver');
     if (disableScreensaverBtn) {
         disableScreensaverBtn.addEventListener('click', function() {
             stopScreensaverFromOverlay();
+        });
+    }
+
+    const nextImageBtn = document.getElementById('next-image-home');
+    if (nextImageBtn) {
+        nextImageBtn.addEventListener('click', function() {
+            nextScreensaverImageFromHome();
         });
     }
 
@@ -615,6 +622,44 @@ async function stopScreensaverFromOverlay() {
         // Reset button state
         disableBtn.disabled = false;
         disableBtn.innerHTML = originalText;
+    }
+}
+
+async function nextScreensaverImageFromHome() {
+    const nextBtn = document.getElementById('next-image-home');
+    if (!nextBtn) return;
+
+    // Show loading state
+    const originalText = nextBtn.innerHTML;
+    nextBtn.disabled = true;
+    nextBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Loading...';
+
+    try {
+        const response = await fetch('/screensaver/next', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        if (data.success) {
+            showAlert('Next image displayed successfully', 'success');
+        } else {
+            showAlert('Error displaying next image: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    } catch (error) {
+        console.error('Error displaying next image:', error);
+        showAlert('Failed to display next image: ' + error.message, 'danger');
+    } finally {
+        // Reset button state
+        nextBtn.disabled = false;
+        nextBtn.innerHTML = originalText;
     }
 }
 
