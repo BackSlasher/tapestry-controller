@@ -7,11 +7,11 @@ from .geometry import Dimensions, Point, Rectangle
 
 
 class ResizeResult(NamedTuple):
-    image: PIL.Image
+    image: PIL.Image.Image
     px_in_unit: int
 
 
-def image_refit(image: PIL.Image, bounder: Dimensions) -> ResizeResult:
+def image_refit(image: PIL.Image.Image, bounder: Dimensions) -> ResizeResult:
     bounder_ratio = bounder.width / bounder.height
     image_width, image_height = image.size
 
@@ -25,7 +25,7 @@ def image_refit(image: PIL.Image, bounder: Dimensions) -> ResizeResult:
     return ResizeResult(PIL.ImageOps.fit(image, new_dimensions), px_in_unit)
 
 
-def image_crop(image: PIL.Image, rectangle: Rectangle) -> PIL.Image:
+def image_crop(image: PIL.Image.Image, rectangle: Rectangle) -> PIL.Image.Image:
     original_dimensions = Dimensions(image.size[0], image.size[1])
     new_image = PIL.Image.new(
         image.mode,

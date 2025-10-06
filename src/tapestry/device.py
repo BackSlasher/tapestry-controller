@@ -55,7 +55,7 @@ def info(hostname):
     return EpdInfo.from_response(resp)
 
 
-def image_refit(image: PIL.Image, bounder: Dimensions) -> PIL.Image:
+def image_refit(image: PIL.Image.Image, bounder: Dimensions) -> PIL.Image.Image:
     bounder_ratio = bounder.width / bounder.height
     image_width, image_height = image.size
 
@@ -78,7 +78,7 @@ def convert_8bit_to_4bit(bytestring):
     return fourbit
 
 
-def draw_unrotated(hostname, img: PIL.Image, clear: bool):
+def draw_unrotated(hostname, img: PIL.Image.Image, clear: bool):
     """Draw image to device without any rotation - for QR positioning."""
     try:
         inf = info(hostname)
@@ -104,7 +104,7 @@ def draw_unrotated(hostname, img: PIL.Image, clear: bool):
         raise
 
 
-def draw(hostname, img: PIL.Image, clear: bool, rotation: int = 0):
+def draw(hostname, img: PIL.Image.Image, clear: bool, rotation: int = 0):
     try:
         inf = info(hostname)
         img = image_refit(img, Dimensions(width=inf.width, height=inf.height))

@@ -90,7 +90,7 @@ def create_layout_visualization(scaled_image, device_rectangles, mm_to_px_ratio)
     """Create a layout visualization using the new simplified controller logic."""
 
     # Calculate bounding rectangle in mm (same as controller)
-    bounding_rect_mm = Rectangle.bounding_rectangle(device_rectangles.values())
+    bounding_rect_mm = Rectangle.bounding_rectangle(list(device_rectangles.values()))
 
     # Start with the scaled image as the background
     layout_canvas = scaled_image.copy()
@@ -249,7 +249,7 @@ def save_last_image(image):
         )
 
     # Process image using the new controller approach
-    bounding_rectangle = Rectangle.bounding_rectangle(device_rectangles.values())
+    bounding_rectangle = Rectangle.bounding_rectangle(list(device_rectangles.values()))
     scaled_image, mm_to_px_ratio = controller._scale_image_to_layout(
         image, bounding_rectangle.dimensions
     )
@@ -650,7 +650,7 @@ def layout_data():
                 )
 
             # Calculate bounding rectangle and get scaling factor
-            bounding_rect_mm = Rectangle.bounding_rectangle(device_rectangles.values())
+            bounding_rect_mm = Rectangle.bounding_rectangle(list(device_rectangles.values()))
             mm_to_px_ratio = last_image_state.get("px_in_unit")
 
             # If no image has been processed yet, we can't provide pixel coordinates
@@ -776,7 +776,7 @@ def layout_image():
             )
 
         # Calculate bounding rectangle exactly like the controller
-        bounding_rectangle = Rectangle.bounding_rectangle(device_rectangles.values())
+        bounding_rectangle = Rectangle.bounding_rectangle(list(device_rectangles.values()))
 
         # Use the scaled image if available, otherwise create a white background
         if last_image_state["refit_image"] is not None:

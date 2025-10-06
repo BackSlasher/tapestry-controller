@@ -1,4 +1,5 @@
 import threading
+from typing import Optional
 
 import PIL.Image
 
@@ -11,7 +12,7 @@ class TapestryController:
     def __init__(self, config: Config):
         self.config = config
 
-    def send_image(self, image: PIL.Image, debug_output_dir: str = None):
+    def send_image(self, image: PIL.Image.Image, debug_output_dir: Optional[str] = None):
         """Send image to devices using a simplified coordinate approach."""
 
         # Step 1: Calculate the bounding box of all screens in millimeters
@@ -26,7 +27,7 @@ class TapestryController:
             )
 
         # Find the overall bounding rectangle in millimeters
-        bounding_rect_mm = Rectangle.bounding_rectangle(device_rects_mm.values())
+        bounding_rect_mm = Rectangle.bounding_rectangle(list(device_rects_mm.values()))
 
         # Step 2: Scale the input image to fit the bounding rectangle
         # while maintaining aspect ratio
@@ -75,7 +76,7 @@ class TapestryController:
         for t in threads:
             t.join()
 
-    def _scale_image_to_layout(self, image: PIL.Image, layout_dimensions: Dimensions):
+    def _scale_image_to_layout(self, image: PIL.Image.Image, layout_dimensions: Dimensions):
         """Scale input image to fit the layout dimensions while maintaining aspect ratio."""
         import PIL.ImageOps
 
@@ -96,12 +97,12 @@ class TapestryController:
 
         # Use PIL's fit function to scale and crop the image appropriately
         scaled_image = PIL.ImageOps.fit(
-            image, (target_width, target_height), method=PIL.Image.LANCZOS
+            image, (target_width, target_height), method=PIL.Image.Resampling.LANCZOS
         )
 
         return scaled_image, mm_to_px_ratio
 
-    def _crop_device_section(self, scaled_image: PIL.Image, device_rect_px: Rectangle):
+    def _crop_device_section(self, scaled_image: PIL.Image.Image, device_rect_px: Rectangle):
         """Crop a section of the scaled image for a specific device."""
 
         # Calculate crop coordinates

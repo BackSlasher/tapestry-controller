@@ -42,6 +42,7 @@ dev = [
     "pytest>=7.0",
     "black>=22.0",
     "ruff>=0.13.1",
+    "ty",
 ]
 
 [project.scripts]
@@ -64,3 +65,4 @@ target-version = "py39"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
 ignore = ["E501"]
+
