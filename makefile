@@ -9,22 +9,22 @@ help:
 	@echo "  remote-install    - Install dependencies on remote server"
 	@echo "  remote-restart    - Restart service on remote server"
 	@echo "  big-deploy        - Full deployment: deploy + remote-install + remote-restart"
-	@echo "  install-systemd   - Install as systemd service (runs poetry install + systemd setup)"
+	@echo "  install-systemd   - Install as systemd service (runs uv sync + systemd setup)"
 	@echo "  uninstall-systemd - Remove systemd service"
 
 test:
-	poetry run pytest
+	uv run pytest
 
 lint:
-	poetry run ruff check --fix src/
-	poetry run black src/
+	uv run ruff check --fix src/
+	uv run black src/
 
 deploy:
 	rsync -avz --delete --filter=':- .gitignore' --filter='- .sl/' --filter='- .git/' --exclude='devices.yaml' --exclude='settings.toml' . $(REMOTE_HOST):./controller/
 
 remote-install:
 	@echo "Installing dependencies on $(REMOTE_HOST)..."
-	ssh $(REMOTE_HOST) "cd ./controller && poetry install"
+	ssh $(REMOTE_HOST) "cd ./controller && uv sync"
 
 remote-restart:
 	@echo "Restarting tapestry-webui service on $(REMOTE_HOST)..."
@@ -37,7 +37,7 @@ big-deploy: deploy remote-install remote-restart
 install-systemd:
 	@echo "Installing Tapestry WebUI as systemd service..."
 	# Install dependencies
-	poetry install
+	uv sync
 	# Create systemd unit file from template
 	@sed -e 's|USER_PLACEHOLDER|$(USER)|g' \
 	     -e 's|WORKING_DIR_PLACEHOLDER|$(PWD)|g' \
