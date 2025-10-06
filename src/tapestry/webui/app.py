@@ -45,7 +45,7 @@ app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max file size
 logger = logging.getLogger(__name__)
 
 # Global controller instance
-controller = None
+controller TapestryController | None = None
 
 # Screensaver manager instance
 screensaver_manager = None
@@ -162,7 +162,7 @@ def get_or_create_thumbnail():
 
     # Create thumbnail
     img = last_image_state["refit_image"].copy()
-    img.thumbnail(last_image_state["thumbnail_max_size"], PIL.Image.LANCZOS)
+    img.thumbnail(last_image_state["thumbnail_max_size"], PIL.Image.Resampling.LANCZOS)
 
     # Cache it
     last_image_state["thumbnail_cache"] = img
@@ -182,23 +182,23 @@ def fix_image_orientation(image):
             # Apply rotation based on EXIF orientation
             if orientation == 2:
                 # Horizontal flip
-                image = image.transpose(PIL.Image.FLIP_LEFT_RIGHT)
+                image = image.transpose(PIL.Image.Transpose.FLIP_LEFT_RIGHT)
             elif orientation == 3:
                 # 180 degree rotation
                 image = image.rotate(180, expand=True)
             elif orientation == 4:
                 # Vertical flip
-                image = image.transpose(PIL.Image.FLIP_TOP_BOTTOM)
+                image = image.transpose(PIL.Image.Transpose.FLIP_TOP_BOTTOM)
             elif orientation == 5:
                 # Horizontal flip + 90 degree rotation
-                image = image.transpose(PIL.Image.FLIP_LEFT_RIGHT)
+                image = image.transpose(PIL.Image.Transpose.FLIP_LEFT_RIGHT)
                 image = image.rotate(-90, expand=True)
             elif orientation == 6:
                 # 90 degree rotation
                 image = image.rotate(-90, expand=True)
             elif orientation == 7:
                 # Horizontal flip + 270 degree rotation
-                image = image.transpose(PIL.Image.FLIP_LEFT_RIGHT)
+                image = image.transpose(PIL.Image.Transpose.FLIP_LEFT_RIGHT)
                 image = image.rotate(90, expand=True)
             elif orientation == 8:
                 # 270 degree rotation

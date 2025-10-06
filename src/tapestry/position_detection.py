@@ -303,10 +303,9 @@ def calculate_physical_positions_from_qr(
 
 
 def calculate_physical_positions(
-    position_data: List[QRPositionData], config: Config, pil_image: Image.Image = None
+    position_data: List[QRPositionData], config: Config
 ) -> Dict[str, Dict]:
     """Calculate physical screen positions using cv2 QR detection and JSON data."""
-    # Use the new JSON-based implementation (pil_image parameter kept for backward compatibility but unused)
     return calculate_physical_positions_from_qr(position_data, config)
 
 

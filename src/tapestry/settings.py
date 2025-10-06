@@ -145,7 +145,7 @@ class TapestrySettings(BaseSettings):
 
 
 # Global settings instance
-_settings: TapestrySettings = None
+_settings: TapestrySettings | None = None
 
 
 def get_settings() -> TapestrySettings:

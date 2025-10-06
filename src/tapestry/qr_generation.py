@@ -105,9 +105,10 @@ def generate_positioning_qr_image(
 
     # Generate QR code with medium error correction
     qr = qrcode.QRCode(
-        version=None,  # Auto-size based on data
-        error_correction=qrcode.constants.ERROR_CORRECT_L,  # Low correction for easier QR
-        box_size=1,  # Will be scaled later
+        version=None,
+        # Low correction for simpler QR
+        error_correction=qrcode.constants.ERROR_CORRECT_L, # ty: ignore[unresolved-attribute]
+        box_size=1,
         border=0,  # Entire image is white, no border needed
     )
     qr.add_data(qr_data)
@@ -122,7 +123,7 @@ def generate_positioning_qr_image(
     if target_size < min_qr_size:
         raise Exception(f"QR code too small for {ip}")
 
-    qr_img = qr_img.resize((target_size, target_size), Image.LANCZOS)
+    qr_img = qr_img.resize((target_size, target_size), Image.Resampling.LANCZOS)
 
     # Create white background
     img = Image.new("1", (width, height), 1)  # '1' mode for 1-bit black/white

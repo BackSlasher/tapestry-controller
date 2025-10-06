@@ -61,7 +61,7 @@ def create_synthetic_test_image():
         qr_img = qr.make_image(fill_color="black", back_color="white")
         
         # Resize to target size
-        qr_img = qr_img.resize((config['size'], config['size']), Image.LANCZOS)
+        qr_img = qr_img.resize((config['size'], config['size']), PIL.Image.Resampling.LANCZOS)
         
         # Rotate if needed
         if config['rotation'] != 0:
