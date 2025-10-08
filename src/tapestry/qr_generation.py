@@ -12,6 +12,9 @@ from PIL import Image
 
 from .screen_types import SCREEN_TYPES
 
+# Network connection name constant
+DIGINK_CONNECTION_NAME = "digink"
+
 
 class DiscoveredDevice(NamedTuple):
     """Device discovered from DHCP leases."""
@@ -26,20 +29,27 @@ def discover_devices_from_dhcp() -> List[DiscoveredDevice]:
     devices = []
 
     try:
-        # Read DHCP leases file
-        result = subprocess.run(
-            ["sudo", "cat", "/var/lib/NetworkManager/dnsmasq-wlan0.leases"],
-            capture_output=True,
+        # Get the actual device name from NetworkManager
+        device_name = subprocess.check_output(
+            ["nmcli", "-g", "GENERAL.DEVICES", "connection", "show", DIGINK_CONNECTION_NAME],
+            text=True,
+            timeout=10,
+        ).strip()
+
+        if not device_name:
+            print(f"No device name found for connection '{DIGINK_CONNECTION_NAME}'")
+            return devices
+
+        # Read DHCP leases file using the dynamic device name
+        leases_file = f"/var/lib/NetworkManager/dnsmasq-{device_name}.leases"
+        leases_content = subprocess.check_output(
+            ["sudo", "cat", leases_file],
             text=True,
             timeout=10,
         )
 
-        if result.returncode != 0:
-            print(f"Failed to read DHCP leases: {result.stderr}")
-            return devices
-
         # Parse leases
-        for line in result.stdout.strip().split("\n"):
+        for line in leases_content.strip().split("\n"):
             if not line.strip():
                 continue
 
