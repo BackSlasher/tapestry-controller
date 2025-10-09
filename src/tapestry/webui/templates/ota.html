@@ -278,13 +278,14 @@ async function startOTAProcess() {
                 });
 
                 if (!uploadResponse.ok) {
-                    throw new Error(`HTTP ${uploadResponse.status}`);
+                    const errorText = await uploadResponse.text();
+                    throw new Error(errorText || `HTTP ${uploadResponse.status}`);
                 }
 
                 const uploadData = await uploadResponse.json();
 
                 if (!uploadData.success) {
-                    throw new Error(uploadData.error);
+                    throw new Error(uploadData.error || 'Unknown upload error');
                 }
 
                 appendOutput(`[${index + 1}/${deviceList.length}] ✓ ${device} - Upload successful!\n`);
