@@ -21,9 +21,7 @@ class OTAManager:
             node_directory: Path to the node directory. If None, auto-detected.
         """
         if node_directory is None:
-            # Auto-detect node directory relative to this file
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            node_directory = os.path.abspath(os.path.join(current_dir, "../../../node"))
+            node_directory = os.path.expanduser("~/node/")
 
         self.node_dir = node_directory
         self.build_script = os.path.join(self.node_dir, "build-ota.sh")
