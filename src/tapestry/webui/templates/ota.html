@@ -21,10 +21,28 @@
                 <div class="row mb-4">
                     <div class="col-md-6">
                         <div class="mb-3">
-                            <label for="device-select" class="form-label">Target Device</label>
-                            <select class="form-select" id="device-select">
-                                <option value="">Loading devices...</option>
-                            </select>
+                            <label class="form-label">Target Devices</label>
+                            <div class="card">
+                                <div class="card-header py-2">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <small class="text-muted">Select devices for OTA update</small>
+                                        <div>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" id="select-all-btn">
+                                                <i class="bi bi-check-square"></i> All
+                                            </button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" id="select-none-btn">
+                                                <i class="bi bi-square"></i> None
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-body py-2" id="device-list">
+                                    <div class="text-center text-muted">
+                                        <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                                        Loading devices...
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="mb-3">
@@ -37,6 +55,11 @@
                             <button type="button" class="btn btn-primary" id="ota-btn" disabled>
                                 <i class="bi bi-download"></i> Build & Upload Firmware
                             </button>
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <span id="selected-count">0</span> device(s) selected
+                                </small>
+                            </div>
                         </div>
 
                         <div id="ota-status" class="mb-3" style="display: none;">
@@ -77,7 +100,7 @@
 </div>
 
 <script>
-let selectedDevice = null;
+let selectedDevices = new Set();
 
 document.addEventListener('DOMContentLoaded', function() {
     loadDeviceList();
@@ -89,15 +112,13 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('clear-output').addEventListener('click', clearOutput);
     document.getElementById('copy-output').addEventListener('click', copyOutput);
 
-    // Device selection
-    document.getElementById('device-select').addEventListener('change', function() {
-        selectedDevice = this.value;
-        document.getElementById('ota-btn').disabled = !selectedDevice;
-    });
+    // Device selection controls
+    document.getElementById('select-all-btn').addEventListener('click', selectAllDevices);
+    document.getElementById('select-none-btn').addEventListener('click', selectNoDevices);
 });
 
 async function loadDeviceList() {
-    const deviceSelect = document.getElementById('device-select');
+    const deviceList = document.getElementById('device-list');
 
     try {
         const response = await fetch('/devices');
@@ -107,36 +128,83 @@ async function loadDeviceList() {
 
         const data = await response.json();
 
-        // Clear existing options
-        deviceSelect.innerHTML = '<option value="">Select a device...</option>';
-
         if (!data.devices || data.devices.length === 0) {
-            deviceSelect.innerHTML = '<option value="">No devices configured</option>';
+            deviceList.innerHTML = '<div class="text-center text-muted">No devices configured</div>';
             return;
         }
 
-        // Add device options
-        data.devices.forEach(device => {
+        // Create device checkboxes
+        const deviceItems = data.devices.map(device => {
             const hostname = device.host || 'Unknown';
             const screenType = device.screen_type || 'Unknown';
-            const option = document.createElement('option');
-            option.value = hostname;
-            option.textContent = `${hostname} (${screenType})`;
-            deviceSelect.appendChild(option);
+            const deviceId = `device-${hostname}`;
+
+            return `
+                <div class="form-check">
+                    <input class="form-check-input device-checkbox" type="checkbox" id="${deviceId}" value="${hostname}">
+                    <label class="form-check-label" for="${deviceId}">
+                        <strong>${hostname}</strong> <span class="text-muted">(${screenType})</span>
+                    </label>
+                </div>
+            `;
+        }).join('');
+
+        deviceList.innerHTML = deviceItems;
+
+        // Add event listeners to checkboxes
+        document.querySelectorAll('.device-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', onDeviceSelectionChange);
         });
+
+        updateSelectedCount();
 
     } catch (error) {
         console.error('Error loading devices:', error);
-        deviceSelect.innerHTML = '<option value="">Error loading devices</option>';
+        deviceList.innerHTML = '<div class="text-center text-danger">Error loading devices</div>';
         appendOutput(`Error loading devices: ${error.message}\n`);
     }
+}
+
+function onDeviceSelectionChange(event) {
+    const deviceHost = event.target.value;
+
+    if (event.target.checked) {
+        selectedDevices.add(deviceHost);
+    } else {
+        selectedDevices.delete(deviceHost);
+    }
+
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    const count = selectedDevices.size;
+    document.getElementById('selected-count').textContent = count;
+    document.getElementById('ota-btn').disabled = count === 0;
+}
+
+function selectAllDevices() {
+    document.querySelectorAll('.device-checkbox').forEach(checkbox => {
+        checkbox.checked = true;
+        selectedDevices.add(checkbox.value);
+    });
+    updateSelectedCount();
+}
+
+function selectNoDevices() {
+    document.querySelectorAll('.device-checkbox').forEach(checkbox => {
+        checkbox.checked = false;
+        selectedDevices.delete(checkbox.value);
+    });
+    selectedDevices.clear();
+    updateSelectedCount();
 }
 
 let currentBuildProcess = null;
 
 async function startOTAProcess() {
-    if (!selectedDevice) {
-        appendOutput('Error: No device selected\n');
+    if (selectedDevices.size === 0) {
+        appendOutput('Error: No devices selected\n');
         return;
     }
 
@@ -150,7 +218,8 @@ async function startOTAProcess() {
     statusDiv.style.display = 'block';
     statusText.textContent = 'Building firmware...';
 
-    appendOutput(`Starting OTA process for device: ${selectedDevice}\n`);
+    const deviceList = Array.from(selectedDevices);
+    appendOutput(`Starting OTA process for ${deviceList.length} device(s): ${deviceList.join(', ')}\n`);
     appendOutput('========================================\n');
 
     try {
@@ -188,37 +257,73 @@ async function startOTAProcess() {
 
         appendOutput('\nBuild completed successfully!\n');
 
-        // Step 2: Upload firmware
-        appendOutput('\nUploading firmware to device...\n');
+        // Step 2: Upload firmware to all selected devices
+        appendOutput(`\nUploading firmware to ${deviceList.length} device(s)...\n`);
         statusText.textContent = 'Uploading firmware...';
 
         const forceUpdate = document.getElementById('force-update-checkbox').checked;
 
-        const uploadResponse = await fetch('/ota/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                device: selectedDevice,
-                force_update: forceUpdate
-            })
+        // Upload to devices in parallel
+        const uploadPromises = deviceList.map(async (device, index) => {
+            appendOutput(`[${index + 1}/${deviceList.length}] Uploading to ${device}...\n`);
+
+            try {
+                const uploadResponse = await fetch('/ota/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        device: device,
+                        force_update: forceUpdate
+                    })
+                });
+
+                if (!uploadResponse.ok) {
+                    throw new Error(`HTTP ${uploadResponse.status}`);
+                }
+
+                const uploadData = await uploadResponse.json();
+
+                if (!uploadData.success) {
+                    throw new Error(uploadData.error);
+                }
+
+                appendOutput(`[${index + 1}/${deviceList.length}] ✓ ${device} - Upload successful!\n`);
+                return { device, success: true };
+
+            } catch (error) {
+                appendOutput(`[${index + 1}/${deviceList.length}] ✗ ${device} - Upload failed: ${error.message}\n`);
+                return { device, success: false, error: error.message };
+            }
         });
 
-        if (!uploadResponse.ok) {
-            throw new Error(`Upload failed: HTTP ${uploadResponse.status}`);
+        const uploadResults = await Promise.all(uploadPromises);
+
+        // Report results
+        const successful = uploadResults.filter(r => r.success);
+        const failed = uploadResults.filter(r => !r.success);
+
+        appendOutput('\n========================================\n');
+        appendOutput(`Upload Summary:\n`);
+        appendOutput(`✓ Successful: ${successful.length}/${deviceList.length}\n`);
+        if (failed.length > 0) {
+            appendOutput(`✗ Failed: ${failed.length}/${deviceList.length}\n`);
+            failed.forEach(result => {
+                appendOutput(`  - ${result.device}: ${result.error}\n`);
+            });
         }
-
-        const uploadData = await uploadResponse.json();
-
-        if (!uploadData.success) {
-            throw new Error(`Upload failed: ${uploadData.error}`);
-        }
-
-        appendOutput(`Upload successful! Device is restarting...\n`);
         appendOutput('========================================\n');
-        appendOutput('OTA process completed successfully!\n');
 
-        statusText.textContent = 'Completed successfully';
-        statusDiv.querySelector('.alert').className = 'alert alert-success';
+        if (successful.length === deviceList.length) {
+            appendOutput('All devices updated successfully!\n');
+            statusText.textContent = 'All devices completed successfully';
+            statusDiv.querySelector('.alert').className = 'alert alert-success';
+        } else if (successful.length > 0) {
+            appendOutput('Partial success - some devices updated successfully.\n');
+            statusText.textContent = `${successful.length}/${deviceList.length} devices completed`;
+            statusDiv.querySelector('.alert').className = 'alert alert-warning';
+        } else {
+            throw new Error('All device uploads failed');
+        }
 
     } catch (error) {
         console.error('OTA process failed:', error);
