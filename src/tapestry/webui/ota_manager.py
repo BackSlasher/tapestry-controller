@@ -44,6 +44,11 @@ class OTAManager:
         if not os.path.exists(self.build_script):
             issues.append(f"Build script not found: {self.build_script}")
 
+        # Check if directory is a git repository
+        git_dir = os.path.join(self.node_dir, ".git")
+        if not os.path.exists(git_dir):
+            issues.append(f"Node directory is not a git repository: {self.node_dir}")
+
         return {
             "valid": len(issues) == 0,
             "issues": issues,
@@ -70,6 +75,28 @@ class OTAManager:
             }
 
         try:
+            # Git pull to ensure repository is up to date
+            logger.info(f"Updating git repository in {self.node_dir}")
+            git_result = subprocess.run(
+                ["git", "pull"],
+                cwd=self.node_dir,
+                capture_output=True,
+                text=True,
+                timeout=60,  # 1 minute timeout for git pull
+            )
+
+            if git_result.returncode != 0:
+                error_msg = f"Git pull failed (exit code {git_result.returncode}): {git_result.stderr.strip()}"
+                logger.error(error_msg)
+                return {
+                    "success": False,
+                    "error": error_msg,
+                    "git_stdout": git_result.stdout,
+                    "git_stderr": git_result.stderr,
+                }
+
+            logger.info(f"Git repository updated successfully: {git_result.stdout.strip()}")
+
             # Make sure build script is executable
             os.chmod(self.build_script, 0o755)
 
@@ -115,12 +142,15 @@ class OTAManager:
                 "size_mb": size_mb,
                 "stdout": result.stdout,
                 "stderr": result.stderr,
+                "git_stdout": git_result.stdout,
+                "git_stderr": git_result.stderr,
             }
 
-        except subprocess.TimeoutExpired:
-            error_msg = (
-                f"Build timeout - firmware build took longer than {timeout} seconds"
-            )
+        except subprocess.TimeoutExpired as e:
+            if "git" in str(e.cmd):
+                error_msg = "Git pull timeout - repository update took longer than 60 seconds"
+            else:
+                error_msg = f"Build timeout - firmware build took longer than {timeout} seconds"
             logger.error(error_msg)
             return {"success": False, "error": error_msg}
         except Exception as e:

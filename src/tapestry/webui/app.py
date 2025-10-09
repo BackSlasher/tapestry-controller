@@ -34,6 +34,7 @@ from ..settings import (
     get_settings,
 )
 from .device_monitor import DeviceMonitor, MonitorConfig
+from .flash_manager import FlashManager
 from .ota_manager import OTAManager
 from .screensaver import ScreensaverManager
 
@@ -80,6 +81,9 @@ ota_manager: OTAManager | None = None
 
 # Device monitor instance
 device_monitor: DeviceMonitor | None = None
+
+# Flash manager instance
+flash_manager: FlashManager | None = None
 
 
 def get_screensaver_config():
@@ -1305,38 +1309,14 @@ def update_screensaver_config():
         return jsonify({"error": f"Failed to update configuration: {str(e)}"}), 500
 
 
-# Global state for flash process
-flash_processes = {}
-
-
-def stream_subprocess_output(process, process_id):
-    """Stream subprocess output line by line."""
-    try:
-        while True:
-            output = process.stdout.readline()
-            if output == "" and process.poll() is not None:
-                break
-            if output:
-                # Store output in process queue
-                if process_id in flash_processes:
-                    flash_processes[process_id]["output"].put(output.strip())
-
-        # Process finished
-        if process_id in flash_processes:
-            return_code = process.poll()
-            flash_processes[process_id]["finished"] = True
-            flash_processes[process_id]["return_code"] = return_code
-            flash_processes[process_id]["output"].put(
-                f"Process finished with exit code: {return_code}"
-            )
-    except Exception as e:
-        if process_id in flash_processes:
-            flash_processes[process_id]["output"].put(f"Error streaming output: {e}")
 
 
 @app.route("/flash/start", methods=["POST"])
 def start_flash():
     """Start the firmware flashing process."""
+    if not flash_manager:
+        return jsonify({"error": "Flash manager not initialized"}), 500
+
     data = request.get_json()
     if not data or "screen_type" not in data:
         return jsonify({"error": "Screen type is required"}), 400
@@ -1345,71 +1325,26 @@ def start_flash():
     if screen_type not in SCREEN_TYPES:
         return jsonify({"error": f"Invalid screen type: {screen_type}"}), 400
 
-    # Check if setup.sh exists
-    setup_script = os.path.expanduser("~/node/setup.sh")
-    if not os.path.exists(setup_script):
-        return jsonify({"error": f"Setup script not found at {setup_script}"}), 404
+    result = flash_manager.start_flash(screen_type)
 
-    if not os.access(setup_script, os.X_OK):
-        return (
-            jsonify({"error": f"Setup script is not executable: {setup_script}"}),
-            403,
-        )
-
-    try:
-        # Generate unique process ID
-        import uuid
-
-        process_id = str(uuid.uuid4())
-
-        # Start the subprocess
-        process = subprocess.Popen(
-            [setup_script, screen_type],
-            cwd=os.path.expanduser("~/node"),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            universal_newlines=True,
-            bufsize=1,
-        )
-
-        # Initialize process tracking
-        output_queue = queue.Queue()
-        flash_processes[process_id] = {
-            "process": process,
-            "output": output_queue,
-            "finished": False,
-            "return_code": None,
-            "screen_type": screen_type,
-        }
-
-        # Start output streaming thread
-        output_thread = threading.Thread(
-            target=stream_subprocess_output, args=(process, process_id)
-        )
-        output_thread.daemon = True
-        output_thread.start()
-
-        return jsonify(
-            {
-                "success": True,
-                "process_id": process_id,
-                "message": f"Started flashing {screen_type} firmware",
-            }
-        )
-
-    except Exception as e:
-        return jsonify({"error": f"Failed to start flash process: {str(e)}"}), 500
+    if result["success"]:
+        return jsonify(result)
+    else:
+        return jsonify(result), 500
 
 
 @app.route("/flash/output/<process_id>")
 def flash_output_stream(process_id):
     """Stream the output of a flash process."""
-    if process_id not in flash_processes:
+    if not flash_manager:
+        return jsonify({"error": "Flash manager not initialized"}), 500
+
+    flash_process = flash_manager.get_process_output(process_id)
+    if not flash_process:
         return jsonify({"error": "Process not found"}), 404
 
     def generate():
-        process_info = flash_processes[process_id]
-        output_queue = process_info["output"]
+        output_queue = flash_process.output_queue
 
         while True:
             try:
@@ -1418,14 +1353,14 @@ def flash_output_stream(process_id):
                 yield f"data: {line}\n\n"
 
                 # Check if process finished
-                if process_info["finished"] and output_queue.empty():
-                    yield f"event: finished\ndata: {process_info['return_code']}\n\n"
+                if flash_process.finished and output_queue.empty():
+                    yield f"event: finished\ndata: {flash_process.return_code}\n\n"
                     break
 
             except queue.Empty:
                 # Send heartbeat to keep connection alive
-                if process_info["finished"]:
-                    yield f"event: finished\ndata: {process_info['return_code']}\n\n"
+                if flash_process.finished:
+                    yield f"event: finished\ndata: {flash_process.return_code}\n\n"
                     break
                 else:
                     yield "data: \n\n"  # Heartbeat
@@ -1440,35 +1375,20 @@ def flash_output_stream(process_id):
 @app.route("/flash/stop/<process_id>", methods=["POST"])
 def stop_flash(process_id):
     """Stop a running flash process."""
-    if process_id not in flash_processes:
-        return jsonify({"error": "Process not found"}), 404
+    if not flash_manager:
+        return jsonify({"error": "Flash manager not initialized"}), 500
 
-    try:
-        process_info = flash_processes[process_id]
-        process = process_info["process"]
+    result = flash_manager.stop_process(process_id)
 
-        if process.poll() is None:  # Process is still running
-            process.terminate()
-            # Wait a bit for graceful termination
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()  # Force kill if it doesn't terminate
-
-        # Mark as finished
-        process_info["finished"] = True
-        process_info["return_code"] = process.returncode
-        process_info["output"].put("Process terminated by user")
-
-        return jsonify({"success": True, "message": "Flash process stopped"})
-
-    except Exception as e:
-        return jsonify({"error": f"Failed to stop process: {str(e)}"}), 500
+    if result["success"]:
+        return jsonify(result)
+    else:
+        return jsonify(result), 500
 
 
 def create_app(devices_file="devices.yaml"):
     """Create Flask app with configuration."""
-    global controller, screensaver_manager, ota_manager, device_monitor
+    global controller, screensaver_manager, ota_manager, device_monitor, flash_manager
     if controller is None:
         controller = TapestryController.from_config_file(devices_file)
     if screensaver_manager is None:
@@ -1481,6 +1401,8 @@ def create_app(devices_file="devices.yaml"):
         screensaver_manager = ScreensaverManager(send_and_save_image)
     if ota_manager is None:
         ota_manager = OTAManager()
+    if flash_manager is None:
+        flash_manager = FlashManager()
     if device_monitor is None:
         config = MonitorConfig(poll_interval=30, request_timeout=5, enabled=True)
         device_monitor = DeviceMonitor(config)
