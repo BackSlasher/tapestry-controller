@@ -487,7 +487,7 @@ async function clearAllScreens() {
     clearBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Clearing...';
 
     try {
-        const response = await fetch('/clear-all-screens', {
+        const response = await fetch('/clear', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
