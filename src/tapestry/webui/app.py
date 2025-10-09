@@ -29,6 +29,7 @@ from ..controller import TapestryController
 from ..geometry import Dimensions, Point, Rectangle
 from ..screen_types import SCREEN_TYPES
 from .screensaver import ScreensaverManager
+from .ota_manager import OTAManager
 from ..settings import (
     GallerySettings,
     PixabaySettings,
@@ -54,6 +55,9 @@ def get_controller() -> TapestryController:
 
 # Screensaver manager instance
 screensaver_manager: ScreensaverManager | None = None
+
+# OTA manager instance
+ota_manager: OTAManager | None = None
 
 
 def get_screensaver_config():
@@ -1394,7 +1398,7 @@ def stop_flash(process_id):
 
 def create_app(devices_file="devices.yaml"):
     """Create Flask app with configuration."""
-    global controller, screensaver_manager
+    global controller, screensaver_manager, ota_manager
     if controller is None:
         controller = TapestryController.from_config_file(devices_file)
     if screensaver_manager is None:
@@ -1404,7 +1408,52 @@ def create_app(devices_file="devices.yaml"):
             save_last_image(image)
 
         screensaver_manager = ScreensaverManager(send_and_save_image)
+    if ota_manager is None:
+        ota_manager = OTAManager()
     return app
+
+
+# OTA Update Routes
+
+@app.route("/ota")
+def ota_page():
+    """OTA firmware update page."""
+    return render_template("ota.html")
+
+
+@app.route("/ota/build", methods=["POST"])
+def ota_build():
+    """Build firmware for OTA update."""
+    if not ota_manager:
+        return jsonify({"error": "OTA manager not initialized"}), 500
+
+    result = ota_manager.build_firmware()
+
+    if result["success"]:
+        return jsonify(result)
+    else:
+        return jsonify(result), 500
+
+
+@app.route("/ota/upload", methods=["POST"])
+def ota_upload():
+    """Upload firmware to device via OTA."""
+    if not ota_manager:
+        return jsonify({"error": "OTA manager not initialized"}), 500
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    device_ip = data.get("device")
+    firmware_path = data.get("firmware_path")
+
+    result = ota_manager.upload_firmware(device_ip, firmware_path)
+
+    if result["success"]:
+        return jsonify(result)
+    else:
+        return jsonify(result), 500
 
 
 def parse_args():

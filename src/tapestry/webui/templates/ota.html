@@ -1,0 +1,400 @@
+{% extends "base.html" %}
+
+{% block title %}OTA Firmware Update - Tapestry Controller{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title mb-0">
+                    <i class="bi bi-download"></i> OTA Firmware Update
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Over-The-Air Updates</strong><br>
+                    Update device firmware remotely without physical access. This will only update the software - screen and WiFi settings will be preserved.
+                </div>
+
+                <!-- Device Selection -->
+                <div class="mb-4">
+                    <h5>Select Device</h5>
+                    <div id="device-list" class="mb-3">
+                        <div class="d-flex justify-content-center">
+                            <div class="spinner-border spinner-border-sm" role="status">
+                                <span class="visually-hidden">Loading devices...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Firmware Build Section -->
+                <div class="mb-4">
+                    <h5>Firmware Build</h5>
+                    <div class="d-grid gap-2 mb-3">
+                        <button type="button" class="btn btn-primary" id="build-firmware">
+                            <i class="bi bi-hammer"></i> Build Latest Firmware
+                        </button>
+                    </div>
+                    <div id="build-status" class="mb-3" style="display: none;">
+                        <div class="alert alert-secondary">
+                            <div class="d-flex align-items-center">
+                                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                                <span>Building firmware... This may take a few minutes.</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="build-result" class="mb-3" style="display: none;"></div>
+                </div>
+
+                <!-- Upload Section -->
+                <div class="mb-4">
+                    <h5>Upload to Device</h5>
+                    <div id="upload-section" style="display: none;">
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>Warning:</strong> Device will restart during the update process. Do not power off the device during the update.
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button type="button" class="btn btn-danger" id="upload-firmware" disabled>
+                                <i class="bi bi-upload"></i> Upload Firmware to Device
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upload Progress -->
+                <div id="upload-progress" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label">Upload Progress</label>
+                        <div class="progress">
+                            <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div id="upload-status" class="alert alert-secondary">
+                        <div class="d-flex align-items-center">
+                            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                            <span>Uploading firmware...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results -->
+                <div id="upload-result" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Instructions Card -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Instructions</h5>
+            </div>
+            <div class="card-body">
+                <ol>
+                    <li>Select the device you want to update from the list above</li>
+                    <li>Click "Build Latest Firmware" to compile the newest firmware</li>
+                    <li>Once the build completes, click "Upload Firmware to Device"</li>
+                    <li>Wait for the upload to complete - the device will restart automatically</li>
+                    <li>The device will reconnect with the updated firmware</li>
+                </ol>
+                <div class="alert alert-light mt-3">
+                    <small>
+                        <strong>Note:</strong> This process requires the device to be online and reachable.
+                        Screen calibration, WiFi credentials, and device settings will be preserved.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let selectedDevice = null;
+let firmwareBuildPath = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadDeviceList();
+
+    document.getElementById('build-firmware').addEventListener('click', buildFirmware);
+    document.getElementById('upload-firmware').addEventListener('click', uploadFirmware);
+});
+
+async function loadDeviceList() {
+    const deviceListDiv = document.getElementById('device-list');
+
+    try {
+        const response = await fetch('/devices');
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        if (!data.devices || data.devices.length === 0) {
+            deviceListDiv.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    No devices configured. Please add devices first.
+                </div>
+            `;
+            return;
+        }
+
+        let deviceHtml = '<div class="row">';
+        data.devices.forEach(device => {
+            const hostname = device.host || 'Unknown';
+            const screenType = device.screen_type || 'Unknown';
+
+            deviceHtml += `
+                <div class="col-md-6 mb-2">
+                    <div class="card device-card" data-device="${hostname}" style="cursor: pointer;">
+                        <div class="card-body py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${hostname}</strong><br>
+                                    <small class="text-muted">${screenType}</small>
+                                </div>
+                                <div class="device-status">
+                                    <i class="bi bi-circle-fill text-secondary"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        deviceHtml += '</div>';
+
+        deviceListDiv.innerHTML = deviceHtml;
+
+        // Add click handlers
+        document.querySelectorAll('.device-card').forEach(card => {
+            card.addEventListener('click', function() {
+                selectDevice(this.dataset.device);
+            });
+        });
+
+        // Check device status
+        checkDeviceStatus(data.devices);
+
+    } catch (error) {
+        console.error('Error loading devices:', error);
+        deviceListDiv.innerHTML = `
+            <div class="alert alert-danger">
+                Error loading devices: ${error.message}
+            </div>
+        `;
+    }
+}
+
+async function checkDeviceStatus(devices) {
+    for (const device of devices) {
+        try {
+            const response = await fetch(`http://${device.host}/`, {
+                method: 'GET',
+                signal: AbortSignal.timeout(3000)
+            });
+
+            const statusIcon = document.querySelector(`[data-device="${device.host}"] .device-status i`);
+            if (statusIcon) {
+                if (response.ok) {
+                    statusIcon.className = 'bi bi-circle-fill text-success';
+                    statusIcon.title = 'Online';
+                } else {
+                    statusIcon.className = 'bi bi-circle-fill text-warning';
+                    statusIcon.title = 'Reachable but error';
+                }
+            }
+        } catch (error) {
+            const statusIcon = document.querySelector(`[data-device="${device.host}"] .device-status i`);
+            if (statusIcon) {
+                statusIcon.className = 'bi bi-circle-fill text-danger';
+                statusIcon.title = 'Offline';
+            }
+        }
+    }
+}
+
+function selectDevice(hostname) {
+    // Remove previous selection
+    document.querySelectorAll('.device-card').forEach(card => {
+        card.classList.remove('border-primary');
+    });
+
+    // Select new device
+    const selectedCard = document.querySelector(`[data-device="${hostname}"]`);
+    if (selectedCard) {
+        selectedCard.classList.add('border-primary');
+        selectedDevice = hostname;
+
+        // Enable firmware building
+        document.getElementById('build-firmware').disabled = false;
+
+        showAlert(`Selected device: ${hostname}`, 'info');
+    }
+}
+
+async function buildFirmware() {
+    const buildBtn = document.getElementById('build-firmware');
+    const buildStatus = document.getElementById('build-status');
+    const buildResult = document.getElementById('build-result');
+
+    // Reset UI
+    buildStatus.style.display = 'block';
+    buildResult.style.display = 'none';
+    buildBtn.disabled = true;
+
+    try {
+        const response = await fetch('/ota/build', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        buildStatus.style.display = 'none';
+
+        if (data.success) {
+            firmwareBuildPath = data.firmware_path;
+            buildResult.innerHTML = `
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle"></i>
+                    <strong>Build Successful!</strong><br>
+                    Firmware built: ${data.firmware_path}<br>
+                    Size: ${data.size_mb} MB
+                </div>
+            `;
+            buildResult.style.display = 'block';
+
+            // Show upload section
+            document.getElementById('upload-section').style.display = 'block';
+            document.getElementById('upload-firmware').disabled = false;
+        } else {
+            buildResult.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-x-circle"></i>
+                    <strong>Build Failed!</strong><br>
+                    ${data.error || 'Unknown error occurred'}
+                </div>
+            `;
+            buildResult.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error building firmware:', error);
+        buildStatus.style.display = 'none';
+        buildResult.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-x-circle"></i>
+                <strong>Build Error!</strong><br>
+                ${error.message}
+            </div>
+        `;
+        buildResult.style.display = 'block';
+    } finally {
+        buildBtn.disabled = false;
+    }
+}
+
+async function uploadFirmware() {
+    if (!selectedDevice || !firmwareBuildPath) {
+        showAlert('Please select a device and build firmware first', 'danger');
+        return;
+    }
+
+    const uploadBtn = document.getElementById('upload-firmware');
+    const uploadProgress = document.getElementById('upload-progress');
+    const uploadResult = document.getElementById('upload-result');
+    const progressBar = uploadProgress.querySelector('.progress-bar');
+    const uploadStatus = document.getElementById('upload-status');
+
+    // Reset UI
+    uploadBtn.disabled = true;
+    uploadProgress.style.display = 'block';
+    uploadResult.style.display = 'none';
+    progressBar.style.width = '0%';
+
+    try {
+        const response = await fetch('/ota/upload', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                device: selectedDevice,
+                firmware_path: firmwareBuildPath
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        uploadProgress.style.display = 'none';
+
+        if (data.success) {
+            uploadResult.innerHTML = `
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle"></i>
+                    <strong>Upload Successful!</strong><br>
+                    Firmware uploaded to ${selectedDevice}. Device is restarting...
+                </div>
+            `;
+            uploadResult.style.display = 'block';
+
+            // Refresh device status after a delay
+            setTimeout(() => {
+                loadDeviceList();
+            }, 10000);
+        } else {
+            uploadResult.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-x-circle"></i>
+                    <strong>Upload Failed!</strong><br>
+                    ${data.error || 'Unknown error occurred'}
+                </div>
+            `;
+            uploadResult.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error uploading firmware:', error);
+        uploadProgress.style.display = 'none';
+        uploadResult.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-x-circle"></i>
+                <strong>Upload Error!</strong><br>
+                ${error.message}
+            </div>
+        `;
+        uploadResult.style.display = 'block';
+    } finally {
+        uploadBtn.disabled = false;
+    }
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 1050; max-width: 400px;';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    document.body.appendChild(alertDiv);
+
+    setTimeout(() => {
+        alertDiv.remove();
+    }, 5000);
+}
+</script>
+{% endblock %}
