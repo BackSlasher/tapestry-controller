@@ -8,6 +8,8 @@ import threading
 import uuid
 from typing import Any, Dict, Optional
 
+from .process_manager import ProcessManager
+
 logger = logging.getLogger(__name__)
 
 # Default node directory path
@@ -29,17 +31,20 @@ class FlashProcess:
 class FlashManager:
     """Manages firmware flashing for Tapestry devices."""
 
-    def __init__(self, node_directory: Optional[str] = None):
+    def __init__(self, node_directory: Optional[str] = None, process_manager: Optional[ProcessManager] = None):
         """Initialize Flash manager.
 
         Args:
             node_directory: Path to the node directory. If None, auto-detected.
+            process_manager: Shared process manager for streaming operations. If None, creates its own.
         """
         if node_directory is None:
             node_directory = DEFAULT_NODE_DIRECTORY
 
         self.node_dir = node_directory
         self.setup_script = os.path.join(self.node_dir, "setup.sh")
+        self.process_manager = process_manager or ProcessManager()
+        # Keep the old active_processes for backward compatibility in existing methods
         self.active_processes: Dict[str, FlashProcess] = {}
 
     def validate_environment(self) -> Dict[str, Any]:
@@ -135,46 +140,23 @@ class FlashManager:
         if not git_result["success"]:
             return git_result
 
-        try:
-            # Generate unique process ID
-            process_id = str(uuid.uuid4())
+        # Start streaming flash process using ProcessManager
+        cmd = [self.setup_script, screen_type]
+        description = f"Flash {screen_type} firmware"
 
-            # Start the subprocess
-            process = subprocess.Popen(
-                [self.setup_script, screen_type],
-                cwd=self.node_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                universal_newlines=True,
-                bufsize=1,
-            )
+        result = self.process_manager.start_process(
+            cmd=cmd,
+            cwd=self.node_dir,
+            operation_type="flash",
+            description=description
+        )
 
-            # Create flash process tracking object
-            flash_process = FlashProcess(process_id, process, screen_type)
-            self.active_processes[process_id] = flash_process
+        # Add git information to the result if successful
+        if result["success"]:
+            result["git_stdout"] = git_result["git_stdout"]
+            result["git_stderr"] = git_result["git_stderr"]
 
-            # Start output streaming thread
-            output_thread = threading.Thread(
-                target=self._stream_subprocess_output,
-                args=(flash_process,)
-            )
-            output_thread.daemon = True
-            output_thread.start()
-
-            logger.info(f"Started flashing {screen_type} firmware with process ID {process_id}")
-
-            return {
-                "success": True,
-                "process_id": process_id,
-                "message": f"Started flashing {screen_type} firmware",
-                "git_stdout": git_result["git_stdout"],
-                "git_stderr": git_result["git_stderr"],
-            }
-
-        except Exception as e:
-            error_msg = f"Failed to start flash process: {str(e)}"
-            logger.error(error_msg)
-            return {"success": False, "error": error_msg}
+        return result
 
     def _stream_subprocess_output(self, flash_process: FlashProcess):
         """Stream subprocess output line by line."""
@@ -200,16 +182,16 @@ class FlashManager:
             flash_process.output_queue.put(f"Error streaming output: {e}")
             logger.error(f"Error streaming output for process {flash_process.process_id}: {e}")
 
-    def get_process_output(self, process_id: str) -> Optional[FlashProcess]:
+    def get_process_output(self, process_id: str):
         """Get the flash process for output streaming.
 
         Args:
             process_id: The process ID
 
         Returns:
-            FlashProcess object or None if not found
+            StreamingProcess object or None if not found
         """
-        return self.active_processes.get(process_id)
+        return self.process_manager.get_process(process_id)
 
     def stop_process(self, process_id: str) -> Dict[str, Any]:
         """Stop a running flash process.
@@ -220,33 +202,7 @@ class FlashManager:
         Returns:
             Dict with stop results
         """
-        if process_id not in self.active_processes:
-            return {"success": False, "error": "Process not found"}
-
-        try:
-            flash_process = self.active_processes[process_id]
-            process = flash_process.process
-
-            if process.poll() is None:  # Process is still running
-                process.terminate()
-                # Wait a bit for graceful termination
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()  # Force kill if it doesn't terminate
-
-            # Mark as finished
-            flash_process.finished = True
-            flash_process.return_code = process.returncode
-            flash_process.output_queue.put("Process terminated by user")
-
-            logger.info(f"Flash process {process_id} stopped")
-            return {"success": True, "message": "Flash process stopped"}
-
-        except Exception as e:
-            error_msg = f"Failed to stop process: {str(e)}"
-            logger.error(f"Error stopping flash process {process_id}: {e}")
-            return {"success": False, "error": error_msg}
+        return self.process_manager.stop_process(process_id)
 
     def cleanup_finished_processes(self):
         """Clean up finished processes to prevent memory leaks."""

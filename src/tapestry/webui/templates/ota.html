@@ -132,6 +132,8 @@ async function loadDeviceList() {
     }
 }
 
+let currentBuildProcess = null;
+
 async function startOTAProcess() {
     if (!selectedDevice) {
         appendOutput('Error: No device selected\n');
@@ -144,7 +146,7 @@ async function startOTAProcess() {
 
     // Disable button and show status
     otaBtn.disabled = true;
-    otaBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
+    otaBtn.innerHTML = '<i class="bi bi-stop-circle"></i> Stop Build';
     statusDiv.style.display = 'block';
     statusText.textContent = 'Building firmware...';
 
@@ -152,27 +154,38 @@ async function startOTAProcess() {
     appendOutput('========================================\n');
 
     try {
-        // Step 1: Build firmware
+        // Step 1: Start streaming build
         appendOutput('Building firmware...\n');
         statusText.textContent = 'Building firmware...';
 
-        const buildResponse = await fetch('/ota/build', {
+        const buildResponse = await fetch('/ota/build-stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });
 
         if (!buildResponse.ok) {
-            throw new Error(`Build failed: HTTP ${buildResponse.status}`);
+            throw new Error(`Build failed to start: HTTP ${buildResponse.status}`);
         }
 
         const buildData = await buildResponse.json();
 
         if (!buildData.success) {
-            throw new Error(`Build failed: ${buildData.error}`);
+            throw new Error(`Build failed to start: ${buildData.error}`);
         }
 
-        appendOutput(`Build successful! Firmware size: ${buildData.size_mb} MB\n`);
-        appendOutput(`Firmware path: ${buildData.firmware_path}\n`);
+        currentBuildProcess = buildData.process_id;
+
+        // Change button to stop function
+        otaBtn.onclick = () => stopBuildProcess();
+
+        // Start streaming build output
+        const buildSuccess = await streamBuildOutput(buildData.process_id);
+
+        if (!buildSuccess) {
+            throw new Error('Build process failed');
+        }
+
+        appendOutput('\nBuild completed successfully!\n');
 
         // Step 2: Upload firmware
         appendOutput('\nUploading firmware to device...\n');
@@ -216,9 +229,68 @@ async function startOTAProcess() {
         statusDiv.querySelector('.alert').className = 'alert alert-danger';
     } finally {
         // Reset button
+        currentBuildProcess = null;
         otaBtn.disabled = false;
         otaBtn.innerHTML = '<i class="bi bi-download"></i> Build & Upload Firmware';
+        otaBtn.onclick = startOTAProcess;
     }
+}
+
+function streamBuildOutput(processId) {
+    return new Promise((resolve, reject) => {
+        const eventSource = new EventSource(`/ota/output/${processId}`);
+
+        eventSource.onmessage = function(event) {
+            if (event.data.trim()) {
+                appendOutput(event.data + '\n');
+            }
+        };
+
+        eventSource.addEventListener('finished', function(event) {
+            const exitCode = parseInt(event.data);
+            appendOutput(`Build process finished with exit code: ${exitCode}\n`);
+            eventSource.close();
+
+            if (exitCode === 0) {
+                resolve(true);
+            } else {
+                reject(new Error(`Build failed with exit code: ${exitCode}`));
+            }
+        });
+
+        eventSource.onerror = function(event) {
+            console.error('Build stream error:', event);
+            eventSource.close();
+            reject(new Error('Build stream connection failed'));
+        };
+    });
+}
+
+async function stopBuildProcess() {
+    if (!currentBuildProcess) {
+        return;
+    }
+
+    const otaBtn = document.getElementById('ota-btn');
+    otaBtn.disabled = true;
+    otaBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Stopping...';
+
+    try {
+        const response = await fetch(`/ota/stop/${currentBuildProcess}`, {
+            method: 'POST'
+        });
+
+        if (response.ok) {
+            appendOutput('\nBuild process stopped by user.\n');
+        } else {
+            appendOutput('\nFailed to stop build process.\n');
+        }
+    } catch (error) {
+        console.error('Error stopping build:', error);
+        appendOutput('\nError stopping build process.\n');
+    }
+
+    currentBuildProcess = null;
 }
 
 function appendOutput(text) {

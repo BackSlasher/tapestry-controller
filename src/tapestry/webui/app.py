@@ -36,6 +36,7 @@ from ..settings import (
 from .device_monitor import DeviceMonitor, MonitorConfig
 from .flash_manager import FlashManager
 from .ota_manager import OTAManager
+from .process_manager import ProcessManager
 from .screensaver import ScreensaverManager
 
 app = Flask(__name__)
@@ -84,6 +85,9 @@ device_monitor: DeviceMonitor | None = None
 
 # Flash manager instance
 flash_manager: FlashManager | None = None
+
+# Process manager instance (shared between flash and OTA)
+process_manager: ProcessManager | None = None
 
 
 def get_screensaver_config():
@@ -1388,7 +1392,7 @@ def stop_flash(process_id):
 
 def create_app(devices_file="devices.yaml"):
     """Create Flask app with configuration."""
-    global controller, screensaver_manager, ota_manager, device_monitor, flash_manager
+    global controller, screensaver_manager, ota_manager, device_monitor, flash_manager, process_manager
     if controller is None:
         controller = TapestryController.from_config_file(devices_file)
     if screensaver_manager is None:
@@ -1399,10 +1403,12 @@ def create_app(devices_file="devices.yaml"):
             save_last_image(image)
 
         screensaver_manager = ScreensaverManager(send_and_save_image)
+    if process_manager is None:
+        process_manager = ProcessManager()
     if ota_manager is None:
-        ota_manager = OTAManager()
+        ota_manager = OTAManager(process_manager=process_manager)
     if flash_manager is None:
-        flash_manager = FlashManager()
+        flash_manager = FlashManager(process_manager=process_manager)
     if device_monitor is None:
         config = MonitorConfig(poll_interval=30, request_timeout=5, enabled=True)
         device_monitor = DeviceMonitor(config)
@@ -1449,6 +1455,73 @@ def ota_upload():
     force_update = data["force_update"]
 
     result = ota_manager.upload_firmware(device_ip, force_update)
+
+    if result["success"]:
+        return jsonify(result)
+    else:
+        return jsonify(result), 500
+
+
+@app.route("/ota/build-stream", methods=["POST"])
+def ota_build_stream():
+    """Start streaming OTA firmware build process."""
+    if not ota_manager:
+        return jsonify({"error": "OTA manager not initialized"}), 500
+
+    result = ota_manager.start_streaming_build()
+
+    if result["success"]:
+        return jsonify(result)
+    else:
+        return jsonify(result), 500
+
+
+@app.route("/ota/output/<process_id>")
+def ota_output_stream(process_id):
+    """Stream the output of an OTA build process."""
+    if not ota_manager:
+        return jsonify({"error": "OTA manager not initialized"}), 500
+
+    streaming_process = ota_manager.get_streaming_process(process_id)
+    if not streaming_process:
+        return jsonify({"error": "Process not found"}), 404
+
+    def generate():
+        output_queue = streaming_process.output_queue
+
+        while True:
+            try:
+                # Get output with timeout
+                line = output_queue.get(timeout=1.0)
+                yield f"data: {line}\n\n"
+
+                # Check if process finished
+                if streaming_process.finished and output_queue.empty():
+                    yield f"event: finished\ndata: {streaming_process.return_code}\n\n"
+                    break
+
+            except queue.Empty:
+                # Send heartbeat to keep connection alive
+                if streaming_process.finished:
+                    yield f"event: finished\ndata: {streaming_process.return_code}\n\n"
+                    break
+                else:
+                    yield "data: \n\n"  # Heartbeat
+
+    return Response(
+        generate(),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )
+
+
+@app.route("/ota/stop/<process_id>", methods=["POST"])
+def ota_stop_build(process_id):
+    """Stop a running OTA build process."""
+    if not ota_manager:
+        return jsonify({"error": "OTA manager not initialized"}), 500
+
+    result = ota_manager.stop_streaming_process(process_id)
 
     if result["success"]:
         return jsonify(result)

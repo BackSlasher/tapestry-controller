@@ -8,6 +8,8 @@ from typing import Any, Dict, Optional
 import requests
 from requests.exceptions import ConnectionError, Timeout
 
+from .process_manager import ProcessManager
+
 logger = logging.getLogger(__name__)
 
 # Default node directory path
@@ -17,11 +19,12 @@ DEFAULT_NODE_DIRECTORY = os.path.expanduser("~/node/")
 class OTAManager:
     """Manages OTA firmware building and uploading for Tapestry devices."""
 
-    def __init__(self, node_directory: Optional[str] = None):
+    def __init__(self, node_directory: Optional[str] = None, process_manager: Optional[ProcessManager] = None):
         """Initialize OTA manager.
 
         Args:
             node_directory: Path to the node directory. If None, auto-detected.
+            process_manager: Shared process manager for streaming operations. If None, creates its own.
         """
         if node_directory is None:
             node_directory = DEFAULT_NODE_DIRECTORY
@@ -29,6 +32,7 @@ class OTAManager:
         self.node_dir = node_directory
         self.build_script = os.path.join(self.node_dir, "build-ota.sh")
         self.firmware_path = os.path.join(self.node_dir, "build/tapestry-node.bin")
+        self.process_manager = process_manager or ProcessManager()
 
     def validate_environment(self) -> Dict[str, Any]:
         """Validate that the OTA environment is set up correctly.
@@ -157,6 +161,88 @@ class OTAManager:
             error_msg = f"Build error: {str(e)}"
             logger.error(f"Error building OTA firmware: {e}")
             return {"success": False, "error": error_msg}
+
+    def start_streaming_build(self) -> Dict[str, Any]:
+        """Start a streaming firmware build process.
+
+        Returns:
+            Dict with build start results including process_id
+        """
+        # Validate environment first
+        validation = self.validate_environment()
+        if not validation["valid"]:
+            return {
+                "success": False,
+                "error": f"Environment validation failed: {'; '.join(validation['issues'])}",
+            }
+
+        # Update git repository first
+        git_result = self._update_git_repository()
+        if not git_result["success"]:
+            return git_result
+
+        # Start streaming build process
+        cmd = ["./build-ota.sh"]
+        description = "OTA firmware build"
+
+        result = self.process_manager.start_process(
+            cmd=cmd,
+            cwd=self.node_dir,
+            operation_type="ota_build",
+            description=description
+        )
+
+        return result
+
+    def _update_git_repository(self) -> Dict[str, Any]:
+        """Update the git repository before building (non-streaming).
+
+        Returns:
+            Dict with git update results
+        """
+        try:
+            logger.info(f"Updating git repository in {self.node_dir}")
+            git_result = subprocess.run(
+                ["git", "pull"],
+                cwd=self.node_dir,
+                capture_output=True,
+                text=True,
+                timeout=60,  # 1 minute timeout for git pull
+            )
+
+            if git_result.returncode != 0:
+                error_msg = f"Git pull failed (exit code {git_result.returncode}): {git_result.stderr.strip()}"
+                logger.error(error_msg)
+                return {
+                    "success": False,
+                    "error": error_msg,
+                    "git_stdout": git_result.stdout,
+                    "git_stderr": git_result.stderr,
+                }
+
+            logger.info(f"Git repository updated successfully for OTA: {git_result.stdout.strip()}")
+            return {
+                "success": True,
+                "git_stdout": git_result.stdout,
+                "git_stderr": git_result.stderr,
+            }
+
+        except subprocess.TimeoutExpired:
+            error_msg = "Git pull timeout - repository update took longer than 60 seconds"
+            logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+        except Exception as e:
+            error_msg = f"Git pull error: {str(e)}"
+            logger.error(f"Error updating git repository for OTA: {e}")
+            return {"success": False, "error": error_msg}
+
+    def get_streaming_process(self, process_id: str):
+        """Get a streaming process by ID."""
+        return self.process_manager.get_process(process_id)
+
+    def stop_streaming_process(self, process_id: str) -> Dict[str, Any]:
+        """Stop a streaming build process."""
+        return self.process_manager.stop_process(process_id)
 
     def upload_firmware(self, device_ip: str, force_update: bool) -> Dict[str, Any]:
         """Upload firmware to device via OTA.
