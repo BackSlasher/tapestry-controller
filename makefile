@@ -18,6 +18,7 @@ test:
 lint:
 	uv run ruff check --fix src/
 	uv run black src/
+	uv run ty check src/
 
 deploy:
 	rsync -avz --delete --filter=':- .gitignore' --filter='- .sl/' --filter='- .git/' --exclude='devices.yaml' --exclude='settings.toml' . $(REMOTE_HOST):./controller/

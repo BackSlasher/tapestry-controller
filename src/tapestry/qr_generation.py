@@ -31,7 +31,14 @@ def discover_devices_from_dhcp() -> List[DiscoveredDevice]:
     try:
         # Get the actual device name from NetworkManager
         device_name = subprocess.check_output(
-            ["nmcli", "-g", "GENERAL.DEVICES", "connection", "show", DIGINK_CONNECTION_NAME],
+            [
+                "nmcli",
+                "-g",
+                "GENERAL.DEVICES",
+                "connection",
+                "show",
+                DIGINK_CONNECTION_NAME,
+            ],
             text=True,
             timeout=10,
         ).strip()
@@ -117,7 +124,7 @@ def generate_positioning_qr_image(
     qr = qrcode.QRCode(
         version=None,
         # Low correction for simpler QR
-        error_correction=qrcode.constants.ERROR_CORRECT_L, # ty: ignore[unresolved-attribute]
+        error_correction=qrcode.constants.ERROR_CORRECT_L,  # ty: ignore[unresolved-attribute]
         box_size=1,
         border=0,  # Entire image is white, no border needed
     )
@@ -183,7 +190,9 @@ def generate_all_positioning_qr_images() -> Dict[str, Image.Image]:
                 f"Generated QR code for {device.hostname} ({device.ip}) - {device.screen_type}"
             )
         except Exception as e:
-            print(f"Failed to generate QR code for {device.hostname} ({device.ip}): {e}")
+            print(
+                f"Failed to generate QR code for {device.hostname} ({device.ip}): {e}"
+            )
             continue
 
     return qr_images

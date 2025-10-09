@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 import argparse
-import base64
 import glob
 import hashlib
 import io
 import logging
 import os
 import queue
-import random
 import subprocess
 import threading
 
@@ -28,8 +26,6 @@ from PIL import ImageDraw, ImageFont
 from ..controller import TapestryController
 from ..geometry import Dimensions, Point, Rectangle
 from ..screen_types import SCREEN_TYPES
-from .screensaver import ScreensaverManager
-from .ota_manager import OTAManager
 from ..settings import (
     GallerySettings,
     PixabaySettings,
@@ -37,6 +33,8 @@ from ..settings import (
     ScreensaverSettings,
     get_settings,
 )
+from .ota_manager import OTAManager
+from .screensaver import ScreensaverManager
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "tapestry-webui-secret-key"
@@ -48,10 +46,12 @@ logger = logging.getLogger(__name__)
 # Global controller instance
 controller: TapestryController | None = None
 
+
 def get_controller() -> TapestryController:
     if controller is None:
         raise Exception("No controller")
     return controller
+
 
 # Screensaver manager instance
 screensaver_manager: ScreensaverManager | None = None
@@ -304,8 +304,6 @@ def flash_firmware():
 def positioning():
     """QR-based positioning page."""
     return render_template("positioning.html")
-
-
 
 
 @app.route("/positioning/qr-mode", methods=["POST"])
@@ -659,7 +657,9 @@ def layout_data():
                 )
 
             # Calculate bounding rectangle and get scaling factor
-            bounding_rect_mm = Rectangle.bounding_rectangle(list(device_rectangles.values()))
+            bounding_rect_mm = Rectangle.bounding_rectangle(
+                list(device_rectangles.values())
+            )
             mm_to_px_ratio = last_image_state.get("px_in_unit")
 
             # If no image has been processed yet, we can't provide pixel coordinates
@@ -785,7 +785,9 @@ def layout_image():
             )
 
         # Calculate bounding rectangle exactly like the controller
-        bounding_rectangle = Rectangle.bounding_rectangle(list(device_rectangles.values()))
+        bounding_rectangle = Rectangle.bounding_rectangle(
+            list(device_rectangles.values())
+        )
 
         # Use the scaled image if available, otherwise create a white background
         if last_image_state["refit_image"] is not None:
@@ -846,7 +848,9 @@ def upload_image():
         # Only save for layout overlay if send was successful
         save_last_image(image)
 
-        flash(f"Successfully sent image to {len(get_controller().config.devices)} devices!")
+        flash(
+            f"Successfully sent image to {len(get_controller().config.devices)} devices!"
+        )
         return redirect(url_for("index"))
 
     except Exception as e:
@@ -1015,7 +1019,10 @@ def start_screensaver_internal():
 def start_screensaver():
     """Start the screensaver."""
     if not controller or not screensaver_manager:
-        return jsonify({"error": "Controller or screensaver manager not initialized"}), 500
+        return (
+            jsonify({"error": "Controller or screensaver manager not initialized"}),
+            500,
+        )
 
     if screensaver_manager.is_active:
         return jsonify({"error": "Screensaver already active"}), 400
@@ -1402,6 +1409,7 @@ def create_app(devices_file="devices.yaml"):
     if controller is None:
         controller = TapestryController.from_config_file(devices_file)
     if screensaver_manager is None:
+
         def send_and_save_image(image):
             """Send image to displays and save for current-image endpoint."""
             controller.send_image(image)
@@ -1414,6 +1422,7 @@ def create_app(devices_file="devices.yaml"):
 
 
 # OTA Update Routes
+
 
 @app.route("/ota")
 def ota_page():

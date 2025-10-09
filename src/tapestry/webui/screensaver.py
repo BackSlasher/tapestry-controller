@@ -5,7 +5,6 @@ import logging
 import os
 import random
 import threading
-import time
 from typing import Callable, Optional
 from urllib.parse import urlparse
 
@@ -56,14 +55,14 @@ class ScreensaverManager:
         # Start screensaver thread
         self._stop_event = threading.Event()
         self._thread = threading.Thread(
-            target=self._worker,
-            args=(config,),
-            daemon=True
+            target=self._worker, args=(config,), daemon=True
         )
         self._active = True
         self._thread.start()
 
-        logger.info(f"Screensaver started: type={config['type']}, interval={config['interval']}")
+        logger.info(
+            f"Screensaver started: type={config['type']}, interval={config['interval']}"
+        )
 
     def stop(self, timeout: float = 2.0) -> None:
         """Stop the screensaver.
@@ -94,7 +93,9 @@ class ScreensaverManager:
             bool: True if an image was successfully displayed, False otherwise
         """
         if not self._current_config:
-            logger.warning("Cannot display next image: no screensaver configuration available")
+            logger.warning(
+                "Cannot display next image: no screensaver configuration available"
+            )
             return False
 
         try:
@@ -137,7 +138,9 @@ class ScreensaverManager:
                 if image:
                     self.image_sender(image)
                 else:
-                    logger.warning(f"No image retrieved for screensaver type: {config['type']}")
+                    logger.warning(
+                        f"No image retrieved for screensaver type: {config['type']}"
+                    )
 
             except Exception as e:
                 logger.error(f"Screensaver error: {e}")
@@ -198,7 +201,9 @@ class ScreensaverManager:
             params = {"t": time_period, "limit": limit}
             headers = {"User-Agent": "Tapestry:v1.0 (by /u/tapestry_user)"}
 
-            logger.info(f"Reddit API request: {url} with params: {params}, keywords: '{keywords}'")
+            logger.info(
+                f"Reddit API request: {url} with params: {params}, keywords: '{keywords}'"
+            )
 
             response = requests.get(url, params=params, headers=headers, timeout=10)
             response.raise_for_status()
@@ -230,9 +235,14 @@ class ScreensaverManager:
                 parsed_url = urlparse(post_url)
                 is_image = False
 
-                if parsed_url.path.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
+                if parsed_url.path.lower().endswith(
+                    (".png", ".jpg", ".jpeg", ".gif", ".webp")
+                ):
                     is_image = True
-                elif any(domain in parsed_url.netloc.lower() for domain in ["i.imgur.com", "i.redd.it"]):
+                elif any(
+                    domain in parsed_url.netloc.lower()
+                    for domain in ["i.imgur.com", "i.redd.it"]
+                ):
                     is_image = True
 
                 if is_image:
@@ -241,15 +251,19 @@ class ScreensaverManager:
                     # Apply keyword filtering if keywords are provided
                     title = post_data.get("title", "").lower()
                     if keywords.strip():
-                        keyword_list = [kw.strip().lower() for kw in keywords.split() if kw.strip()]
+                        keyword_list = [
+                            kw.strip().lower() for kw in keywords.split() if kw.strip()
+                        ]
                         if not any(keyword in title for keyword in keyword_list):
                             keyword_filtered_posts += 1
                             continue
 
-                    image_posts.append({
-                        "url": post_url,
-                        "title": post_data.get("title", "Reddit Wallpaper")
-                    })
+                    image_posts.append(
+                        {
+                            "url": post_url,
+                            "title": post_data.get("title", "Reddit Wallpaper"),
+                        }
+                    )
 
             logger.info(
                 f"Reddit filtering results: {filtered_posts} filtered out (deleted/self), "
@@ -266,14 +280,19 @@ class ScreensaverManager:
 
             # Select and download random image
             selected = random.choice(image_posts)
-            logger.info(f"Selected Reddit post: '{selected['title']}' from {selected['url']}")
+            logger.info(
+                f"Selected Reddit post: '{selected['title']}' from {selected['url']}"
+            )
 
             img_response = requests.get(selected["url"], headers=headers, timeout=30)
             img_response.raise_for_status()
 
             from io import BytesIO
+
             image = PIL.Image.open(BytesIO(img_response.content))
-            logger.info(f"Reddit screensaver: successfully loaded image '{selected['title']}'")
+            logger.info(
+                f"Reddit screensaver: successfully loaded image '{selected['title']}'"
+            )
 
             return image
 
@@ -328,6 +347,7 @@ class ScreensaverManager:
             img_response.raise_for_status()
 
             from io import BytesIO
+
             image = PIL.Image.open(BytesIO(img_response.content))
             logger.info(
                 f"Pixabay screensaver: displaying image by {selected.get('user', 'unknown')} "

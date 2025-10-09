@@ -18,16 +18,13 @@ def parse_args():
     parser.add_argument("input_image", help="Path to input image file")
     parser.add_argument(
         "--output-image",
-        help="Path for debug visualization output (default: input_debug.png)"
+        help="Path for debug visualization output (default: input_debug.png)",
     )
     parser.add_argument(
-        "--output-json",
-        help="Path for JSON data output (default: print to stdout)"
+        "--output-json", help="Path for JSON data output (default: print to stdout)"
     )
     parser.add_argument(
-        "--quiet", "-q",
-        action="store_true",
-        help="Suppress non-JSON output"
+        "--quiet", "-q", action="store_true", help="Suppress non-JSON output"
     )
     return parser.parse_args()
 
@@ -68,13 +65,13 @@ def main():
             "input_image": str(input_path),
             "output_image": str(output_image_path),
             "total_found": len(qr_info),
-            "qr_codes": qr_info
+            "qr_codes": qr_info,
         }
 
         # Output JSON data
         if args.output_json:
             json_path = Path(args.output_json)
-            with open(json_path, 'w') as f:
+            with open(json_path, "w") as f:
                 json.dump(output_data, f, indent=2)
             if not args.quiet:
                 print(f"JSON data saved: {json_path}")

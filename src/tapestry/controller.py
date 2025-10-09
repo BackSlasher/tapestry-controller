@@ -12,7 +12,9 @@ class TapestryController:
     def __init__(self, config: Config):
         self.config = config
 
-    def send_image(self, image: PIL.Image.Image, debug_output_dir: Optional[str] = None):
+    def send_image(
+        self, image: PIL.Image.Image, debug_output_dir: Optional[str] = None
+    ):
         """Send image to devices using a simplified coordinate approach."""
 
         # Step 1: Calculate the bounding box of all screens in millimeters
@@ -76,7 +78,9 @@ class TapestryController:
         for t in threads:
             t.join()
 
-    def _scale_image_to_layout(self, image: PIL.Image.Image, layout_dimensions: Dimensions):
+    def _scale_image_to_layout(
+        self, image: PIL.Image.Image, layout_dimensions: Dimensions
+    ):
         """Scale input image to fit the layout dimensions while maintaining aspect ratio."""
         import PIL.ImageOps
 
@@ -102,7 +106,9 @@ class TapestryController:
 
         return scaled_image, mm_to_px_ratio
 
-    def _crop_device_section(self, scaled_image: PIL.Image.Image, device_rect_px: Rectangle):
+    def _crop_device_section(
+        self, scaled_image: PIL.Image.Image, device_rect_px: Rectangle
+    ):
         """Crop a section of the scaled image for a specific device."""
 
         # Calculate crop coordinates

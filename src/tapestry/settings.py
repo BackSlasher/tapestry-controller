@@ -63,12 +63,8 @@ class RedditSettings(BaseModel):
 class PixabaySettings(BaseModel):
     """Pixabay screensaver settings."""
 
-    api_key: str = Field(
-        default="", description="Pixabay API key"
-    )
-    keywords: str = Field(
-        default="wallpaper", description="Keywords for image search"
-    )
+    api_key: str = Field(default="", description="Pixabay API key")
+    keywords: str = Field(default="wallpaper", description="Keywords for image search")
     per_page: int = Field(
         default=20, ge=3, le=200, description="Number of images per request"
     )
@@ -101,10 +97,12 @@ class ScreensaverSettings(BaseModel):
         default_factory=PixabaySettings, description="Pixabay screensaver settings"
     )
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def validate_screensaver_config(self):
         if self.type == "pixabay" and not self.pixabay.api_key.strip():
-            raise ValueError("Pixabay API key is required when using Pixabay screensaver")
+            raise ValueError(
+                "Pixabay API key is required when using Pixabay screensaver"
+            )
         return self
 
 
