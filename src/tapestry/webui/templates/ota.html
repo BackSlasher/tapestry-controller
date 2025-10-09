@@ -175,7 +175,8 @@ async function startOTAProcess() {
 
         currentBuildProcess = buildData.process_id;
 
-        // Change button to stop function
+        // Change button to stop function and re-enable it
+        otaBtn.disabled = false;
         otaBtn.onclick = () => stopBuildProcess();
 
         // Start streaming build output
