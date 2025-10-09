@@ -10,6 +10,9 @@ from requests.exceptions import ConnectionError, Timeout
 
 logger = logging.getLogger(__name__)
 
+# Default node directory path
+DEFAULT_NODE_DIRECTORY = os.path.expanduser("~/node/")
+
 
 class OTAManager:
     """Manages OTA firmware building and uploading for Tapestry devices."""
@@ -21,7 +24,7 @@ class OTAManager:
             node_directory: Path to the node directory. If None, auto-detected.
         """
         if node_directory is None:
-            node_directory = os.path.expanduser("~/node/")
+            node_directory = DEFAULT_NODE_DIRECTORY
 
         self.node_dir = node_directory
         self.build_script = os.path.join(self.node_dir, "build-ota.sh")
@@ -125,21 +128,18 @@ class OTAManager:
             logger.error(f"Error building OTA firmware: {e}")
             return {"success": False, "error": error_msg}
 
-    def upload_firmware(
-        self, device_ip: str, firmware_path: Optional[str] = None, timeout: int = 60
-    ) -> Dict[str, Any]:
+    def upload_firmware(self, device_ip: str, force_update: bool) -> Dict[str, Any]:
         """Upload firmware to device via OTA.
 
         Args:
             device_ip: IP address of the target device
-            firmware_path: Path to firmware file. If None, uses default built firmware
-            timeout: Upload timeout in seconds (default: 1 minute)
+            force_update: Whether to force the update with X-Force-Update header
 
         Returns:
             Dict with upload results
         """
-        if firmware_path is None:
-            firmware_path = self.firmware_path
+        firmware_path = self.firmware_path
+        timeout = 60  # 1 minute timeout
 
         # Validate inputs
         if not device_ip:
@@ -159,11 +159,15 @@ class OTAManager:
             logger.info(f"Uploading OTA firmware to {device_ip} ({size_mb} MB)")
 
             # Upload firmware to device
+            headers = {"Content-Type": "application/octet-stream"}
+            if force_update:
+                headers["X-Force-Update"] = "true"
+
             with open(firmware_path, "rb") as firmware_file:
                 response = requests.post(
                     f"http://{device_ip}/ota",
                     data=firmware_file,
-                    headers={"Content-Type": "application/octet-stream"},
+                    headers=headers,
                     timeout=timeout,
                 )
 

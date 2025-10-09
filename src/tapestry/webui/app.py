@@ -1454,10 +1454,10 @@ def ota_upload():
     if not data:
         return jsonify({"error": "No data provided"}), 400
 
-    device_ip = data.get("device")
-    firmware_path = data.get("firmware_path")
+    device_ip = data["device"]
+    force_update = data["force_update"]
 
-    result = ota_manager.upload_firmware(device_ip, firmware_path)
+    result = ota_manager.upload_firmware(device_ip, force_update)
 
     if result["success"]:
         return jsonify(result)

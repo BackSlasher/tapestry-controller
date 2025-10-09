@@ -28,6 +28,12 @@
                         </div>
 
                         <div class="mb-3">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="force-update-checkbox">
+                                <label class="form-check-label" for="force-update-checkbox">
+                                    Force update (bypass version checks)
+                                </label>
+                            </div>
                             <button type="button" class="btn btn-primary" id="ota-btn" disabled>
                                 <i class="bi bi-download"></i> Build & Upload Firmware
                             </button>
@@ -172,12 +178,14 @@ async function startOTAProcess() {
         appendOutput('\nUploading firmware to device...\n');
         statusText.textContent = 'Uploading firmware...';
 
+        const forceUpdate = document.getElementById('force-update-checkbox').checked;
+
         const uploadResponse = await fetch('/ota/upload', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 device: selectedDevice,
-                firmware_path: buildData.firmware_path
+                force_update: forceUpdate
             })
         });
 
