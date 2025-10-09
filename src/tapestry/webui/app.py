@@ -33,6 +33,7 @@ from ..settings import (
     ScreensaverSettings,
     get_settings,
 )
+from .device_monitor import DeviceMonitor, MonitorConfig
 from .ota_manager import OTAManager
 from .screensaver import ScreensaverManager
 
@@ -58,6 +59,9 @@ screensaver_manager: ScreensaverManager | None = None
 
 # OTA manager instance
 ota_manager: OTAManager | None = None
+
+# Device monitor instance
+device_monitor: DeviceMonitor | None = None
 
 
 def get_screensaver_config():
@@ -304,6 +308,12 @@ def flash_firmware():
 def positioning():
     """QR-based positioning page."""
     return render_template("positioning.html")
+
+
+@app.route("/device-monitoring")
+def device_monitoring():
+    """Device monitoring page."""
+    return render_template("device_monitoring.html")
 
 
 @app.route("/positioning/qr-mode", methods=["POST"])
@@ -931,6 +941,45 @@ def devices_info():
     return jsonify({"devices": devices})
 
 
+@app.route("/device-status")
+def device_status():
+    """Return device monitoring status as JSON."""
+    if not device_monitor:
+        return jsonify({"error": "Device monitor not initialized"}), 500
+
+    statuses = device_monitor.get_all_statuses()
+
+    # Convert DeviceStatus objects to dict for JSON serialization
+    status_data = {}
+    for host, status in statuses.items():
+        status_data[host] = {
+            "host": status.host,
+            "online": status.online,
+            "last_seen": status.last_seen.isoformat() if status.last_seen else None,
+            "last_error": status.last_error,
+            "width": status.width,
+            "height": status.height,
+            "temperature": status.temperature,
+            "screen_model": status.screen_model,
+            "current_version": status.current_version,
+            "compile_date": status.compile_date,
+            "compile_time": status.compile_time,
+            "project_name": status.project_name,
+            "idf_version": status.idf_version,
+            "running_partition": status.running_partition,
+            "next_partition": status.next_partition,
+            "app_elf_sha256": status.app_elf_sha256,
+            "response_time_ms": status.response_time_ms,
+        }
+
+    return jsonify({
+        "devices": status_data,
+        "online_count": len(device_monitor.get_online_devices()),
+        "offline_count": len(device_monitor.get_offline_devices()),
+        "total_count": len(statuses),
+    })
+
+
 @app.route("/clear", methods=["POST"])
 def clear_screens():
     """Clear all device screens."""
@@ -1405,7 +1454,7 @@ def stop_flash(process_id):
 
 def create_app(devices_file="devices.yaml"):
     """Create Flask app with configuration."""
-    global controller, screensaver_manager, ota_manager
+    global controller, screensaver_manager, ota_manager, device_monitor
     if controller is None:
         controller = TapestryController.from_config_file(devices_file)
     if screensaver_manager is None:
@@ -1418,6 +1467,12 @@ def create_app(devices_file="devices.yaml"):
         screensaver_manager = ScreensaverManager(send_and_save_image)
     if ota_manager is None:
         ota_manager = OTAManager()
+    if device_monitor is None:
+        config = MonitorConfig(poll_interval=30, request_timeout=5, enabled=True)
+        device_monitor = DeviceMonitor(config)
+        # Start monitoring devices from controller config
+        device_hosts = [device.host for device in controller.config.devices]
+        device_monitor.start_monitoring(device_hosts)
     return app
 
 

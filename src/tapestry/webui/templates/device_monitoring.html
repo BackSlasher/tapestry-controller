@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+
+{% block title %}Device Monitoring - Tapestry Controller{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title mb-0">
+                    <i class="bi bi-display"></i> Device Monitoring
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Real-time Device Status</strong><br>
+                    Monitoring device status every 30 seconds. View connectivity, dimensions, temperature, and firmware information.
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body text-center">
+                                <h4 class="card-title mb-0" id="online-count">-</h4>
+                                <small>Online Devices</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-danger text-white">
+                            <div class="card-body text-center">
+                                <h4 class="card-title mb-0" id="offline-count">-</h4>
+                                <small>Offline Devices</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body text-center">
+                                <h4 class="card-title mb-0" id="total-count">-</h4>
+                                <small>Total Devices</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-secondary text-white">
+                            <div class="card-body text-center">
+                                <small class="text-white-50">Last Updated</small>
+                                <div id="last-updated" class="fw-bold">-</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5>Device Status</h5>
+                    <div>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="refresh-btn">
+                            <i class="bi bi-arrow-clockwise"></i> Refresh
+                        </button>
+                        <div class="form-check form-switch d-inline-block ms-3">
+                            <input class="form-check-input" type="checkbox" id="auto-refresh-toggle" checked>
+                            <label class="form-check-label" for="auto-refresh-toggle">
+                                Auto-refresh
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Status</th>
+                                <th>Device</th>
+                                <th>Dimensions</th>
+                                <th>Temperature</th>
+                                <th>Response Time</th>
+                                <th>Version</th>
+                                <th>Last Seen</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="device-table-body">
+                            <tr>
+                                <td colspan="8" class="text-center text-muted">
+                                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                                    Loading device status...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Device Details Modal -->
+<div class="modal fade" id="deviceDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Device Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="device-details-content">
+                    <!-- Device details will be populated here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let autoRefreshInterval = null;
+let selectedDevice = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Initial load
+    loadDeviceStatus();
+
+    // Set up auto-refresh
+    setupAutoRefresh();
+
+    // Refresh button
+    document.getElementById('refresh-btn').addEventListener('click', loadDeviceStatus);
+
+    // Auto-refresh toggle
+    document.getElementById('auto-refresh-toggle').addEventListener('change', setupAutoRefresh);
+});
+
+function setupAutoRefresh() {
+    const autoRefreshEnabled = document.getElementById('auto-refresh-toggle').checked;
+
+    // Clear existing interval
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+    }
+
+    // Start new interval if enabled
+    if (autoRefreshEnabled) {
+        autoRefreshInterval = setInterval(loadDeviceStatus, 10000); // Refresh every 10 seconds
+    }
+}
+
+async function loadDeviceStatus() {
+    try {
+        const response = await fetch('/device-status');
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        updateDeviceTable(data);
+        updateCounters(data);
+        updateLastUpdated();
+
+    } catch (error) {
+        console.error('Error loading device status:', error);
+        showError('Failed to load device status: ' + error.message);
+    }
+}
+
+function updateCounters(data) {
+    document.getElementById('online-count').textContent = data.online_count;
+    document.getElementById('offline-count').textContent = data.offline_count;
+    document.getElementById('total-count').textContent = data.total_count;
+}
+
+function updateLastUpdated() {
+    const now = new Date();
+    document.getElementById('last-updated').textContent = now.toLocaleTimeString();
+}
+
+function updateDeviceTable(data) {
+    const tbody = document.getElementById('device-table-body');
+
+    if (!data.devices || Object.keys(data.devices).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No devices configured</td></tr>';
+        return;
+    }
+
+    const rows = [];
+    for (const [host, device] of Object.entries(data.devices)) {
+        const statusBadge = device.online ?
+            '<span class="badge bg-success"><i class="bi bi-check-circle"></i> Online</span>' :
+            '<span class="badge bg-danger"><i class="bi bi-x-circle"></i> Offline</span>';
+
+        const dimensions = device.width && device.height ?
+            `${device.width}×${device.height}` :
+            '<span class="text-muted">Unknown</span>';
+
+        const temperature = device.temperature ?
+            `${device.temperature}°C` :
+            '<span class="text-muted">-</span>';
+
+        const responseTime = device.response_time_ms ?
+            `${Math.round(device.response_time_ms)}ms` :
+            '<span class="text-muted">-</span>';
+
+        const version = device.current_version || '<span class="text-muted">Unknown</span>';
+
+        const lastSeen = device.last_seen ?
+            new Date(device.last_seen).toLocaleString() :
+            '<span class="text-muted">Never</span>';
+
+        rows.push(`
+            <tr class="${device.online ? '' : 'table-warning'}">
+                <td>${statusBadge}</td>
+                <td>
+                    <strong>${device.host}</strong>
+                    ${device.screen_model ? `<br><small class="text-muted">${device.screen_model}</small>` : ''}
+                    ${device.last_error ? `<br><small class="text-danger"><i class="bi bi-exclamation-triangle"></i> ${device.last_error}</small>` : ''}
+                </td>
+                <td>${dimensions}</td>
+                <td>${temperature}</td>
+                <td>${responseTime}</td>
+                <td>${version}</td>
+                <td>${lastSeen}</td>
+                <td>
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="showDeviceDetails('${device.host}')">
+                        <i class="bi bi-info-circle"></i> Details
+                    </button>
+                </td>
+            </tr>
+        `);
+    }
+
+    tbody.innerHTML = rows.join('');
+}
+
+function showDeviceDetails(host) {
+    // Get device data
+    fetch('/device-status')
+        .then(response => response.json())
+        .then(data => {
+            const device = data.devices[host];
+            if (!device) {
+                showError('Device not found');
+                return;
+            }
+
+            const detailsHtml = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Basic Information</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Host:</strong></td><td>${device.host}</td></tr>
+                            <tr><td><strong>Status:</strong></td><td>${device.online ? '<span class="badge bg-success">Online</span>' : '<span class="badge bg-danger">Offline</span>'}</td></tr>
+                            <tr><td><strong>Dimensions:</strong></td><td>${device.width && device.height ? `${device.width}×${device.height}` : 'Unknown'}</td></tr>
+                            <tr><td><strong>Temperature:</strong></td><td>${device.temperature ? `${device.temperature}°C` : 'Unknown'}</td></tr>
+                            <tr><td><strong>Screen Model:</strong></td><td>${device.screen_model || 'Unknown'}</td></tr>
+                            <tr><td><strong>Response Time:</strong></td><td>${device.response_time_ms ? `${Math.round(device.response_time_ms)}ms` : 'Unknown'}</td></tr>
+                            <tr><td><strong>Last Seen:</strong></td><td>${device.last_seen ? new Date(device.last_seen).toLocaleString() : 'Never'}</td></tr>
+                            ${device.last_error ? `<tr><td><strong>Last Error:</strong></td><td class="text-danger">${device.last_error}</td></tr>` : ''}
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Firmware Information</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Version:</strong></td><td>${device.current_version || 'Unknown'}</td></tr>
+                            <tr><td><strong>Compile Date:</strong></td><td>${device.compile_date || 'Unknown'}</td></tr>
+                            <tr><td><strong>Compile Time:</strong></td><td>${device.compile_time || 'Unknown'}</td></tr>
+                            <tr><td><strong>Project:</strong></td><td>${device.project_name || 'Unknown'}</td></tr>
+                            <tr><td><strong>IDF Version:</strong></td><td>${device.idf_version || 'Unknown'}</td></tr>
+                            <tr><td><strong>Running Partition:</strong></td><td>${device.running_partition || 'Unknown'}</td></tr>
+                            <tr><td><strong>Next Partition:</strong></td><td>${device.next_partition || 'Unknown'}</td></tr>
+                            <tr><td><strong>SHA256:</strong></td><td>${device.app_elf_sha256 ? `<code class="small">${device.app_elf_sha256.substring(0, 16)}...</code>` : 'Unknown'}</td></tr>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('device-details-content').innerHTML = detailsHtml;
+            document.querySelector('#deviceDetailsModal .modal-title').textContent = `Device Details - ${device.host}`;
+
+            const modal = new bootstrap.Modal(document.getElementById('deviceDetailsModal'));
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Error loading device details:', error);
+            showError('Failed to load device details: ' + error.message);
+        });
+}
+
+function showError(message) {
+    // Create alert div
+    const alertDiv = document.createElement('div');
+    alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+    alertDiv.innerHTML = `
+        <i class="bi bi-exclamation-triangle"></i> ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    // Insert at top of content
+    const content = document.querySelector('.container.mt-4');
+    content.insertBefore(alertDiv, content.firstChild);
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}
