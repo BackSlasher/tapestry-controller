@@ -54,6 +54,24 @@ def get_controller() -> TapestryController:
     return controller
 
 
+def reload_device_config(devices_file: str = "devices.yaml"):
+    """Reload device configuration and update both controller and device monitor."""
+    global controller, device_monitor
+
+    # Reload controller configuration
+    from ..models import load_config
+    new_config = load_config(devices_file)
+    get_controller().config = new_config
+
+    # Update device monitor with new device list
+    if device_monitor:
+        device_hosts = [device.host for device in new_config.devices]
+        device_monitor.update_device_list(device_hosts)
+        logger.info(f"Updated device monitor with {len(device_hosts)} devices")
+
+    logger.info(f"Reloaded configuration from {devices_file}")
+
+
 # Screensaver manager instance
 screensaver_manager: ScreensaverManager | None = None
 
@@ -526,12 +544,8 @@ def apply_positioning_config():
         with open(devices_file, "w") as f:
             yaml.dump(updated_config, f, default_flow_style=False, indent=2)
 
-        # Reload controller with new configuration
-        global controller
-        from ..models import load_config
-
-        new_config = load_config(devices_file)
-        get_controller().config = new_config
+        # Reload controller and device monitor with new configuration
+        reload_device_config(devices_file)
 
         # Restore saved image if available
         restored_image = False
