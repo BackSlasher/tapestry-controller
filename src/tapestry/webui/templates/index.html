@@ -27,13 +27,19 @@
 
         <div class="card mt-4">
             <div class="card-header">
-                <h5 class="card-title mb-0">Device Information</h5>
+                <h5 class="card-title mb-0">
+                    <button class="btn btn-link p-0 text-decoration-none collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#device-info-collapse" aria-expanded="false" aria-controls="device-info-collapse">
+                        <i class="bi bi-chevron-right"></i> Device Information
+                    </button>
+                </h5>
             </div>
-            <div class="card-body">
-                <div id="device-info">
-                    <div class="d-flex justify-content-center">
-                        <div class="spinner-border" role="status">
-                            <span class="visually-hidden">Loading...</span>
+            <div class="collapse" id="device-info-collapse">
+                <div class="card-body">
+                    <div id="device-info">
+                        <div class="d-flex justify-content-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
                         </div>
                     </div>
                 </div>
