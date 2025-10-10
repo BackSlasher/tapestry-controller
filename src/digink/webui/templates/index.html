@@ -70,6 +70,30 @@
 
         <div class="card mt-4">
             <div class="card-header">
+                <h5 class="card-title mb-0">Screensaver</h5>
+            </div>
+            <div class="card-body">
+                <div id="screensaver-status" class="mb-3">
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border spinner-border-sm" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-success" id="start-screensaver" style="display: none;">
+                        <i class="bi bi-play-fill"></i> Start Screensaver
+                    </button>
+                    <button type="button" class="btn btn-danger" id="stop-screensaver" style="display: none;">
+                        <i class="bi bi-stop-fill"></i> Stop Screensaver
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
                 <h5 class="card-title mb-0">Actions</h5>
             </div>
             <div class="card-body">

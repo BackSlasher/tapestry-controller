@@ -2,6 +2,10 @@
 import os
 import io
 import argparse
+import time
+import random
+import glob
+import threading
 from flask import Flask, render_template, request, jsonify, send_file, flash, redirect, url_for
 from werkzeug.utils import secure_filename
 import PIL.Image
@@ -14,6 +18,15 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # Global controller instance
 controller = None
+
+# Screensaver state
+screensaver_state = {
+    'active': False,
+    'thread': None,
+    'stop_event': None,
+    'wallpapers_dir': 'wallpapers',
+    'interval': 30  # seconds
+}
 
 def allowed_file(filename):
     """Check if uploaded file has allowed extension."""
@@ -110,6 +123,115 @@ def clear_screens():
         
     except Exception as e:
         return jsonify({'error': f'Failed to clear screens: {str(e)}'}), 500
+
+def get_wallpaper_images():
+    """Get list of wallpaper images from wallpapers directory."""
+    patterns = ['*.png', '*.jpg', '*.jpeg', '*.gif', '*.bmp', '*.tiff', '*.webp']
+    images = []
+    for pattern in patterns:
+        images.extend(glob.glob(os.path.join(screensaver_state['wallpapers_dir'], pattern)))
+    return images
+
+def screensaver_worker():
+    """Background worker that cycles through wallpaper images."""
+    stop_event = screensaver_state['stop_event']
+    
+    while not stop_event.is_set():
+        try:
+            # Get list of wallpaper images
+            images = get_wallpaper_images()
+            if not images:
+                print("No wallpaper images found in", screensaver_state['wallpapers_dir'])
+                stop_event.wait(screensaver_state['interval'])
+                continue
+            
+            # Choose random image
+            image_path = random.choice(images)
+            print(f"Screensaver: displaying {os.path.basename(image_path)}")
+            
+            # Load and send image
+            image = PIL.Image.open(image_path)
+            controller.send_image(image)
+            
+        except Exception as e:
+            print(f"Screensaver error: {e}")
+        
+        # Wait for next cycle or stop signal
+        stop_event.wait(screensaver_state['interval'])
+
+@app.route('/screensaver/start', methods=['POST'])
+def start_screensaver():
+    """Start the screensaver."""
+    if not controller:
+        return jsonify({'error': 'Controller not initialized'}), 500
+    
+    if screensaver_state['active']:
+        return jsonify({'error': 'Screensaver already active'}), 400
+    
+    # Check if wallpapers directory exists and has images
+    if not os.path.exists(screensaver_state['wallpapers_dir']):
+        return jsonify({'error': f"Wallpapers directory '{screensaver_state['wallpapers_dir']}' not found"}), 400
+    
+    images = get_wallpaper_images()
+    if not images:
+        return jsonify({'error': f"No wallpaper images found in '{screensaver_state['wallpapers_dir']}'"}), 400
+    
+    try:
+        # Start screensaver thread
+        screensaver_state['stop_event'] = threading.Event()
+        screensaver_state['thread'] = threading.Thread(target=screensaver_worker)
+        screensaver_state['thread'].daemon = True
+        screensaver_state['active'] = True
+        screensaver_state['thread'].start()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Screensaver started with {len(images)} wallpapers',
+            'image_count': len(images)
+        })
+        
+    except Exception as e:
+        screensaver_state['active'] = False
+        return jsonify({'error': f'Failed to start screensaver: {str(e)}'}), 500
+
+@app.route('/screensaver/stop', methods=['POST'])
+def stop_screensaver():
+    """Stop the screensaver."""
+    if not screensaver_state['active']:
+        return jsonify({'error': 'Screensaver not active'}), 400
+    
+    try:
+        # Stop the screensaver thread
+        if screensaver_state['stop_event']:
+            screensaver_state['stop_event'].set()
+        
+        if screensaver_state['thread'] and screensaver_state['thread'].is_alive():
+            screensaver_state['thread'].join(timeout=2)
+        
+        screensaver_state['active'] = False
+        screensaver_state['thread'] = None
+        screensaver_state['stop_event'] = None
+        
+        return jsonify({
+            'success': True,
+            'message': 'Screensaver stopped'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to stop screensaver: {str(e)}'}), 500
+
+@app.route('/screensaver/status')
+def screensaver_status():
+    """Get screensaver status."""
+    images = get_wallpaper_images()
+    
+    return jsonify({
+        'active': screensaver_state['active'],
+        'interval': screensaver_state['interval'],
+        'wallpapers_dir': screensaver_state['wallpapers_dir'],
+        'image_count': len(images),
+        'has_images': len(images) > 0
+    })
 
 def create_app(devices_file='devices.yaml'):
     """Create Flask app with configuration."""

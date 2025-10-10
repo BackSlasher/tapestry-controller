@@ -1,8 +1,9 @@
 // Digink Web UI JavaScript
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Load device information on page load
+    // Load device information and screensaver status on page load
     loadDeviceInfo();
+    loadScreensaverStatus();
     
     // Image preview functionality
     const imageInput = document.getElementById('image-input');
@@ -59,6 +60,22 @@ document.addEventListener('DOMContentLoaded', function() {
     if (clearScreensBtn) {
         clearScreensBtn.addEventListener('click', function() {
             clearAllScreens();
+        });
+    }
+    
+    // Screensaver buttons
+    const startScreensaverBtn = document.getElementById('start-screensaver');
+    const stopScreensaverBtn = document.getElementById('stop-screensaver');
+    
+    if (startScreensaverBtn) {
+        startScreensaverBtn.addEventListener('click', function() {
+            startScreensaver();
+        });
+    }
+    
+    if (stopScreensaverBtn) {
+        stopScreensaverBtn.addEventListener('click', function() {
+            stopScreensaver();
         });
     }
 });
@@ -178,6 +195,129 @@ function showAlert(message, type = 'info') {
         const bsAlert = new bootstrap.Alert(alertDiv);
         bsAlert.close();
     }, 5000);
+}
+
+function loadScreensaverStatus() {
+    const statusDiv = document.getElementById('screensaver-status');
+    const startBtn = document.getElementById('start-screensaver');
+    const stopBtn = document.getElementById('stop-screensaver');
+    
+    if (!statusDiv) return;
+    
+    fetch('/screensaver/status')
+        .then(response => response.json())
+        .then(data => {
+            let statusHtml = '';
+            
+            if (data.active) {
+                statusHtml = `
+                    <div class="alert alert-success mb-0">
+                        <i class="bi bi-play-circle-fill"></i> 
+                        <strong>Active</strong><br>
+                        <small>Cycling through ${data.image_count} wallpapers every ${data.interval}s</small>
+                    </div>
+                `;
+                startBtn.style.display = 'none';
+                stopBtn.style.display = 'block';
+            } else {
+                if (data.has_images) {
+                    statusHtml = `
+                        <div class="alert alert-secondary mb-0">
+                            <i class="bi bi-pause-circle-fill"></i> 
+                            <strong>Inactive</strong><br>
+                            <small>${data.image_count} wallpapers available in ${data.wallpapers_dir}/</small>
+                        </div>
+                    `;
+                    startBtn.style.display = 'block';
+                } else {
+                    statusHtml = `
+                        <div class="alert alert-warning mb-0">
+                            <i class="bi bi-exclamation-triangle-fill"></i> 
+                            <strong>No wallpapers found</strong><br>
+                            <small>Add images to ${data.wallpapers_dir}/ directory</small>
+                        </div>
+                    `;
+                    startBtn.style.display = 'none';
+                }
+                stopBtn.style.display = 'none';
+            }
+            
+            statusDiv.innerHTML = statusHtml;
+        })
+        .catch(error => {
+            console.error('Error loading screensaver status:', error);
+            statusDiv.innerHTML = '<div class="alert alert-danger mb-0">Failed to load screensaver status</div>';
+        });
+}
+
+function startScreensaver() {
+    const startBtn = document.getElementById('start-screensaver');
+    if (!startBtn) return;
+    
+    // Show loading state
+    const originalText = startBtn.innerHTML;
+    startBtn.disabled = true;
+    startBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Starting...';
+    
+    fetch('/screensaver/start', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(data.message, 'success');
+            loadScreensaverStatus(); // Refresh status
+        } else {
+            showAlert(data.error || 'Failed to start screensaver', 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error starting screensaver:', error);
+        showAlert('Failed to start screensaver', 'danger');
+    })
+    .finally(() => {
+        // Restore button state
+        startBtn.disabled = false;
+        startBtn.innerHTML = originalText;
+    });
+}
+
+function stopScreensaver() {
+    const stopBtn = document.getElementById('stop-screensaver');
+    if (!stopBtn) return;
+    
+    // Show loading state
+    const originalText = stopBtn.innerHTML;
+    stopBtn.disabled = true;
+    stopBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Stopping...';
+    
+    fetch('/screensaver/stop', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(data.message, 'success');
+            loadScreensaverStatus(); // Refresh status
+        } else {
+            showAlert(data.error || 'Failed to stop screensaver', 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error stopping screensaver:', error);
+        showAlert('Failed to stop screensaver', 'danger');
+    })
+    .finally(() => {
+        // Restore button state
+        stopBtn.disabled = false;
+        stopBtn.innerHTML = originalText;
+    });
 }
 
 // Auto-dismiss alerts after 5 seconds
