@@ -286,33 +286,29 @@ async function drawCanvas(layoutData, imageBlob) {
         try {
             const img = new Image();
             img.onload = function() {
+                // Set canvas to exact image dimensions (no scaling needed since /current-image now returns processed source)
+                canvas.width = img.width;
+                canvas.height = img.height;
+
                 // Clear canvas and draw background
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-                // Calculate scaling to fit canvas while maintaining aspect ratio
-                const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
-                const scaledWidth = img.width * scale;
-                const scaledHeight = img.height * scale;
+                // Draw the image at 1:1 scale (exact match with processed source)
+                ctx.drawImage(img, 0, 0);
 
-                // Center the image
-                const x = (canvas.width - scaledWidth) / 2;
-                const y = (canvas.height - scaledHeight) / 2;
-
-                // Draw the image
-                ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
-
-                // Draw screen overlays on top
-                drawScreens(ctx, layoutData.screens, displayScale);
+                // Draw screen overlays on top using exact pixel coordinates
+                drawScreens(ctx, layoutData.screens, 1); // Scale factor is 1 since we're using exact dimensions
 
                 URL.revokeObjectURL(img.src);
             };
             img.src = URL.createObjectURL(imageBlob);
         } catch (error) {
             console.error('Error loading background image:', error);
+            // Fallback to original sizing logic if image load fails
             drawScreens(ctx, layoutData.screens, displayScale);
         }
     } else {
-        // No image or error - just draw screen borders
+        // No image or error - use original sizing logic for screen borders
         drawScreens(ctx, layoutData.screens, displayScale);
     }
 }

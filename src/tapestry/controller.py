@@ -11,6 +11,7 @@ from .models import Config, load_config
 class TapestryController:
     def __init__(self, config: Config):
         self.config = config
+        self._cached_processed_image = None
 
     def send_image(
         self, image: PIL.Image.Image, debug_output_dir: Optional[str] = None
@@ -36,6 +37,9 @@ class TapestryController:
         scaled_image, mm_to_px_ratio = self._scale_image_to_layout(
             image, bounding_rect_mm.dimensions
         )
+
+        # Cache the processed image
+        self._cached_processed_image = scaled_image.copy()
 
         if debug_output_dir:
             scaled_image.save(f"{debug_output_dir}/scaled_image.png")
@@ -105,6 +109,56 @@ class TapestryController:
         )
 
         return scaled_image, mm_to_px_ratio
+
+    def get_layout_info(self, image: PIL.Image.Image):
+        """Get the exact layout information used for device distribution.
+
+        Returns:
+            tuple: (scaled_image, mm_to_px_ratio, device_rectangles_px, bounding_rect_mm)
+        """
+        # Calculate device rectangles in mm (same as send_image)
+        device_rects_mm = {}
+        for device in self.config.devices:
+            device_rects_mm[device] = Rectangle(
+                start=Point(x=device.coordinates.x, y=device.coordinates.y),
+                dimensions=Dimensions(
+                    width=device.detected_dimensions.width,
+                    height=device.detected_dimensions.height,
+                ),
+            )
+
+        # Find the overall bounding rectangle in millimeters
+        bounding_rect_mm = Rectangle.bounding_rectangle(list(device_rects_mm.values()))
+
+        # Scale the input image to fit the bounding rectangle
+        scaled_image, mm_to_px_ratio = self._scale_image_to_layout(
+            image, bounding_rect_mm.dimensions
+        )
+
+        # Calculate device rectangles in pixels
+        device_rects_px = {}
+        for device, rect_mm in device_rects_mm.items():
+            device_rects_px[device] = Rectangle(
+                start=Point(
+                    x=int((rect_mm.start.x - bounding_rect_mm.start.x) * mm_to_px_ratio),
+                    y=int((rect_mm.start.y - bounding_rect_mm.start.y) * mm_to_px_ratio),
+                ),
+                dimensions=Dimensions(
+                    width=int(rect_mm.dimensions.width * mm_to_px_ratio),
+                    height=int(rect_mm.dimensions.height * mm_to_px_ratio),
+                ),
+            )
+
+        return scaled_image, mm_to_px_ratio, device_rects_px, bounding_rect_mm
+
+    def get_processed_source_image(self) -> Optional[PIL.Image.Image]:
+        """Get the latest processed source image from cache.
+
+        Returns the most recently processed image from send_image() calls.
+        Returns None if no image has been processed yet.
+        """
+        return self._cached_processed_image
+
 
     def _crop_device_section(
         self, scaled_image: PIL.Image.Image, device_rect_px: Rectangle

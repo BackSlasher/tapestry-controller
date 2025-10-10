@@ -34,6 +34,7 @@ from ..settings import (
 )
 from .device_monitor import DeviceMonitor, MonitorConfig
 from .flash_manager import FlashManager
+from .image_cache import ImageCache
 from .ota_manager import OTAManager
 from .process_manager import ProcessManager
 from .screensaver import ScreensaverManager
@@ -47,12 +48,14 @@ logger = logging.getLogger(__name__)
 
 # Global controller instance
 controller: TapestryController | None = None
+image_cache = ImageCache()
 
 
 def get_controller() -> TapestryController:
     if controller is None:
         raise Exception("No controller")
     return controller
+
 
 
 def reload_device_config(devices_file: str = "devices.yaml"):
@@ -666,69 +669,34 @@ def layout():
 def layout_data():
     """Get screen layout data as JSON for canvas operations."""
     try:
-        # Get the current image if available
+        # Get the current processed source image if available
         image_size = None
-        if last_image_state["refit_image"] is not None:
-            image_size = {
-                "width": last_image_state["refit_image"].size[0],
-                "height": last_image_state["refit_image"].size[1],
-            }
+        if controller:
+            processed_image = controller.get_processed_source_image()
+            if processed_image is not None:
+                image_size = {
+                    "width": processed_image.size[0],
+                    "height": processed_image.size[1],
+                }
 
-        # Get screen layout information using the new simplified coordinate system
+        # Get screen layout information using controller's layout calculation
         screens = []
-        if controller and controller.config and controller.config.devices:
-            # Create device rectangles in mm (same as new controller logic)
-            device_rectangles = {}
-            for device in controller.config.devices:
-                device_rectangles[device] = Rectangle(
-                    start=Point(x=device.coordinates.x, y=device.coordinates.y),
-                    dimensions=Dimensions(
-                        width=device.detected_dimensions.width,
-                        height=device.detected_dimensions.height,
-                    ),
-                )
+        if controller and controller.config and controller.config.devices and last_image_state["image"] is not None:
+            # Use the controller's exact layout calculation method
+            _, mm_to_px_ratio, device_rects_px, _ = controller.get_layout_info(last_image_state["image"])
 
-            # Calculate bounding rectangle and get scaling factor
-            bounding_rect_mm = Rectangle.bounding_rectangle(
-                list(device_rectangles.values())
-            )
-            mm_to_px_ratio = last_image_state.get("px_in_unit")
-
-            # If no image has been processed yet, we can't provide pixel coordinates
-            if mm_to_px_ratio is None:
-                # Return empty screens data when no image is loaded
-                screens = []
-            else:
-                # Convert each device from mm to pixels in scaled image coordinate system
-                for device, rect_mm in device_rectangles.items():
-                    # Same conversion as the new controller
-                    device_rect_px = Rectangle(
-                        start=Point(
-                            x=int(
-                                (rect_mm.start.x - bounding_rect_mm.start.x)
-                                * mm_to_px_ratio
-                            ),
-                            y=int(
-                                (rect_mm.start.y - bounding_rect_mm.start.y)
-                                * mm_to_px_ratio
-                            ),
-                        ),
-                        dimensions=Dimensions(
-                            width=int(rect_mm.dimensions.width * mm_to_px_ratio),
-                            height=int(rect_mm.dimensions.height * mm_to_px_ratio),
-                        ),
-                    )
-
-                    screen_info = {
-                        "hostname": device.host,
-                        "screen_type": device.screen_type,
-                        "x": device_rect_px.start.x,
-                        "y": device_rect_px.start.y,
-                        "width": device_rect_px.dimensions.width,
-                        "height": device_rect_px.dimensions.height,
-                        "rotation": device.rotation,
-                    }
-                    screens.append(screen_info)
+            # Convert device rectangles to screen info format
+            for device, device_rect_px in device_rects_px.items():
+                screen_info = {
+                    "hostname": device.host,
+                    "screen_type": device.screen_type,
+                    "x": device_rect_px.start.x,
+                    "y": device_rect_px.start.y,
+                    "width": device_rect_px.dimensions.width,
+                    "height": device_rect_px.dimensions.height,
+                    "rotation": device.rotation,
+                }
+                screens.append(screen_info)
 
         response_data = {
             "image_size": image_size,
@@ -760,29 +728,30 @@ def layout_data():
 
 @app.route("/current-image")
 def current_image():
-    """Serve the current image thumbnail for the canvas with caching support."""
+    """Serve the processed source image that gets distributed to devices."""
     try:
-        # Get or create thumbnail
-        thumbnail = get_or_create_thumbnail()
-        if thumbnail is None:
-            # No image available - return 204 No Content
+        if not controller:
+            # No controller available - return 204 No Content
             return "", 204
 
-        # Convert thumbnail to bytes
-        img_buffer = io.BytesIO()
-        thumbnail.save(img_buffer, format="PNG")
-        img_data = img_buffer.getvalue()
+        # Get the processed source image from controller
+        processed_image = controller.get_processed_source_image()
+        if processed_image is None:
+            # No processed image available - return 204 No Content
+            return "", 204
 
-        # Calculate MD5 hash of the image data
-        md5_hash = hashlib.md5(img_data).hexdigest()
-        etag = f'"{md5_hash}"'
+        # Get PNG data from cache (will auto-update if image changed)
+        img_data, etag = image_cache.get_png_data(processed_image)
+        if img_data is None or etag is None:
+            # Should not happen, but handle gracefully
+            return "", 204
 
         # Check if client has the same version
         client_etag = request.headers.get("If-None-Match")
         if client_etag == etag:
             return "", 304  # Not Modified
 
-        # Create new buffer for sending
+        # Create buffer for sending
         img_buffer = io.BytesIO(img_data)
         response = send_file(img_buffer, mimetype="image/png")
 
@@ -1403,6 +1372,7 @@ def create_app(devices_file="devices.yaml"):
             """Send image to displays and save for current-image endpoint."""
             controller.send_image(image)
             save_last_image(image)
+            # Don't update cache for screensaver images - they're temporary
 
         screensaver_manager = ScreensaverManager(send_and_save_image)
     if process_manager is None:
