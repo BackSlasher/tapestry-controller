@@ -296,6 +296,26 @@ async function drawCanvas(layoutData, imageBlob) {
                 // Draw the image at 1:1 scale (exact match with processed source)
                 ctx.drawImage(img, 0, 0);
 
+                // Create a mask for screen areas
+                const screenMask = document.createElement('canvas');
+                screenMask.width = canvas.width;
+                screenMask.height = canvas.height;
+                const maskCtx = screenMask.getContext('2d');
+
+                // Fill mask with white (faded areas)
+                maskCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                maskCtx.fillRect(0, 0, screenMask.width, screenMask.height);
+
+                // Cut out screen areas (keep original image visible)
+                maskCtx.globalCompositeOperation = 'destination-out';
+                layoutData.screens.forEach(screen => {
+                    maskCtx.fillStyle = 'rgba(0, 0, 0, 1)';
+                    maskCtx.fillRect(screen.x, screen.y, screen.width, screen.height);
+                });
+
+                // Apply the mask to the main canvas
+                ctx.drawImage(screenMask, 0, 0);
+
                 // Draw screen overlays on top using exact pixel coordinates
                 drawScreens(ctx, layoutData.screens, 1); // Scale factor is 1 since we're using exact dimensions
 
