@@ -118,7 +118,9 @@ class ScreensaverManager:
 
         if config["type"] == "gallery":
             wallpapers_dir = config.get("gallery", {}).get("wallpapers_dir") or ""
-            if not wallpapers_dir or not os.path.exists(os.path.expanduser(wallpapers_dir)):
+            if not wallpapers_dir or not os.path.exists(
+                os.path.expanduser(wallpapers_dir)
+            ):
                 raise ValueError(f"Invalid wallpapers directory: {wallpapers_dir}")
 
             images = self._get_gallery_images(wallpapers_dir)
