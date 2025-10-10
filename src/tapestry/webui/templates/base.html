@@ -36,17 +36,17 @@
                             <i class="bi bi-tools"></i> Maintenance
                         </a>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{{ url_for('flash_firmware') }}">
-                                <i class="bi bi-lightning-charge"></i> Flash Firmware
-                            </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('ota_page') }}">
-                                <i class="bi bi-download"></i> OTA Update
+                            <li><a class="dropdown-item" href="{{ url_for('device_monitoring') }}">
+                                <i class="bi bi-activity"></i> Device Monitoring
                             </a></li>
                             <li><a class="dropdown-item" href="{{ url_for('positioning') }}">
                                 <i class="bi bi-qr-code"></i> QR Positioning
                             </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('device_monitoring') }}">
-                                <i class="bi bi-activity"></i> Device Monitoring
+                            <li><a class="dropdown-item" href="{{ url_for('ota_page') }}">
+                                <i class="bi bi-download"></i> OTA Update
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('flash_firmware') }}">
+                                <i class="bi bi-lightning-charge"></i> Flash Firmware
                             </a></li>
                         </ul>
                     </li>
