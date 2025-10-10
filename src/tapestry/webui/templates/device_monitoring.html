@@ -78,13 +78,14 @@
                                 <th>Temperature</th>
                                 <th>Response Time</th>
                                 <th>Version</th>
+                                <th>Firmware State</th>
                                 <th>Last Seen</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="device-table-body">
                             <tr>
-                                <td colspan="8" class="text-center text-muted">
+                                <td colspan="9" class="text-center text-muted">
                                     <div class="spinner-border spinner-border-sm me-2" role="status"></div>
                                     Loading device status...
                                 </td>
@@ -179,11 +180,36 @@ function updateLastUpdated() {
     document.getElementById('last-updated').textContent = now.toLocaleTimeString();
 }
 
+function getFirmwareStateBadge(device) {
+    if (!device.online) {
+        return '<span class="text-muted">-</span>';
+    }
+
+    if (!device.ota_state) {
+        return '<span class="text-muted">Unknown</span>';
+    }
+
+    if (device.ota_state === 'validated') {
+        return '<span class="badge bg-success"><i class="bi bi-check-circle"></i> Validated</span>';
+    }
+
+    if (device.ota_state === 'pending_verification') {
+        if (device.rollback_enabled) {
+            return '<span class="badge bg-warning"><i class="bi bi-clock"></i> Pending Verification</span><br><small class="text-warning"><i class="bi bi-exclamation-triangle"></i> Rollback enabled</small>';
+        } else {
+            return '<span class="badge bg-info"><i class="bi bi-clock"></i> Pending Verification</span>';
+        }
+    }
+
+    // Other states
+    return `<span class="badge bg-secondary">${device.ota_state}</span>`;
+}
+
 function updateDeviceTable(data) {
     const tbody = document.getElementById('device-table-body');
 
     if (!data.devices || Object.keys(data.devices).length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No devices configured</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No devices configured</td></tr>';
         return;
     }
 
@@ -207,6 +233,8 @@ function updateDeviceTable(data) {
 
         const version = device.current_version || '<span class="text-muted">Unknown</span>';
 
+        const firmwareState = getFirmwareStateBadge(device);
+
         const lastSeen = device.last_seen ?
             new Date(device.last_seen).toLocaleString() :
             '<span class="text-muted">Never</span>';
@@ -223,6 +251,7 @@ function updateDeviceTable(data) {
                 <td>${temperature}</td>
                 <td>${responseTime}</td>
                 <td>${version}</td>
+                <td>${firmwareState}</td>
                 <td>${lastSeen}</td>
                 <td>
                     <button type="button" class="btn btn-outline-primary btn-sm" onclick="showDeviceDetails('${device.host}')">
@@ -272,6 +301,8 @@ function showDeviceDetails(host) {
                             <tr><td><strong>IDF Version:</strong></td><td>${device.idf_version || 'Unknown'}</td></tr>
                             <tr><td><strong>Running Partition:</strong></td><td>${device.running_partition || 'Unknown'}</td></tr>
                             <tr><td><strong>Next Partition:</strong></td><td>${device.next_partition || 'Unknown'}</td></tr>
+                            <tr><td><strong>OTA State:</strong></td><td>${device.ota_state ? `<span class="badge ${device.ota_state === 'validated' ? 'bg-success' : device.ota_state === 'pending_verification' ? 'bg-warning' : 'bg-secondary'}">${device.ota_state}</span>` : 'Unknown'}</td></tr>
+                            <tr><td><strong>Rollback Enabled:</strong></td><td>${device.rollback_enabled !== null ? (device.rollback_enabled ? '<span class="badge bg-warning">Yes</span>' : '<span class="badge bg-success">No</span>') : 'Unknown'}</td></tr>
                             <tr><td><strong>SHA256:</strong></td><td>${device.app_elf_sha256 ? `<code class="small">${device.app_elf_sha256.substring(0, 16)}...</code>` : 'Unknown'}</td></tr>
                         </table>
                     </div>

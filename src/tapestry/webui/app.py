@@ -991,6 +991,8 @@ def device_status():
             "running_partition": status.running_partition,
             "next_partition": status.next_partition,
             "app_elf_sha256": status.app_elf_sha256,
+            "ota_state": status.ota_state,
+            "rollback_enabled": status.rollback_enabled,
             "response_time_ms": status.response_time_ms,
         }
 

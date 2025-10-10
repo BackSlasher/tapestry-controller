@@ -35,6 +35,8 @@ class DeviceStatus:
     running_partition: Optional[str] = None
     next_partition: Optional[str] = None
     app_elf_sha256: Optional[str] = None
+    ota_state: Optional[str] = None
+    rollback_enabled: Optional[bool] = None
 
     # Response times
     response_time_ms: Optional[float] = None
@@ -231,6 +233,8 @@ class DeviceMonitor:
                 status.running_partition = ota_info.get("running_partition")
                 status.next_partition = ota_info.get("next_partition")
                 status.app_elf_sha256 = ota_info.get("app_elf_sha256")
+                status.ota_state = ota_info.get("ota_state")
+                status.rollback_enabled = ota_info.get("rollback_enabled")
 
         except Exception as e:
             # Mark device as offline
