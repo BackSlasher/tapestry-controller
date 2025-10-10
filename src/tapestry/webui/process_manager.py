@@ -4,6 +4,7 @@ import logging
 import queue
 import subprocess
 import threading
+import time
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -13,7 +14,13 @@ logger = logging.getLogger(__name__)
 class StreamingProcess:
     """Represents a running process with streaming output capability."""
 
-    def __init__(self, process_id: str, process: subprocess.Popen, operation_type: str, description: str):
+    def __init__(
+        self,
+        process_id: str,
+        process: subprocess.Popen,
+        operation_type: str,
+        description: str,
+    ):
         """Initialize a streaming process.
 
         Args:
@@ -50,7 +57,7 @@ class ProcessManager:
         cwd: str,
         operation_type: str,
         description: str,
-        timeout: Optional[int] = None
+        timeout: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Start a new streaming process.
 
@@ -79,13 +86,14 @@ class ProcessManager:
             )
 
             # Create streaming process tracking object
-            streaming_process = StreamingProcess(process_id, process, operation_type, description)
+            streaming_process = StreamingProcess(
+                process_id, process, operation_type, description
+            )
             self.active_processes[process_id] = streaming_process
 
             # Start output streaming thread
             output_thread = threading.Thread(
-                target=self._stream_subprocess_output,
-                args=(streaming_process,)
+                target=self._stream_subprocess_output, args=(streaming_process,)
             )
             output_thread.daemon = True
             output_thread.start()
@@ -112,7 +120,7 @@ class ProcessManager:
 
         try:
             while True:
-                output = streaming_process.process.stdout.readline()
+                output = streaming_process.process.stdout.readline()  # ty: ignore
                 if output == "" and streaming_process.process.poll() is not None:
                     break
                 if output:
@@ -137,7 +145,9 @@ class ProcessManager:
 
         except Exception as e:
             streaming_process.output_queue.put(f"Error streaming output: {e}")
-            logger.error(f"Error streaming output for process {streaming_process.process_id}: {e}")
+            logger.error(
+                f"Error streaming output for process {streaming_process.process_id}: {e}"
+            )
 
     def get_process(self, process_id: str) -> Optional[StreamingProcess]:
         """Get a streaming process by ID.
@@ -179,15 +189,22 @@ class ProcessManager:
             streaming_process.return_code = process.returncode
             streaming_process.output_queue.put("Process terminated by user")
 
-            logger.info(f"{streaming_process.operation_type.title()} process {process_id} stopped")
-            return {"success": True, "message": f"{streaming_process.operation_type.title()} process stopped"}
+            logger.info(
+                f"{streaming_process.operation_type.title()} process {process_id} stopped"
+            )
+            return {
+                "success": True,
+                "message": f"{streaming_process.operation_type.title()} process stopped",
+            }
 
         except Exception as e:
             error_msg = f"Failed to stop process: {str(e)}"
             logger.error(f"Error stopping process {process_id}: {e}")
             return {"success": False, "error": error_msg}
 
-    def get_active_processes(self, operation_type: Optional[str] = None) -> List[StreamingProcess]:
+    def get_active_processes(
+        self, operation_type: Optional[str] = None
+    ) -> List[StreamingProcess]:
         """Get all active processes, optionally filtered by operation type.
 
         Args:
@@ -259,7 +276,11 @@ class ProcessManager:
             "description": streaming_process.description,
             "finished": streaming_process.finished,
             "return_code": streaming_process.return_code,
-            "pid": streaming_process.process.pid if streaming_process.process.poll() is None else None,
+            "pid": (
+                streaming_process.process.pid
+                if streaming_process.process.poll() is None
+                else None
+            ),
             "duration": duration,
             "start_time": streaming_process.start_time,
             "end_time": streaming_process.end_time,

@@ -4,8 +4,6 @@ import logging
 import os
 import queue
 import subprocess
-import threading
-import uuid
 from typing import Any, Dict, Optional
 
 from .process_manager import ProcessManager
@@ -31,7 +29,11 @@ class FlashProcess:
 class FlashManager:
     """Manages firmware flashing for Tapestry devices."""
 
-    def __init__(self, node_directory: Optional[str] = None, process_manager: Optional[ProcessManager] = None):
+    def __init__(
+        self,
+        node_directory: Optional[str] = None,
+        process_manager: Optional[ProcessManager] = None,
+    ):
         """Initialize Flash manager.
 
         Args:
@@ -102,7 +104,9 @@ class FlashManager:
                     "git_stderr": git_result.stderr,
                 }
 
-            logger.info(f"Git repository updated successfully for flash: {git_result.stdout.strip()}")
+            logger.info(
+                f"Git repository updated successfully for flash: {git_result.stdout.strip()}"
+            )
             return {
                 "success": True,
                 "git_stdout": git_result.stdout,
@@ -110,7 +114,9 @@ class FlashManager:
             }
 
         except subprocess.TimeoutExpired:
-            error_msg = "Git pull timeout - repository update took longer than 60 seconds"
+            error_msg = (
+                "Git pull timeout - repository update took longer than 60 seconds"
+            )
             logger.error(error_msg)
             return {"success": False, "error": error_msg}
         except Exception as e:
@@ -145,10 +151,7 @@ class FlashManager:
         description = f"Flash {screen_type} firmware"
 
         result = self.process_manager.start_process(
-            cmd=cmd,
-            cwd=self.node_dir,
-            operation_type="flash",
-            description=description
+            cmd=cmd, cwd=self.node_dir, operation_type="flash", description=description
         )
 
         # Add git information to the result if successful
@@ -162,7 +165,7 @@ class FlashManager:
         """Stream subprocess output line by line."""
         try:
             while True:
-                output = flash_process.process.stdout.readline()
+                output = flash_process.process.stdout.readline()  # ty: ignore
                 if output == "" and flash_process.process.poll() is not None:
                     break
                 if output:
@@ -176,11 +179,15 @@ class FlashManager:
             flash_process.output_queue.put(
                 f"Process finished with exit code: {return_code}"
             )
-            logger.info(f"Flash process {flash_process.process_id} finished with exit code {return_code}")
+            logger.info(
+                f"Flash process {flash_process.process_id} finished with exit code {return_code}"
+            )
 
         except Exception as e:
             flash_process.output_queue.put(f"Error streaming output: {e}")
-            logger.error(f"Error streaming output for process {flash_process.process_id}: {e}")
+            logger.error(
+                f"Error streaming output for process {flash_process.process_id}: {e}"
+            )
 
     def get_process_output(self, process_id: str):
         """Get the flash process for output streaming.
@@ -207,7 +214,8 @@ class FlashManager:
     def cleanup_finished_processes(self):
         """Clean up finished processes to prevent memory leaks."""
         finished_processes = [
-            pid for pid, fp in self.active_processes.items()
+            pid
+            for pid, fp in self.active_processes.items()
             if fp.finished and fp.output_queue.empty()
         ]
 
@@ -237,5 +245,9 @@ class FlashManager:
             "screen_type": flash_process.screen_type,
             "finished": flash_process.finished,
             "return_code": flash_process.return_code,
-            "pid": flash_process.process.pid if flash_process.process.poll() is None else None,
+            "pid": (
+                flash_process.process.pid
+                if flash_process.process.poll() is None
+                else None
+            ),
         }

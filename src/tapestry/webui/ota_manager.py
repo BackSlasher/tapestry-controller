@@ -19,7 +19,11 @@ DEFAULT_NODE_DIRECTORY = os.path.expanduser("~/node/")
 class OTAManager:
     """Manages OTA firmware building and uploading for Tapestry devices."""
 
-    def __init__(self, node_directory: Optional[str] = None, process_manager: Optional[ProcessManager] = None):
+    def __init__(
+        self,
+        node_directory: Optional[str] = None,
+        process_manager: Optional[ProcessManager] = None,
+    ):
         """Initialize OTA manager.
 
         Args:
@@ -99,7 +103,9 @@ class OTAManager:
                     "git_stderr": git_result.stderr,
                 }
 
-            logger.info(f"Git repository updated successfully: {git_result.stdout.strip()}")
+            logger.info(
+                f"Git repository updated successfully: {git_result.stdout.strip()}"
+            )
 
             # Make sure build script is executable
             os.chmod(self.build_script, 0o755)
@@ -152,9 +158,13 @@ class OTAManager:
 
         except subprocess.TimeoutExpired as e:
             if "git" in str(e.cmd):
-                error_msg = "Git pull timeout - repository update took longer than 60 seconds"
+                error_msg = (
+                    "Git pull timeout - repository update took longer than 60 seconds"
+                )
             else:
-                error_msg = f"Build timeout - firmware build took longer than {timeout} seconds"
+                error_msg = (
+                    f"Build timeout - firmware build took longer than {timeout} seconds"
+                )
             logger.error(error_msg)
             return {"success": False, "error": error_msg}
         except Exception as e:
@@ -189,7 +199,7 @@ class OTAManager:
             cmd=cmd,
             cwd=self.node_dir,
             operation_type="ota_build",
-            description=description
+            description=description,
         )
 
         return result
@@ -220,7 +230,9 @@ class OTAManager:
                     "git_stderr": git_result.stderr,
                 }
 
-            logger.info(f"Git repository updated successfully for OTA: {git_result.stdout.strip()}")
+            logger.info(
+                f"Git repository updated successfully for OTA: {git_result.stdout.strip()}"
+            )
             return {
                 "success": True,
                 "git_stdout": git_result.stdout,
@@ -228,7 +240,9 @@ class OTAManager:
             }
 
         except subprocess.TimeoutExpired:
-            error_msg = "Git pull timeout - repository update took longer than 60 seconds"
+            error_msg = (
+                "Git pull timeout - repository update took longer than 60 seconds"
+            )
             logger.error(error_msg)
             return {"success": False, "error": error_msg}
         except Exception as e:

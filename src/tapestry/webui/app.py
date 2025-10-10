@@ -6,7 +6,6 @@ import io
 import logging
 import os
 import queue
-import subprocess
 import threading
 
 import PIL.Image
@@ -62,6 +61,7 @@ def reload_device_config(devices_file: str = "devices.yaml"):
 
     # Reload controller configuration
     from ..models import load_config
+
     new_config = load_config(devices_file)
     get_controller().config = new_config
 
@@ -996,12 +996,14 @@ def device_status():
             "response_time_ms": status.response_time_ms,
         }
 
-    return jsonify({
-        "devices": status_data,
-        "online_count": len(device_monitor.get_online_devices()),
-        "offline_count": len(device_monitor.get_offline_devices()),
-        "total_count": len(statuses),
-    })
+    return jsonify(
+        {
+            "devices": status_data,
+            "online_count": len(device_monitor.get_online_devices()),
+            "offline_count": len(device_monitor.get_offline_devices()),
+            "total_count": len(statuses),
+        }
+    )
 
 
 @app.route("/clear", methods=["POST"])
@@ -1313,8 +1315,6 @@ def update_screensaver_config():
         return jsonify({"error": f"Invalid configuration value: {str(e)}"}), 400
     except Exception as e:
         return jsonify({"error": f"Failed to update configuration: {str(e)}"}), 500
-
-
 
 
 @app.route("/flash/start", methods=["POST"])

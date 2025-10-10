@@ -3,7 +3,7 @@
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class DeviceStatus:
     """Status information for a single device."""
+
     host: str
     online: bool = False
     last_seen: Optional[datetime] = None
@@ -45,6 +46,7 @@ class DeviceStatus:
 @dataclass
 class MonitorConfig:
     """Configuration for device monitoring."""
+
     poll_interval: int = 30  # seconds
     request_timeout: int = 5  # seconds
     enabled: bool = True
@@ -53,7 +55,7 @@ class MonitorConfig:
 class DeviceMonitor:
     """Monitors device status and stores information in memory."""
 
-    def __init__(self, config: MonitorConfig = None):
+    def __init__(self, config: Optional[MonitorConfig] = None):
         """Initialize device monitor.
 
         Args:
@@ -89,14 +91,13 @@ class DeviceMonitor:
 
         # Start monitoring thread
         self._stop_event = threading.Event()
-        self._monitor_thread = threading.Thread(
-            target=self._monitor_loop,
-            daemon=True
-        )
+        self._monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self._running = True
         self._monitor_thread.start()
 
-        logger.info(f"Started monitoring {len(device_hosts)} devices (interval: {self.config.poll_interval}s)")
+        logger.info(
+            f"Started monitoring {len(device_hosts)} devices (interval: {self.config.poll_interval}s)"
+        )
 
     def stop_monitoring(self) -> None:
         """Stop device monitoring."""
@@ -145,7 +146,9 @@ class DeviceMonitor:
         Returns:
             List of DeviceStatus objects for offline devices
         """
-        return [status for status in self._device_statuses.values() if not status.online]
+        return [
+            status for status in self._device_statuses.values() if not status.online
+        ]
 
     def update_device_list(self, device_hosts: List[str]) -> None:
         """Update the list of devices to monitor.
@@ -162,8 +165,7 @@ class DeviceMonitor:
 
         # Remove devices no longer in the list
         hosts_to_remove = [
-            host for host in self._device_statuses.keys()
-            if host not in device_hosts
+            host for host in self._device_statuses.keys() if host not in device_hosts
         ]
         for host in hosts_to_remove:
             del self._device_statuses[host]
@@ -254,8 +256,7 @@ class DeviceMonitor:
         """
         try:
             response = requests.get(
-                f"http://{host}/",
-                timeout=self.config.request_timeout
+                f"http://{host}/", timeout=self.config.request_timeout
             )
             response.raise_for_status()
             return response.json()
@@ -273,8 +274,7 @@ class DeviceMonitor:
         """
         try:
             response = requests.get(
-                f"http://{host}/ota",
-                timeout=self.config.request_timeout
+                f"http://{host}/ota", timeout=self.config.request_timeout
             )
             response.raise_for_status()
             return response.json()
