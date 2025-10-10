@@ -1179,7 +1179,7 @@ def screensaver_status():
 @app.route("/screensaver/wallpaper-dirs")
 def get_wallpaper_directories():
     """Get available wallpaper directories."""
-    return jsonify({"directories": ["wallpapers"]})
+    return jsonify({"directories": ["~/wallpapers"]})
 
 
 @app.route("/screensaver/config/reddit")

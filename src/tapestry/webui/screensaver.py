@@ -117,8 +117,8 @@ class ScreensaverManager:
             raise ValueError("Screensaver type is required")
 
         if config["type"] == "gallery":
-            wallpapers_dir = config.get("gallery", {}).get("wallpapers_dir")
-            if not wallpapers_dir or not os.path.exists(wallpapers_dir):
+            wallpapers_dir = config.get("gallery", {}).get("wallpapers_dir") or ""
+            if not wallpapers_dir or not os.path.exists(os.path.expanduser(wallpapers_dir)):
                 raise ValueError(f"Invalid wallpapers directory: {wallpapers_dir}")
 
             images = self._get_gallery_images(wallpapers_dir)
@@ -182,6 +182,7 @@ class ScreensaverManager:
 
     def _get_gallery_images(self, wallpapers_dir: str) -> list[str]:
         """Get list of image files from directory."""
+        wallpapers_dir = os.path.expanduser(wallpapers_dir)
         patterns = ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tiff", "*.webp"]
         images = []
         for pattern in patterns:
