@@ -428,6 +428,7 @@ def analyze_positioning_photo():
             detect_qr_positions,
             generate_updated_config,
         )
+        from ..perspective_correction import correct_perspective_distortion
 
         # Open image and fix EXIF orientation
         image = PIL.Image.open(file.stream)
@@ -458,6 +459,16 @@ def analyze_positioning_photo():
                 ),
                 400,
             )
+
+        # Apply perspective correction using rectangular screen constraints
+        corrected_position_data = correct_perspective_distortion(position_data)
+
+        # Use corrected data for position calculations
+        position_data = [corrected.original._replace(
+            center=corrected.corrected_center,
+            corners=corrected.corrected_corners,
+            screen_corners=corrected.corrected_screen_corners
+        ) for corrected in corrected_position_data]
 
         # Calculate physical positions
         physical_positions = calculate_physical_positions(
