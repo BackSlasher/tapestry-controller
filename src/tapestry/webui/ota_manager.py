@@ -13,27 +13,19 @@ from .process_manager import ProcessManager
 logger = logging.getLogger(__name__)
 
 # Default node directory path
-DEFAULT_NODE_DIRECTORY = os.path.expanduser("~/node/")
+NODE_DIRECTORY = os.path.expanduser("~/node/")
 
 
 class OTAManager:
     """Manages OTA firmware building and uploading for Tapestry devices."""
 
-    def __init__(
-        self,
-        node_directory: Optional[str] = None,
-        process_manager: Optional[ProcessManager] = None,
-    ):
+    def __init__(self, process_manager: Optional[ProcessManager] = None):
         """Initialize OTA manager.
 
         Args:
-            node_directory: Path to the node directory. If None, auto-detected.
             process_manager: Shared process manager for streaming operations. If None, creates its own.
         """
-        if node_directory is None:
-            node_directory = DEFAULT_NODE_DIRECTORY
-
-        self.node_dir = node_directory
+        self.node_dir = NODE_DIRECTORY
         self.build_script = os.path.join(self.node_dir, "build-ota.sh")
         self.firmware_path = os.path.join(self.node_dir, "build/tapestry-node.bin")
         self.process_manager = process_manager or ProcessManager()

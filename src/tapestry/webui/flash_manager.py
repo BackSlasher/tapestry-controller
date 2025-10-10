@@ -11,7 +11,7 @@ from .process_manager import ProcessManager
 logger = logging.getLogger(__name__)
 
 # Default node directory path
-DEFAULT_NODE_DIRECTORY = os.path.expanduser("~/node/")
+NODE_DIRECTORY = os.path.expanduser("~/node/")
 
 
 class FlashProcess:
@@ -29,21 +29,13 @@ class FlashProcess:
 class FlashManager:
     """Manages firmware flashing for Tapestry devices."""
 
-    def __init__(
-        self,
-        node_directory: Optional[str] = None,
-        process_manager: Optional[ProcessManager] = None,
-    ):
+    def __init__(self, process_manager: Optional[ProcessManager] = None):
         """Initialize Flash manager.
 
         Args:
-            node_directory: Path to the node directory. If None, auto-detected.
             process_manager: Shared process manager for streaming operations. If None, creates its own.
         """
-        if node_directory is None:
-            node_directory = DEFAULT_NODE_DIRECTORY
-
-        self.node_dir = node_directory
+        self.node_dir = NODE_DIRECTORY
         self.setup_script = os.path.join(self.node_dir, "setup.sh")
         self.process_manager = process_manager or ProcessManager()
         # Keep the old active_processes for backward compatibility in existing methods
