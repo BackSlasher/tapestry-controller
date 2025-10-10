@@ -30,7 +30,9 @@ class ImageCache:
         """Get the cached PIL image."""
         return self._cached_image
 
-    def get_png_data(self, image: PIL.Image.Image) -> Tuple[Optional[bytes], Optional[str]]:
+    def get_png_data(
+        self, image: PIL.Image.Image
+    ) -> Tuple[Optional[bytes], Optional[str]]:
         """Get PNG bytes and ETag for the given image.
 
         If the image matches the cached one, returns cached data.
@@ -50,7 +52,9 @@ class ImageCache:
 
         return self._cached_png_bytes, self._cached_etag
 
-    def _images_equal(self, img1: Optional[PIL.Image.Image], img2: Optional[PIL.Image.Image]) -> bool:
+    def _images_equal(
+        self, img1: Optional[PIL.Image.Image], img2: Optional[PIL.Image.Image]
+    ) -> bool:
         """Check if two images are equal."""
         if img1 is None or img2 is None:
             return img1 is img2

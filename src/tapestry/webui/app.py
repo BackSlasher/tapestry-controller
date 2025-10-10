@@ -58,7 +58,6 @@ def get_controller() -> TapestryController:
     return controller
 
 
-
 def reload_device_config(devices_file: str = "devices.yaml"):
     """Reload device configuration and update both controller and device monitor."""
     global controller, device_monitor
@@ -424,12 +423,12 @@ def analyze_positioning_photo():
         )
 
     try:
+        from ..perspective_correction import correct_perspective_distortion
         from ..position_detection import (
             calculate_physical_positions,
             detect_qr_positions,
             generate_updated_config,
         )
-        from ..perspective_correction import correct_perspective_distortion
 
         # Open image and fix EXIF orientation
         image = PIL.Image.open(file.stream)
@@ -465,11 +464,14 @@ def analyze_positioning_photo():
         corrected_position_data = correct_perspective_distortion(position_data)
 
         # Use corrected data for position calculations
-        position_data = [corrected.original._replace(
-            center=corrected.corrected_center,
-            corners=corrected.corrected_corners,
-            screen_corners=corrected.corrected_screen_corners
-        ) for corrected in corrected_position_data]
+        position_data = [
+            corrected.original._replace(
+                center=corrected.corrected_center,
+                corners=corrected.corrected_corners,
+                screen_corners=corrected.corrected_screen_corners,
+            )
+            for corrected in corrected_position_data
+        ]
 
         # Calculate physical positions
         physical_positions = calculate_physical_positions(
@@ -693,9 +695,16 @@ def layout_data():
 
         # Get screen layout information using controller's layout calculation
         screens = []
-        if controller and controller.config and controller.config.devices and last_image_state["image"] is not None:
+        if (
+            controller
+            and controller.config
+            and controller.config.devices
+            and last_image_state["image"] is not None
+        ):
             # Use the controller's exact layout calculation method
-            _, mm_to_px_ratio, device_rects_px, _ = controller.get_layout_info(last_image_state["image"])
+            _, mm_to_px_ratio, device_rects_px, _ = controller.get_layout_info(
+                last_image_state["image"]
+            )
 
             # Convert device rectangles to screen info format
             for device, device_rect_px in device_rects_px.items():

@@ -140,8 +140,12 @@ class TapestryController:
         for device, rect_mm in device_rects_mm.items():
             device_rects_px[device] = Rectangle(
                 start=Point(
-                    x=int((rect_mm.start.x - bounding_rect_mm.start.x) * mm_to_px_ratio),
-                    y=int((rect_mm.start.y - bounding_rect_mm.start.y) * mm_to_px_ratio),
+                    x=int(
+                        (rect_mm.start.x - bounding_rect_mm.start.x) * mm_to_px_ratio
+                    ),
+                    y=int(
+                        (rect_mm.start.y - bounding_rect_mm.start.y) * mm_to_px_ratio
+                    ),
                 ),
                 dimensions=Dimensions(
                     width=int(rect_mm.dimensions.width * mm_to_px_ratio),
@@ -158,7 +162,6 @@ class TapestryController:
         Returns None if no image has been processed yet.
         """
         return self._cached_processed_image
-
 
     def _crop_device_section(
         self, scaled_image: PIL.Image.Image, device_rect_px: Rectangle

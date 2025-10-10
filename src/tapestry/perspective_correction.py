@@ -5,15 +5,17 @@ Uses the known rectangular nature of screens to detect and correct perspective d
 """
 
 import math
-import numpy as np
-from typing import List, Tuple, NamedTuple
+from typing import List, NamedTuple, Tuple
+
 import cv2
+import numpy as np
 
 from .position_detection import QRPositionData
 
 
 class CorrectedQRData(NamedTuple):
     """QR position data with perspective correction applied."""
+
     original: QRPositionData
     corrected_center: Tuple[float, float]
     corrected_corners: List[Tuple[float, float]]
@@ -62,7 +64,10 @@ def calculate_rectangularity_score(corners: List[Tuple[float, float]]) -> float:
     # - All angles should be 90 degrees (π/2 radians)
 
     # Score based on side length consistency
-    opposite_pairs = [(side_lengths[0], side_lengths[2]), (side_lengths[1], side_lengths[3])]
+    opposite_pairs = [
+        (side_lengths[0], side_lengths[2]),
+        (side_lengths[1], side_lengths[3]),
+    ]
     side_score = 1.0
     for pair in opposite_pairs:
         ratio = min(pair) / max(pair) if max(pair) > 0 else 0
@@ -81,10 +86,9 @@ def calculate_rectangularity_score(corners: List[Tuple[float, float]]) -> float:
     return rectangularity
 
 
-def calculate_ideal_rectangle(center: Tuple[float, float],
-                            width: float,
-                            height: float,
-                            rotation: float = 0.0) -> List[Tuple[float, float]]:
+def calculate_ideal_rectangle(
+    center: Tuple[float, float], width: float, height: float, rotation: float = 0.0
+) -> List[Tuple[float, float]]:
     """
     Calculate the corners of an ideal rectangle given center, dimensions, and rotation.
 
@@ -106,9 +110,9 @@ def calculate_ideal_rectangle(center: Tuple[float, float],
     # Corner offsets from center (before rotation)
     corners_offset = [
         (-hw, -hh),  # top-left
-        (hw, -hh),   # top-right
-        (hw, hh),    # bottom-right
-        (-hw, hh)    # bottom-left
+        (hw, -hh),  # top-right
+        (hw, hh),  # bottom-right
+        (-hw, hh),  # bottom-left
     ]
 
     # Apply rotation and translate to center
@@ -129,8 +133,9 @@ def calculate_ideal_rectangle(center: Tuple[float, float],
     return corners
 
 
-def estimate_best_rectangle_for_screen(qr_data: QRPositionData,
-                                     known_aspect_ratio: float = 1.45) -> Tuple[float, float, float]:
+def estimate_best_rectangle_for_screen(
+    qr_data: QRPositionData, known_aspect_ratio: float = 1.45
+) -> Tuple[float, float, float]:
     """
     Estimate the best rectangle dimensions and rotation for a detected screen.
 
@@ -141,10 +146,14 @@ def estimate_best_rectangle_for_screen(qr_data: QRPositionData,
     Returns:
         (width, height, rotation) of the best-fit rectangle
     """
-    if not hasattr(qr_data, 'screen_corners') or not qr_data.screen_corners:
+    if not hasattr(qr_data, "screen_corners") or not qr_data.screen_corners:
         # Fallback: use QR data to estimate
-        qr_size = (qr_data.bounding_box[2] - qr_data.bounding_box[0] +
-                  qr_data.bounding_box[3] - qr_data.bounding_box[1]) / 2
+        qr_size = (
+            qr_data.bounding_box[2]
+            - qr_data.bounding_box[0]
+            + qr_data.bounding_box[3]
+            - qr_data.bounding_box[1]
+        ) / 2
 
         # QR is ~75% of screen height, so screen height = qr_size / 0.75
         estimated_height = qr_size / 0.75
@@ -183,8 +192,9 @@ def estimate_best_rectangle_for_screen(qr_data: QRPositionData,
     return width_estimate, height_estimate, rotation
 
 
-def correct_perspective_distortion(qr_data_list: List[QRPositionData],
-                                 known_aspect_ratio: float = 1.45) -> List[CorrectedQRData]:
+def correct_perspective_distortion(
+    qr_data_list: List[QRPositionData], known_aspect_ratio: float = 1.45
+) -> List[CorrectedQRData]:
     """
     Correct perspective distortion using rectangular screen constraints.
 
@@ -197,33 +207,42 @@ def correct_perspective_distortion(qr_data_list: List[QRPositionData],
     """
     if len(qr_data_list) < 2:
         # Need at least 2 screens for perspective correction
-        return [CorrectedQRData(
-            original=qr,
-            corrected_center=qr.center,
-            corrected_corners=qr.corners,
-            corrected_screen_corners=getattr(qr, 'screen_corners', []),
-            rectangularity_score=1.0
-        ) for qr in qr_data_list]
+        return [
+            CorrectedQRData(
+                original=qr,
+                corrected_center=qr.center,
+                corrected_corners=qr.corners,
+                corrected_screen_corners=getattr(qr, "screen_corners", []),
+                rectangularity_score=1.0,
+            )
+            for qr in qr_data_list
+        ]
 
     # Step 1: Calculate rectangularity scores for all screens
     rectangularity_scores = []
     for qr in qr_data_list:
-        if hasattr(qr, 'screen_corners') and qr.screen_corners:
+        if hasattr(qr, "screen_corners") and qr.screen_corners:
             score = calculate_rectangularity_score(qr.screen_corners)
         else:
             score = 0.5  # Unknown, assume moderate distortion
         rectangularity_scores.append(score)
 
     # Step 2: Find the most rectangular screen (least distorted)
-    best_screen_idx = max(range(len(rectangularity_scores)), key=lambda i: rectangularity_scores[i])
+    best_screen_idx = max(
+        range(len(rectangularity_scores)), key=lambda i: rectangularity_scores[i]
+    )
     reference_qr = qr_data_list[best_screen_idx]
 
-    print(f"Using screen {reference_qr.hostname} as reference (rectangularity: {rectangularity_scores[best_screen_idx]:.3f})")
+    print(
+        f"Using screen {reference_qr.hostname} as reference (rectangularity: {rectangularity_scores[best_screen_idx]:.3f})"
+    )
 
     # Step 3: Estimate ideal dimensions for all screens
     screen_estimates = []
     for qr in qr_data_list:
-        width, height, rotation = estimate_best_rectangle_for_screen(qr, known_aspect_ratio)
+        width, height, rotation = estimate_best_rectangle_for_screen(
+            qr, known_aspect_ratio
+        )
         screen_estimates.append((width, height, rotation))
 
     # Step 4: Calculate average scale (use median to handle outliers)
@@ -235,18 +254,20 @@ def correct_perspective_distortion(qr_data_list: List[QRPositionData],
     actual_corners_all = []
 
     for i, qr in enumerate(qr_data_list):
-        if not hasattr(qr, 'screen_corners') or not qr.screen_corners:
+        if not hasattr(qr, "screen_corners") or not qr.screen_corners:
             continue
 
         # Use median scale and known aspect ratio for consistency
-        ideal_width = median_scale
-        ideal_height = median_scale / known_aspect_ratio
+        ideal_width = float(median_scale)
+        ideal_height = float(median_scale / known_aspect_ratio)
 
         # Use the estimated rotation
         _, _, rotation = screen_estimates[i]
 
         # Generate ideal rectangle
-        ideal_corners = calculate_ideal_rectangle(qr.center, ideal_width, ideal_height, rotation)
+        ideal_corners = calculate_ideal_rectangle(
+            qr.center, ideal_width, ideal_height, rotation
+        )
 
         ideal_corners_all.extend(ideal_corners)
         actual_corners_all.extend(qr.screen_corners)
@@ -261,12 +282,14 @@ def correct_perspective_distortion(qr_data_list: List[QRPositionData],
             H, mask = cv2.findHomography(actual_pts, ideal_pts, cv2.RANSAC)
 
             if H is not None:
-                print(f"Calculated homography from {len(actual_corners_all)} point pairs")
+                print(
+                    f"Calculated homography from {len(actual_corners_all)} point pairs"
+                )
             else:
                 print("Failed to calculate homography, using identity")
                 H = np.eye(3)
-        except:
-            print("Error calculating homography, using identity")
+        except Exception as e:
+            print(f"Error calculating homography: {e}, using identity")
             H = np.eye(3)
     else:
         print("Not enough points for homography, using identity")
@@ -278,28 +301,39 @@ def correct_perspective_distortion(qr_data_list: List[QRPositionData],
         # Apply homography to center point
         center_pt = np.array([[[qr.center[0], qr.center[1]]]], dtype=np.float32)
         corrected_center_pt = cv2.perspectiveTransform(center_pt, H)[0][0]
-        corrected_center = (float(corrected_center_pt[0]), float(corrected_center_pt[1]))
+        corrected_center = (
+            float(corrected_center_pt[0]),
+            float(corrected_center_pt[1]),
+        )
 
         # Apply homography to QR corners
         corrected_qr_corners = []
         if qr.corners:
             corners_array = np.array([qr.corners], dtype=np.float32)
             corrected_corners_array = cv2.perspectiveTransform(corners_array, H)[0]
-            corrected_qr_corners = [(float(pt[0]), float(pt[1])) for pt in corrected_corners_array]
+            corrected_qr_corners = [
+                (float(pt[0]), float(pt[1])) for pt in corrected_corners_array
+            ]
 
         # Apply homography to screen corners
         corrected_screen_corners = []
-        if hasattr(qr, 'screen_corners') and qr.screen_corners:
+        if hasattr(qr, "screen_corners") and qr.screen_corners:
             screen_corners_array = np.array([qr.screen_corners], dtype=np.float32)
-            corrected_screen_array = cv2.perspectiveTransform(screen_corners_array, H)[0]
-            corrected_screen_corners = [(float(pt[0]), float(pt[1])) for pt in corrected_screen_array]
+            corrected_screen_array = cv2.perspectiveTransform(screen_corners_array, H)[
+                0
+            ]
+            corrected_screen_corners = [
+                (float(pt[0]), float(pt[1])) for pt in corrected_screen_array
+            ]
 
-        corrected_data.append(CorrectedQRData(
-            original=qr,
-            corrected_center=corrected_center,
-            corrected_corners=corrected_qr_corners,
-            corrected_screen_corners=corrected_screen_corners,
-            rectangularity_score=rectangularity_scores[i]
-        ))
+        corrected_data.append(
+            CorrectedQRData(
+                original=qr,
+                corrected_center=corrected_center,
+                corrected_corners=corrected_qr_corners,
+                corrected_screen_corners=corrected_screen_corners,
+                rectangularity_score=rectangularity_scores[i],
+            )
+        )
 
     return corrected_data
