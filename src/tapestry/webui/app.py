@@ -40,7 +40,8 @@ from .process_manager import ProcessManager
 from .screensaver import ScreensaverManager
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "tapestry-webui-secret-key"
+# Secure secret key from settings with auto-generation
+app.config["SECRET_KEY"] = get_settings().ensure_secure_webui_config()
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max file size
 
 # Set up logging

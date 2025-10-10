@@ -1,6 +1,7 @@
 """Settings management for Tapestry controller using Pydantic Settings."""
 
 import logging
+import secrets
 from typing import Literal
 
 import toml
@@ -106,11 +107,30 @@ class ScreensaverSettings(BaseModel):
         return self
 
 
+class WebUISettings(BaseModel):
+    """Web UI settings."""
+
+    secret_key: str = Field(
+        default="", description="Flask secret key for session security"
+    )
+
+    def ensure_secret_key(self) -> str:
+        """Ensure a secure secret key exists, generating one if needed."""
+        if not self.secret_key or self.secret_key == "tapestry-webui-secret-key":
+            # Generate a secure 32-byte (256-bit) secret key
+            self.secret_key = secrets.token_hex(32)
+            logger.info("Generated new secure Flask secret key")
+        return self.secret_key
+
+
 class TapestrySettings(BaseSettings):
     """Main Tapestry settings."""
 
     screensaver: ScreensaverSettings = Field(
         default_factory=ScreensaverSettings, description="Screensaver configuration"
+    )
+    webui: WebUISettings = Field(
+        default_factory=WebUISettings, description="Web UI configuration"
     )
 
     model_config = SettingsConfigDict(
@@ -135,11 +155,23 @@ class TapestrySettings(BaseSettings):
         )
 
     def save_to_file(self) -> None:
-        file_path = self.model_config["toml_file"]
         """Save settings to TOML file."""
+        file_path = self.model_config["toml_file"]
         with open(file_path, "w") as f:
             toml.dump(self.model_dump(), f)
         logger.info(f"Settings saved to {file_path}")
+
+    def ensure_secure_webui_config(self) -> str:
+        """Ensure secure web UI configuration, auto-saving if changes made."""
+        old_secret = self.webui.secret_key
+        secret_key = self.webui.ensure_secret_key()
+
+        # If the secret key was generated/changed, save to file
+        if secret_key != old_secret:
+            self.save_to_file()
+            logger.info("Auto-saved settings with new secure secret key")
+
+        return secret_key
 
 
 # Global settings instance
