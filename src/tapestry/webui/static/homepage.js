@@ -355,7 +355,7 @@ function drawScreens(ctx, screens, displayScale) {
         const centerY = y + height / 2;
 
         // Draw hostname (IP address) with white background for visibility
-        const fontSize = Math.max(10, 12 * displayScale);
+        const fontSize = Math.max(28, 32 * displayScale);
         ctx.font = `${fontSize}px Arial`;
         ctx.textAlign = 'center';
         const textWidth = ctx.measureText(screen.hostname).width;
@@ -367,26 +367,27 @@ function drawScreens(ctx, screens, displayScale) {
 
         // Draw hostname text
         ctx.fillStyle = '#000';
-        ctx.fillText(screen.hostname, centerX, centerY + 3);
+        ctx.textBaseline = 'middle';
+        ctx.fillText(screen.hostname, centerX, centerY);
 
         // Draw direction arrow (pointing to rotation = 0 direction)
         ctx.save();
-        ctx.translate(centerX, centerY - 20);
+        ctx.translate(centerX, centerY - 40);
         ctx.rotate((screen.rotation || 0) * Math.PI / 180);
 
         // White circle background for arrow
         ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
         ctx.beginPath();
-        const arrowRadius = Math.max(8, 10 * displayScale);
+        const arrowRadius = Math.max(16, 20 * displayScale);
         ctx.arc(0, 0, arrowRadius, 0, 2 * Math.PI);
         ctx.fill();
 
         // Arrow
-        const arrowFontSize = Math.max(12, 14 * displayScale);
-        ctx.font = `${arrowFontSize}px Arial`;
+        ctx.font = `${fontSize}px Arial`;
         ctx.fillStyle = '#000';
         ctx.textAlign = 'center';
-        ctx.fillText('↑', 0, arrowFontSize/3);
+        ctx.textBaseline = 'middle';
+        ctx.fillText('↑', 0, 0);
 
         ctx.restore();
     });
