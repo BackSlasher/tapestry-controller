@@ -16,6 +16,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set up periodic screensaver status check and layout refresh
     schedulePeriodicUpdates();
 
+    // Set up drag and drop functionality
+    setupDragAndDrop();
+
 
     // Upload form handling
     const uploadForm = document.getElementById('upload-form');
@@ -598,4 +601,101 @@ async function schedulePeriodicUpdates() {
 
     // Schedule next update only after current one finishes
     setTimeout(schedulePeriodicUpdates, 5000);
+}
+
+function setupDragAndDrop() {
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('image-input');
+
+    if (!dropZone || !fileInput) return;
+
+    // Prevent default drag behaviors
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+        document.body.addEventListener(eventName, preventDefaults, false);
+    });
+
+    // Highlight drop zone when item is dragged over it
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, highlight, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, unhighlight, false);
+    });
+
+    // Handle dropped files
+    dropZone.addEventListener('drop', handleDrop, false);
+
+    // Update drop zone when file is selected via click
+    fileInput.addEventListener('change', updateDropZoneText, false);
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    function highlight() {
+        dropZone.classList.add('border-primary', 'bg-light');
+    }
+
+    function unhighlight() {
+        dropZone.classList.remove('border-primary', 'bg-light');
+    }
+
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+
+        if (files.length > 0) {
+            const file = files[0];
+
+            // Check if it's an image
+            if (file.type.startsWith('image/')) {
+                // Create a new FileList-like object and assign to input
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                fileInput.files = dataTransfer.files;
+
+                // Trigger change event
+                fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+                updateDropZoneText();
+            } else {
+                alert('Please drop an image file.');
+            }
+        }
+    }
+
+    function updateDropZoneText() {
+        const dropZoneContent = document.getElementById('drop-zone-content');
+        if (fileInput.files && fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            const fileName = file.name;
+
+            // Create a FileReader to read the image
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                // Set background image and overlay
+                dropZone.style.backgroundImage = `url(${e.target.result})`;
+                dropZone.style.backgroundSize = 'cover';
+                dropZone.style.backgroundPosition = 'center';
+                dropZone.style.backgroundRepeat = 'no-repeat';
+
+                // Add overlay content with semi-transparent background
+                dropZoneContent.innerHTML = `
+                    <div class="bg-dark bg-opacity-75 text-white rounded p-3">
+                        <i class="bi bi-file-image" style="font-size: 2rem;"></i>
+                        <div class="mt-2">
+                            <strong>${fileName}</strong>
+                        </div>
+                        <div class="mt-1">
+                            <small>Click to change file</small>
+                        </div>
+                    </div>
+                `;
+            };
+            reader.readAsDataURL(file);
+        }
+    }
 }

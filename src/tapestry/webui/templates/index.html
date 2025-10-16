@@ -79,10 +79,17 @@
                 <form id="upload-form" action="{{ url_for('upload_image') }}" method="post" enctype="multipart/form-data">
                     <div class="mb-3">
                         <label for="image-input" class="form-label">Select Image</label>
-                        <input type="file" class="form-control" id="image-input" name="image" accept="image/*" required>
-                        <div class="form-text">
-                            Supported formats: PNG, JPG, GIF, BMP, TIFF<br>
-                            Max size: 16MB
+                        <div id="drop-zone" class="border border-2 border-dashed rounded p-4 text-center position-relative" style="min-height: 120px; transition: all 0.3s ease;">
+                            <input type="file" class="form-control position-absolute opacity-0 w-100 h-100" id="image-input" name="image" accept="image/*" required style="cursor: pointer;">
+                            <div id="drop-zone-content" class="pointer-events-none">
+                                <i class="bi bi-cloud-upload text-muted" style="font-size: 2rem;"></i>
+                                <div class="mt-2">
+                                    <span class="text-muted">Drag & drop an image here, or <strong>click to browse</strong></span>
+                                </div>
+                                <div class="mt-1">
+                                    <small class="text-muted">Supported formats: PNG, JPG, GIF, BMP, TIFF • Max size: 16MB</small>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
