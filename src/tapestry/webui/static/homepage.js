@@ -300,7 +300,7 @@ async function drawCanvas(layoutData, imageBlob) {
                 ctx.drawImage(screenMask, 0, 0);
 
                 // Draw screen overlays on top using exact pixel coordinates
-                drawScreens(ctx, layoutData.screens, 1); // Scale factor is 1 since we're using exact dimensions
+                drawScreens(ctx, layoutData.screens, 1, canvas); // Scale factor is 1 since we're using exact dimensions
 
                 URL.revokeObjectURL(img.src);
             };
@@ -308,11 +308,11 @@ async function drawCanvas(layoutData, imageBlob) {
         } catch (error) {
             console.error('Error loading background image:', error);
             // Fallback to original sizing logic if image load fails
-            drawScreens(ctx, layoutData.screens, displayScale);
+            drawScreens(ctx, layoutData.screens, displayScale, canvas);
         }
     } else {
         // No image or error - use original sizing logic for screen borders
-        drawScreens(ctx, layoutData.screens, displayScale);
+        drawScreens(ctx, layoutData.screens, displayScale, canvas);
     }
 }
 
@@ -339,7 +339,7 @@ function drawServerSideLayout(canvas, ctx) {
     img.src = '/layout-image';
 }
 
-function drawScreens(ctx, screens, displayScale) {
+function drawScreens(ctx, screens, displayScale, canvas) {
     screens.forEach(screen => {
         // Scale screen coordinates to match canvas display size
         const x = screen.x * displayScale;
@@ -358,7 +358,9 @@ function drawScreens(ctx, screens, displayScale) {
         const centerY = y + height / 2;
 
         // Draw hostname (IP address) with white background for visibility
-        const fontSize = Math.max(28, 32 * displayScale);
+        // Scale font size based on canvas dimensions for high-res images
+        const baseFontSize = Math.min(canvas.width, canvas.height) / 30;
+        const fontSize = Math.max(12, baseFontSize);
         ctx.font = `${fontSize}px Arial`;
         ctx.textAlign = 'center';
         const textWidth = ctx.measureText(screen.hostname).width;
@@ -375,13 +377,15 @@ function drawScreens(ctx, screens, displayScale) {
 
         // Draw direction arrow (pointing to rotation = 0 direction)
         ctx.save();
-        ctx.translate(centerX, centerY - 40);
+        // Position arrow above text with spacing proportional to font size
+        const arrowOffset = fontSize * 1.5 + 10;
+        ctx.translate(centerX, centerY - arrowOffset);
         ctx.rotate((screen.rotation || 0) * Math.PI / 180);
 
-        // White circle background for arrow
+        // White circle background for arrow, sized proportionally to font
         ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
         ctx.beginPath();
-        const arrowRadius = Math.max(16, 20 * displayScale);
+        const arrowRadius = fontSize * 0.8;
         ctx.arc(0, 0, arrowRadius, 0, 2 * Math.PI);
         ctx.fill();
 
