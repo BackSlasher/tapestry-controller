@@ -16,26 +16,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set up periodic screensaver status check and layout refresh
     schedulePeriodicUpdates();
 
-    // Image preview functionality
-    const imageInput = document.getElementById('image-input');
-    const imagePreview = document.getElementById('image-preview');
-    const previewCanvas = document.getElementById('preview-canvas');
-
-    if (imageInput) {
-        imageInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    drawPreviewCanvas(e.target.result);
-                    imagePreview.style.display = 'block';
-                };
-                reader.readAsDataURL(file);
-            } else {
-                imagePreview.style.display = 'none';
-            }
-        });
-    }
 
     // Upload form handling
     const uploadForm = document.getElementById('upload-form');
@@ -413,81 +393,6 @@ function drawScreens(ctx, screens, displayScale) {
     });
 }
 
-function drawPreviewCanvas(imageSrc) {
-    const canvas = document.getElementById('preview-canvas');
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    const img = new Image();
-
-    img.onload = async function() {
-        // Set canvas size
-        const maxWidth = 400;
-        const maxHeight = 300;
-
-        let { width, height } = img;
-
-        // Scale down if too large
-        if (width > maxWidth || height > maxHeight) {
-            const scale = Math.min(maxWidth / width, maxHeight / height);
-            width *= scale;
-            height *= scale;
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-
-        // Draw image
-        ctx.clearRect(0, 0, width, height);
-        ctx.drawImage(img, 0, 0, width, height);
-
-        // Fetch and overlay screen positions
-        try {
-            const response = await fetch('/layout-data');
-
-            if (response.status === 204) return;
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const data = await response.json();
-
-            if (!data || !data.screens) return;
-
-            // Calculate scale factor from original image to canvas
-            const scaleX = width / img.naturalWidth;
-            const scaleY = height / img.naturalHeight;
-
-            // Draw screen overlays
-            data.screens.forEach(screen => {
-                const x = screen.x * scaleX;
-                const y = screen.y * scaleY;
-                const w = screen.width * scaleX;
-                const h = screen.height * scaleY;
-
-                // Draw outline
-                ctx.strokeStyle = '#ff6b6b';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(x, y, w, h);
-
-                // Draw label background
-                ctx.fillStyle = 'rgba(255, 107, 107, 0.8)';
-                ctx.fillRect(x, y - 20, w, 20);
-
-                // Draw label text
-                ctx.fillStyle = 'white';
-                ctx.font = '12px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText(screen.label, x + w/2, y - 6);
-            });
-        } catch (error) {
-            console.error('Error loading screen layout for preview:', error);
-        }
-    };
-
-    img.src = imageSrc;
-}
 
 async function clearAllScreens() {
     const clearBtn = document.getElementById('clear-screens');
