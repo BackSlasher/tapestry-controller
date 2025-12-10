@@ -269,9 +269,25 @@ async function drawCanvas(layoutData, imageBlob) {
         try {
             const img = new Image();
             img.onload = function() {
-                // Set canvas to exact image dimensions (no scaling needed since /current-image now returns processed source)
+                // Set canvas to exact image dimensions for drawing
                 canvas.width = img.width;
                 canvas.height = img.height;
+
+                // Calculate CSS scale to fit container while maintaining aspect ratio
+                const canvasContainer = canvas.parentElement;
+                const containerRect = canvasContainer.getBoundingClientRect();
+                const maxDisplayWidth = Math.max(300, containerRect.width - 20);
+                const maxDisplayHeight = Math.min(600, window.innerHeight * 0.6);
+
+                const cssScale = Math.min(
+                    maxDisplayWidth / img.width,
+                    maxDisplayHeight / img.height,
+                    1  // Don't scale up
+                );
+
+                // Apply CSS scaling to make canvas fit the container
+                canvas.style.width = (img.width * cssScale) + 'px';
+                canvas.style.height = (img.height * cssScale) + 'px';
 
                 // Clear canvas and draw background
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
