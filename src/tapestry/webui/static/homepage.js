@@ -685,7 +685,7 @@ function setupDragAndDrop() {
     function handleDrop(e) {
         const dt = e.dataTransfer;
 
-        // Check dataTransfer.items for image data (works for images dragged from websites)
+        // Check dataTransfer.items for image data
         if (dt.items && dt.items.length > 0) {
             for (const item of dt.items) {
                 if (item.kind === 'file' && item.type.startsWith('image/')) {
@@ -698,13 +698,20 @@ function setupDragAndDrop() {
             }
         }
 
-        // Check dataTransfer.files (works for files dragged from file system)
+        // Check dataTransfer.files (files from file system)
         if (dt.files && dt.files.length > 0) {
             const file = dt.files[0];
             if (file.type.startsWith('image/')) {
                 assignFileToInput(file);
                 return;
             }
+        }
+
+        // Check if browser provided a URL instead of file data (e.g., Firefox)
+        const imageUrl = dt.getData('text/uri-list') || dt.getData('text/plain');
+        if (imageUrl && imageUrl.startsWith('http')) {
+            alert('Your browser doesn\'t support dragging images from websites. Please right-click the image, copy it, and paste here instead (Ctrl+V).');
+            return;
         }
 
         alert('Please drop an image file.');
