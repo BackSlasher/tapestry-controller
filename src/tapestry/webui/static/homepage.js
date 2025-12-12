@@ -647,8 +647,27 @@ function setupDragAndDrop() {
     // Handle dropped files
     dropZone.addEventListener('drop', handleDrop, false);
 
+    // Handle paste from clipboard (works globally on the page)
+    document.addEventListener('paste', handlePaste, false);
+
     // Update drop zone when file is selected via click
     fileInput.addEventListener('change', updateDropZoneText, false);
+
+    function handlePaste(e) {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+
+        for (const item of items) {
+            if (item.kind === 'file' && item.type.startsWith('image/')) {
+                e.preventDefault();
+                const file = item.getAsFile();
+                if (file) {
+                    assignFileToInput(file);
+                    return;
+                }
+            }
+        }
+    }
 
     function preventDefaults(e) {
         e.preventDefault();
@@ -665,26 +684,41 @@ function setupDragAndDrop() {
 
     function handleDrop(e) {
         const dt = e.dataTransfer;
-        const files = dt.files;
 
-        if (files.length > 0) {
-            const file = files[0];
-
-            // Check if it's an image
-            if (file.type.startsWith('image/')) {
-                // Create a new FileList-like object and assign to input
-                const dataTransfer = new DataTransfer();
-                dataTransfer.items.add(file);
-                fileInput.files = dataTransfer.files;
-
-                // Trigger change event
-                fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-                updateDropZoneText();
-            } else {
-                alert('Please drop an image file.');
+        // Check dataTransfer.items for image data (works for images dragged from websites)
+        if (dt.items && dt.items.length > 0) {
+            for (const item of dt.items) {
+                if (item.kind === 'file' && item.type.startsWith('image/')) {
+                    const file = item.getAsFile();
+                    if (file) {
+                        assignFileToInput(file);
+                        return;
+                    }
+                }
             }
         }
+
+        // Check dataTransfer.files (works for files dragged from file system)
+        if (dt.files && dt.files.length > 0) {
+            const file = dt.files[0];
+            if (file.type.startsWith('image/')) {
+                assignFileToInput(file);
+                return;
+            }
+        }
+
+        alert('Please drop an image file.');
+    }
+
+    function assignFileToInput(file) {
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        fileInput.files = dataTransfer.files;
+
+        // Trigger change event
+        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+        updateDropZoneText();
     }
 
     function updateDropZoneText() {
