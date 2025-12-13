@@ -1184,6 +1184,7 @@ def get_wallpaper_directories():
             "directories": [
                 "~/wallpapers",
                 "~/xp-wallpapers",
+                "~/my-photos",
             ]
         }
     )
