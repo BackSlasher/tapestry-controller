@@ -1538,7 +1538,7 @@ def parse_args():
         help="YAML file containing device configuration",
     )
     parser.add_argument(
-        "--host", default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)"
+        "--host", default="::", help="Host to bind to (default: :: for IPv4+IPv6)"
     )
     parser.add_argument(
         "--port", type=int, default=5000, help="Port to bind to (default: 5000)"
@@ -1575,7 +1575,7 @@ def main():
     logger.info(
         f"Starting Tapestry Web UI with {len(get_controller().config.devices)} devices"
     )
-    logger.info(f"Access at http://{args.host}:{args.port}")
+    logger.info(f"Access at http://localhost:{args.port}")
     logger.info("Use 'Restore Last Image' button to load previous image")
 
     app.run(host=args.host, port=args.port, debug=args.debug)
