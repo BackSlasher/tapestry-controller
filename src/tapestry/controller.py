@@ -3,7 +3,7 @@ from typing import Optional
 
 import PIL.Image
 
-from .device import clear, draw
+from .device import clear, draw, load_image, display_loaded
 from .geometry import Dimensions, Point, Rectangle
 from .models import Config, load_config
 
@@ -16,7 +16,11 @@ class TapestryController:
     def send_image(
         self, image: PIL.Image.Image, debug_output_dir: Optional[str] = None
     ):
-        """Send image to devices using a simplified coordinate approach."""
+        """Send image to devices using a two-phase approach for synchronized display.
+
+        Phase 1: Load images to all nodes in parallel (may take time)
+        Phase 2: Display on all nodes simultaneously (fast)
+        """
 
         # Step 1: Calculate the bounding box of all screens in millimeters
         device_rects_mm = {}
@@ -44,9 +48,8 @@ class TapestryController:
         if debug_output_dir:
             scaled_image.save(f"{debug_output_dir}/scaled_image.png")
 
-        # Step 3: For each device, calculate its position in the scaled image
-        # and crop the appropriate section
-        threads = []
+        # Step 3: Prepare device images
+        device_images = {}
         for device, rect_mm in device_rects_mm.items():
             # Convert device position from mm to pixels in scaled image
             device_rect_px = Rectangle(
@@ -70,17 +73,39 @@ class TapestryController:
             if debug_output_dir:
                 device_image.save(f"{debug_output_dir}/device_{device.host}.png")
 
-            # Send to device in parallel
+            device_images[device] = device_image
+
+        # Phase 1: Load images to all devices in parallel
+        print("Loading images to all devices...")
+        load_threads = []
+        for device, device_image in device_images.items():
             t = threading.Thread(
-                target=draw, args=(device.host, device_image, True, device.rotation)
+                target=load_image,
+                args=(device.host, device_image, True, device.rotation),
             )
             t.daemon = True
             t.start()
-            threads.append(t)
+            load_threads.append(t)
 
-        # Wait for all threads to complete
-        for t in threads:
+        # Wait for all loads to complete
+        for t in load_threads:
             t.join()
+
+        print("All images loaded. Triggering synchronized display...")
+
+        # Phase 2: Trigger display on all devices in parallel (fast)
+        display_threads = []
+        for device in self.config.devices:
+            t = threading.Thread(target=display_loaded, args=(device.host,))
+            t.daemon = True
+            t.start()
+            display_threads.append(t)
+
+        # Wait for all displays to complete
+        for t in display_threads:
+            t.join()
+
+        print("Display complete.")
 
     def _scale_image_to_layout(
         self, image: PIL.Image.Image, layout_dimensions: Dimensions

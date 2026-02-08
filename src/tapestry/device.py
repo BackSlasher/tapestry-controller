@@ -104,6 +104,48 @@ def draw_unrotated(hostname, img: PIL.Image.Image, clear: bool):
         raise
 
 
+def load_image(hostname, img: PIL.Image.Image, clear: bool, rotation: int = 0):
+    """Load image to device buffer without displaying it."""
+    try:
+        inf = info(hostname)
+        img = image_refit(img, Dimensions(width=inf.width, height=inf.height))
+        img = img.resize((inf.width, inf.height))
+        img = img.convert("L")
+
+        # Apply device-specific rotation
+        if rotation != 0:
+            img = img.rotate(
+                -rotation, expand=False, fillcolor=255
+            )  # negative for clockwise rotation
+
+        img_bytes = convert_8bit_to_4bit(img.tobytes())
+        resp = requests.post(
+            f"http://{hostname}/load",
+            headers={
+                "width": str(inf.width),
+                "height": str(inf.height),
+                "x": "0",
+                "y": "0",
+                "clear": "1" if clear else "0",
+            },
+            data=img_bytes,
+        )
+        resp.raise_for_status()
+    except Exception as e:
+        print(f"Error loading image to {hostname}: {e}")
+        raise
+
+
+def display_loaded(hostname):
+    """Display the preloaded image on device."""
+    try:
+        resp = requests.post(f"http://{hostname}/display")
+        resp.raise_for_status()
+    except Exception as e:
+        print(f"Error displaying on {hostname}: {e}")
+        raise
+
+
 def draw(hostname, img: PIL.Image.Image, clear: bool, rotation: int = 0):
     try:
         inf = info(hostname)
