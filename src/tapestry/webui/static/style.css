@@ -82,6 +82,24 @@ body {
     border-color: #0a58ca;
 }
 
+/* Upload card styling */
+.upload-card {
+    transition: all 0.2s ease-in-out;
+}
+
+.upload-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.upload-card:hover .card-body {
+    border-color: #0d6efd !important;
+}
+
+.upload-card:hover i {
+    color: #0d6efd !important;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     #layout-image {

@@ -20,7 +20,15 @@ class GallerySettings(BaseModel):
     """Gallery screensaver settings."""
 
     wallpapers_dir: str = Field(
-        default="wallpapers", description="Directory containing wallpaper images"
+        default="wallpapers",
+        description="Legacy: Directory containing wallpaper images (deprecated)",
+    )
+    collections_dir: str = Field(
+        default="~/.tapestry/collections",
+        description="Root directory for image collections",
+    )
+    selected_collection: str = Field(
+        default="wallpapers", description="Name of the currently selected collection"
     )
 
     @field_validator("wallpapers_dir")
@@ -28,6 +36,27 @@ class GallerySettings(BaseModel):
     def validate_wallpapers_dir(cls, v: str) -> str:
         if not v.strip():
             raise ValueError("wallpapers_dir cannot be empty")
+        return v.strip()
+
+    @field_validator("collections_dir")
+    @classmethod
+    def validate_collections_dir(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("collections_dir cannot be empty")
+        return v.strip()
+
+    @field_validator("selected_collection")
+    @classmethod
+    def validate_selected_collection(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("selected_collection cannot be empty")
+        # Validate collection name format
+        import re
+
+        if not re.match(r"^[a-zA-Z0-9\s_-]+$", v.strip()):
+            raise ValueError(
+                "collection name can only contain letters, numbers, spaces, hyphens, and underscores"
+            )
         return v.strip()
 
 

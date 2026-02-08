@@ -117,15 +117,39 @@ class ScreensaverManager:
             raise ValueError("Screensaver type is required")
 
         if config["type"] == "gallery":
-            wallpapers_dir = config.get("gallery", {}).get("wallpapers_dir") or ""
-            if not wallpapers_dir or not os.path.exists(
-                os.path.expanduser(wallpapers_dir)
-            ):
-                raise ValueError(f"Invalid wallpapers directory: {wallpapers_dir}")
+            from .collections_manager import get_collection_path, get_collection_images
 
-            images = self._get_gallery_images(wallpapers_dir)
-            if not images:
-                raise ValueError(f"No images found in {wallpapers_dir}")
+            gallery_config = config.get("gallery", {})
+            collections_dir = gallery_config.get(
+                "collections_dir", "~/.tapestry/collections"
+            )
+            selected_collection = gallery_config.get(
+                "selected_collection", "wallpapers"
+            )
+
+            # Check if collection exists
+            collection_path = get_collection_path(selected_collection, collections_dir)
+
+            if collection_path:
+                # Collection exists, check for images
+                images = get_collection_images(collection_path)
+                if not images:
+                    raise ValueError(
+                        f"No images found in collection '{selected_collection}'"
+                    )
+            else:
+                # Fallback to legacy wallpapers_dir
+                wallpapers_dir = gallery_config.get("wallpapers_dir") or ""
+                if not wallpapers_dir or not os.path.exists(
+                    os.path.expanduser(wallpapers_dir)
+                ):
+                    raise ValueError(
+                        f"Collection '{selected_collection}' not found and no valid legacy wallpapers directory"
+                    )
+
+                images = self._get_gallery_images(wallpapers_dir)
+                if not images:
+                    raise ValueError(f"No images found in {wallpapers_dir}")
 
         elif config["type"] == "pixabay":
             api_key = config.get("pixabay", {}).get("api_key")
@@ -165,16 +189,36 @@ class ScreensaverManager:
             return None
 
     def _get_gallery_image(self, gallery_config: dict) -> Optional[PIL.Image.Image]:
-        """Get random image from gallery directory."""
-        wallpapers_dir = gallery_config["wallpapers_dir"]
-        images = self._get_gallery_images(wallpapers_dir)
+        """Get random image from gallery collection."""
+        from .collections_manager import get_collection_path, get_collection_images
+
+        # Get collection info from config
+        collections_dir = gallery_config.get(
+            "collections_dir", "~/.tapestry/collections"
+        )
+        selected_collection = gallery_config.get("selected_collection", "wallpapers")
+
+        # Get collection path
+        collection_path = get_collection_path(selected_collection, collections_dir)
+
+        # Fallback to legacy wallpapers_dir if collection doesn't exist
+        if not collection_path:
+            logger.warning(
+                f"Collection '{selected_collection}' not found, falling back to legacy wallpapers_dir"
+            )
+            wallpapers_dir = gallery_config.get("wallpapers_dir", "wallpapers")
+            images = self._get_gallery_images(wallpapers_dir)
+        else:
+            images = get_collection_images(collection_path)
 
         if not images:
-            logger.warning(f"No images found in {wallpapers_dir}")
+            logger.warning(f"No images found in collection '{selected_collection}'")
             return None
 
         image_path = random.choice(images)
-        logger.info(f"Gallery screensaver: displaying {os.path.basename(image_path)}")
+        logger.info(
+            f"Gallery screensaver: displaying {os.path.basename(image_path)} from collection '{selected_collection}'"
+        )
 
         try:
             return PIL.Image.open(image_path)
@@ -183,7 +227,7 @@ class ScreensaverManager:
             return None
 
     def _get_gallery_images(self, wallpapers_dir: str) -> list[str]:
-        """Get list of image files from directory."""
+        """Get list of image files from directory (legacy support)."""
         wallpapers_dir = os.path.expanduser(wallpapers_dir)
         patterns = ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tiff", "*.webp"]
         images = []

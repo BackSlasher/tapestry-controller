@@ -42,11 +42,11 @@
                     <div id="gallery-settings" class="screensaver-type-settings">
                         <h6>Gallery Settings</h6>
                         <div class="mb-3">
-                            <label for="wallpapers-dir" class="form-label">Wallpapers Directory</label>
-                            <select class="form-select" id="wallpapers-dir" name="wallpapers_dir">
-                                <option value="">Loading...</option>
+                            <label for="selected-collection" class="form-label">Image Collection</label>
+                            <select class="form-select" id="selected-collection" name="selected_collection">
+                                <option value="">Loading collections...</option>
                             </select>
-                            <div class="form-text">Directory containing wallpaper images</div>
+                            <div class="form-text">Choose a collection to display as screensaver. <a href="/collections">Manage collections</a></div>
                         </div>
                     </div>
 
@@ -139,7 +139,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     loadScreensaverStatus();
     loadScreensaverConfig();
-    loadWallpaperDirectories();
+    loadCollections();
 
     // Form submission
     document.getElementById('screensaver-config-form').addEventListener('submit', function(e) {
@@ -170,9 +170,11 @@ function loadScreensaverStatus() {
         .then(response => response.json())
         .then(data => {
             if (data.active) {
-                let typeInfo = data.type === 'reddit'
+                let typeInfo = data.type === 'gallery'
+                    ? `Collection: ${data.wallpapers_dir}`
+                    : data.type === 'reddit'
                     ? `Reddit ${data.wallpapers_dir}`
-                    : `Gallery (${data.wallpapers_dir})`;
+                    : `Pixabay`;
 
                 statusDiv.innerHTML = `
                     <div class="alert alert-success mb-0">
@@ -296,39 +298,39 @@ function loadScreensaverConfig() {
         });
 }
 
-function loadWallpaperDirectories() {
-    const wallpaperDirSelect = document.getElementById('wallpapers-dir');
+function loadCollections() {
+    const collectionSelect = document.getElementById('selected-collection');
 
-    fetch('/screensaver/wallpaper-dirs')
+    fetch('/api/collections')
         .then(response => response.json())
         .then(data => {
             // Clear loading option
-            wallpaperDirSelect.innerHTML = '';
+            collectionSelect.innerHTML = '';
 
-            // Add options for each directory
-            data.directories.forEach(dir => {
-                const option = document.createElement('option');
-                option.value = dir;
-                option.textContent = dir;
-                wallpaperDirSelect.appendChild(option);
-            });
-
-            // Set current value from status
-            fetch('/screensaver/status')
-                .then(response => response.json())
-                .then(statusData => {
-                    wallpaperDirSelect.value = statusData.wallpapers_dir || 'wallpapers';
-                })
-                .catch(error => {
-                    console.error('Error loading current wallpapers dir:', error);
-                    wallpaperDirSelect.value = 'wallpapers'; // fallback
+            if (data.collections && data.collections.length > 0) {
+                // Add options for each collection
+                data.collections.forEach(collection => {
+                    const option = document.createElement('option');
+                    option.value = collection.name;
+                    option.textContent = `${collection.name} (${collection.image_count} images)`;
+                    collectionSelect.appendChild(option);
                 });
+
+                // Set current selected collection
+                collectionSelect.value = data.selected_collection || 'wallpapers';
+            } else {
+                // No collections available
+                const option = document.createElement('option');
+                option.value = 'wallpapers';
+                option.textContent = 'No collections available - create one first';
+                collectionSelect.appendChild(option);
+            }
         })
         .catch(error => {
-            console.error('Error loading wallpaper directories:', error);
-            // Fallback to hardcoded option
-            wallpaperDirSelect.innerHTML = '<option value="wallpapers">wallpapers</option>';
-            wallpaperDirSelect.value = 'wallpapers';
+            console.error('Error loading collections:', error);
+            // Fallback to default option
+            collectionSelect.innerHTML = '<option value="wallpapers">wallpapers (default)</option>';
+            collectionSelect.value = 'wallpapers';
         });
 }
 

@@ -100,7 +100,11 @@ def get_screensaver_config():
         "enabled": settings.screensaver.enabled,
         "type": settings.screensaver.type,
         "interval": settings.screensaver.interval,
-        "gallery": {"wallpapers_dir": settings.screensaver.gallery.wallpapers_dir},
+        "gallery": {
+            "wallpapers_dir": settings.screensaver.gallery.wallpapers_dir,
+            "collections_dir": settings.screensaver.gallery.collections_dir,
+            "selected_collection": settings.screensaver.gallery.selected_collection,
+        },
         "reddit": {
             "subreddit": settings.screensaver.reddit.subreddit,
             "time_period": settings.screensaver.reddit.time_period,
@@ -584,7 +588,7 @@ def apply_positioning_config():
             except Exception as e:
                 logger.warning(f"Could not restore saved image: {e}")
 
-        message = f'Configuration updated with {len(updated_config["devices"])} devices'
+        message = f"Configuration updated with {len(updated_config['devices'])} devices"
         if restored_image:
             message += ". Previous image restored to displays."
 
@@ -1077,7 +1081,7 @@ def start_screensaver_internal():
     config = get_screensaver_config()
     screensaver_manager.start(config)
 
-    return f'Screensaver started with {config["type"]} type'
+    return f"Screensaver started with {config['type']} type"
 
 
 @app.route("/screensaver/start", methods=["POST"])
@@ -1147,10 +1151,23 @@ def screensaver_status():
     }
 
     if config["type"] == "gallery":
-        images = get_wallpaper_images(config["gallery"]["wallpapers_dir"])
+        from .collections_manager import get_collection_path, get_collection_images
+
+        selected_collection = config["gallery"]["selected_collection"]
+        collections_dir = config["gallery"]["collections_dir"]
+
+        # Try to get images from collection
+        collection_path = get_collection_path(selected_collection, collections_dir)
+        if collection_path:
+            images = get_collection_images(collection_path)
+        else:
+            # Fallback to legacy wallpapers_dir
+            images = get_wallpaper_images(config["gallery"]["wallpapers_dir"])
+
         status.update(
             {
-                "wallpapers_dir": config["gallery"]["wallpapers_dir"],
+                "wallpapers_dir": selected_collection,  # Use collection name for display
+                "selected_collection": selected_collection,
                 "image_count": len(images),
                 "has_images": len(images) > 0,
             }
@@ -1235,8 +1252,19 @@ def update_screensaver_config():
         new_type = data["type"] if "type" in data else current.type
 
         # Update gallery settings
+        new_gallery_data = {}
         if "wallpapers_dir" in data:
-            new_gallery = GallerySettings(wallpapers_dir=data["wallpapers_dir"].strip())
+            new_gallery_data["wallpapers_dir"] = data["wallpapers_dir"].strip()
+        if "selected_collection" in data:
+            new_gallery_data["selected_collection"] = data[
+                "selected_collection"
+            ].strip()
+
+        if new_gallery_data:
+            # Merge with current gallery settings
+            current_gallery = current.gallery.model_dump()
+            current_gallery.update(new_gallery_data)
+            new_gallery = GallerySettings(**current_gallery)
         else:
             new_gallery = current.gallery
 
@@ -1313,6 +1341,269 @@ def update_screensaver_config():
         return jsonify({"error": f"Invalid configuration value: {str(e)}"}), 400
     except Exception as e:
         return jsonify({"error": f"Failed to update configuration: {str(e)}"}), 500
+
+
+# Collections management routes
+
+
+@app.route("/collections")
+def collections_page():
+    """Collections management page."""
+    return render_template("collections.html")
+
+
+@app.route("/api/collections", methods=["GET"])
+def api_list_collections():
+    """List all collections."""
+    from .collections_manager import list_collections
+
+    try:
+        settings = get_settings()
+        collections_dir = settings.screensaver.gallery.collections_dir
+        collections = list_collections(collections_dir)
+
+        return jsonify(
+            {
+                "success": True,
+                "collections": collections,
+                "selected_collection": settings.screensaver.gallery.selected_collection,
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error listing collections: {e}")
+        return jsonify({"error": f"Failed to list collections: {str(e)}"}), 500
+
+
+@app.route("/api/collections", methods=["POST"])
+def api_create_collection():
+    """Create a new collection."""
+    from .collections_manager import create_collection
+
+    data = request.get_json()
+    if not data or "name" not in data:
+        return jsonify({"error": "Collection name is required"}), 400
+
+    try:
+        settings = get_settings()
+        collections_dir = settings.screensaver.gallery.collections_dir
+        success, message = create_collection(data["name"], collections_dir)
+
+        if success:
+            return jsonify({"success": True, "message": message})
+        else:
+            return jsonify({"error": message}), 400
+    except Exception as e:
+        logger.error(f"Error creating collection: {e}")
+        return jsonify({"error": f"Failed to create collection: {str(e)}"}), 500
+
+
+@app.route("/api/collections/<collection_name>", methods=["DELETE"])
+def api_delete_collection(collection_name):
+    """Delete a collection."""
+    from .collections_manager import delete_collection
+
+    try:
+        settings = get_settings()
+        collections_dir = settings.screensaver.gallery.collections_dir
+
+        # Warn if deleting the currently selected collection for screensaver
+        warning = None
+        if collection_name == settings.screensaver.gallery.selected_collection:
+            warning = f"This collection is currently selected for the screensaver. You may want to select a different collection in Screensaver settings."
+
+        success, message = delete_collection(collection_name, collections_dir)
+
+        if success:
+            result = {"success": True, "message": message}
+            if warning:
+                result["warning"] = warning
+            return jsonify(result)
+        else:
+            return jsonify({"error": message}), 400
+    except Exception as e:
+        logger.error(f"Error deleting collection: {e}")
+        return jsonify({"error": f"Failed to delete collection: {str(e)}"}), 500
+
+
+@app.route("/api/collections/<collection_name>/rename", methods=["POST"])
+def api_rename_collection(collection_name):
+    """Rename a collection."""
+    from .collections_manager import rename_collection
+
+    data = request.get_json()
+    if not data or "new_name" not in data:
+        return jsonify({"error": "New collection name is required"}), 400
+
+    try:
+        settings = get_settings()
+        collections_dir = settings.screensaver.gallery.collections_dir
+        new_name = data["new_name"]
+
+        success, message = rename_collection(collection_name, new_name, collections_dir)
+
+        if success:
+            # Update selected collection if we renamed it
+            if collection_name == settings.screensaver.gallery.selected_collection:
+                settings.screensaver.gallery.selected_collection = new_name
+                settings.save_to_file()
+
+            return jsonify({"success": True, "message": message, "new_name": new_name})
+        else:
+            return jsonify({"error": message}), 400
+    except Exception as e:
+        logger.error(f"Error renaming collection: {e}")
+        return jsonify({"error": f"Failed to rename collection: {str(e)}"}), 500
+
+
+@app.route("/api/collections/<collection_name>/select", methods=["POST"])
+def api_select_collection(collection_name):
+    """Select a collection as the active gallery."""
+    from .collections_manager import get_collection_path
+
+    try:
+        settings = get_settings()
+        collections_dir = settings.screensaver.gallery.collections_dir
+
+        # Verify collection exists
+        collection_path = get_collection_path(collection_name, collections_dir)
+        if not collection_path:
+            return jsonify(
+                {"error": f"Collection '{collection_name}' does not exist"}
+            ), 404
+
+        # Update selected collection
+        settings.screensaver.gallery.selected_collection = collection_name
+        settings.save_to_file()
+
+        # Restart screensaver if active
+        if screensaver_manager and screensaver_manager.is_active:
+            screensaver_manager.stop()
+            config = get_screensaver_config()
+            screensaver_manager.start(config)
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Collection '{collection_name}' selected as active gallery",
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error selecting collection: {e}")
+        return jsonify({"error": f"Failed to select collection: {str(e)}"}), 500
+
+
+@app.route("/api/collections/<collection_name>/images", methods=["GET"])
+def api_list_collection_images(collection_name):
+    """List images in a collection."""
+    from .collections_manager import list_collection_images
+
+    try:
+        settings = get_settings()
+        collections_dir = settings.screensaver.gallery.collections_dir
+        images = list_collection_images(collection_name, collections_dir)
+
+        if images is None:
+            return jsonify(
+                {"error": f"Collection '{collection_name}' does not exist"}
+            ), 404
+
+        return jsonify(
+            {
+                "success": True,
+                "collection": collection_name,
+                "images": images,
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error listing collection images: {e}")
+        return jsonify({"error": f"Failed to list images: {str(e)}"}), 500
+
+
+@app.route("/api/collections/<collection_name>/images", methods=["POST"])
+def api_upload_collection_image(collection_name):
+    """Upload an image to a collection."""
+    from .collections_manager import save_uploaded_image
+
+    if "image" not in request.files:
+        return jsonify({"error": "No image file provided"}), 400
+
+    file = request.files["image"]
+    if file.filename == "":
+        return jsonify({"error": "No file selected"}), 400
+
+    if not allowed_file(file.filename):
+        return jsonify(
+            {"error": "Invalid file type. Please upload an image file."}
+        ), 400
+
+    try:
+        settings = get_settings()
+        collections_dir = settings.screensaver.gallery.collections_dir
+        success, message = save_uploaded_image(
+            collection_name, file, file.filename, collections_dir
+        )
+
+        if success:
+            return jsonify(
+                {"success": True, "message": message, "filename": file.filename}
+            )
+        else:
+            return jsonify({"error": message}), 400
+    except Exception as e:
+        logger.error(f"Error uploading image: {e}")
+        return jsonify({"error": f"Failed to upload image: {str(e)}"}), 500
+
+
+@app.route("/api/collections/<collection_name>/images/<filename>", methods=["DELETE"])
+def api_delete_collection_image(collection_name, filename):
+    """Delete an image from a collection."""
+    from .collections_manager import delete_collection_image
+
+    try:
+        settings = get_settings()
+        collections_dir = settings.screensaver.gallery.collections_dir
+        success, message = delete_collection_image(
+            collection_name, filename, collections_dir
+        )
+
+        if success:
+            return jsonify({"success": True, "message": message})
+        else:
+            return jsonify({"error": message}), 400
+    except Exception as e:
+        logger.error(f"Error deleting image: {e}")
+        return jsonify({"error": f"Failed to delete image: {str(e)}"}), 500
+
+
+@app.route("/api/collections/<collection_name>/images/<filename>")
+def api_get_collection_image(collection_name, filename):
+    """Get an image from a collection."""
+    from .collections_manager import get_collection_path
+
+    try:
+        settings = get_settings()
+        collections_dir = settings.screensaver.gallery.collections_dir
+
+        # Get collection path
+        collection_path = get_collection_path(collection_name, collections_dir)
+        if not collection_path:
+            return jsonify(
+                {"error": f"Collection '{collection_name}' does not exist"}
+            ), 404
+
+        # Validate filename (no path components)
+        if "/" in filename or "\\" in filename or filename in [".", ".."]:
+            return jsonify({"error": "Invalid filename"}), 400
+
+        # Get image path
+        image_path = collection_path / filename
+        if not image_path.exists():
+            return jsonify({"error": f"Image '{filename}' not found"}), 404
+
+        return send_file(str(image_path), mimetype=f"image/{image_path.suffix[1:]}")
+    except Exception as e:
+        logger.error(f"Error serving image: {e}")
+        return jsonify({"error": f"Failed to serve image: {str(e)}"}), 500
 
 
 @app.route("/flash/start", methods=["POST"])
@@ -1392,7 +1683,13 @@ def stop_flash(process_id):
 
 def create_app(devices_file="devices.yaml"):
     """Create Flask app with configuration."""
-    global controller, screensaver_manager, ota_manager, device_monitor, flash_manager, process_manager
+    global \
+        controller, \
+        screensaver_manager, \
+        ota_manager, \
+        device_monitor, \
+        flash_manager, \
+        process_manager
     if controller is None:
         controller = TapestryController.from_config_file(devices_file)
     if screensaver_manager is None:
@@ -1416,6 +1713,17 @@ def create_app(devices_file="devices.yaml"):
         # Start monitoring devices from controller config
         device_hosts = [device.host for device in controller.config.devices]
         device_monitor.start_monitoring(device_hosts)
+
+    # Ensure default collection exists and migrate legacy wallpapers if needed
+    from .collections_migration import migrate_legacy_wallpapers_if_needed
+
+    migration_result = migrate_legacy_wallpapers_if_needed()
+    if migration_result["migrated"]:
+        logger.info(
+            "Migrated legacy wallpapers to collections system. "
+            "Your images are now in the 'wallpapers' collection."
+        )
+
     return app
 
 
