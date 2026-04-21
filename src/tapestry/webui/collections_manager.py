@@ -51,9 +51,9 @@ def get_collections_root(collections_dir: str = ".tapestry-data/collections") ->
         collections_dir: Path to collections directory
 
     Returns:
-        Path object for collections directory
+        Path object for collections directory (absolute)
     """
-    path = Path(os.path.expanduser(collections_dir))
+    path = Path(os.path.expanduser(collections_dir)).resolve()
     path.mkdir(parents=True, exist_ok=True)
     return path
 

@@ -53,7 +53,8 @@ class StagingManager:
         Args:
             staging_path: Path to staging directory (supports ~ expansion)
         """
-        self.staging_path = Path(os.path.expanduser(staging_path))
+        # Resolve to absolute path immediately to avoid CWD issues
+        self.staging_path = Path(os.path.expanduser(staging_path)).resolve()
         self._ensure_directory()
 
     def _ensure_directory(self) -> None:

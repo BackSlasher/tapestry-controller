@@ -454,8 +454,15 @@ function nextImage() {
 
 function runCuration() {
     const btn = document.getElementById('run-curation');
+    const resultDiv = document.getElementById('curation-result');
     btn.disabled = true;
-    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Running...';
+
+    // Show progress steps
+    resultDiv.className = 'alert alert-info';
+    resultDiv.innerHTML = '<i class="bi bi-hourglass-split spinner-border spinner-border-sm me-2"></i> <strong>Curating...</strong><br><small>Fetching images from sources, applying filters, staging...</small>';
+    resultDiv.style.display = 'block';
+
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Curating...';
 
     fetch('/api/curation/curate', {
         method: 'POST',
@@ -465,12 +472,31 @@ function runCuration() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showResult(`Staged ${data.staged_count} images (${data.filtered_count} filtered)`, true);
+            // Show detailed results
+            let details = `<strong>Curation complete!</strong><br>`;
+            details += `<i class="bi bi-check-circle text-success"></i> Staged: ${data.staged_count} images<br>`;
+            details += `<i class="bi bi-funnel text-warning"></i> Filtered out: ${data.filtered_count}<br>`;
+            details += `<i class="bi bi-search"></i> Total candidates: ${data.total_candidates}`;
+
+            if (data.sources_summary) {
+                details += `<br><small class="text-muted">Sources: ${JSON.stringify(data.sources_summary)}</small>`;
+            }
+
+            resultDiv.className = 'alert alert-success';
+            resultDiv.innerHTML = details;
+            setTimeout(() => { resultDiv.style.display = 'none'; }, 8000);
+
             loadStaging();
             loadStatus();
         } else {
-            showResult(data.error, false);
+            resultDiv.className = 'alert alert-danger';
+            resultDiv.innerHTML = `<i class="bi bi-x-circle"></i> ${data.error}`;
+            setTimeout(() => { resultDiv.style.display = 'none'; }, 5000);
         }
+    })
+    .catch(error => {
+        resultDiv.className = 'alert alert-danger';
+        resultDiv.innerHTML = `<i class="bi bi-x-circle"></i> Network error: ${error}`;
     })
     .finally(() => {
         btn.disabled = false;
