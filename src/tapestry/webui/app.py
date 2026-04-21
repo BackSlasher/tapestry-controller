@@ -23,6 +23,7 @@ from flask import (
 from PIL import ImageDraw, ImageFont
 
 from ..controller import TapestryController
+from ..curation import CurationManager
 from ..geometry import Dimensions, Point, Rectangle
 from ..screen_types import SCREEN_TYPES
 from ..settings import (
@@ -38,6 +39,7 @@ from .image_cache import ImageCache
 from .ota_manager import OTAManager
 from .process_manager import ProcessManager
 from .screensaver import ScreensaverManager
+from .screensaver_v2 import ScreensaverV2
 
 app = Flask(__name__)
 # Secure secret key from settings with auto-generation
@@ -77,8 +79,12 @@ def reload_device_config(devices_file: str = "devices.yaml"):
     logger.info(f"Reloaded configuration from {devices_file}")
 
 
-# Screensaver manager instance
+# Screensaver manager instance (legacy)
 screensaver_manager: ScreensaverManager | None = None
+
+# New curation-based screensaver
+curation_manager: CurationManager | None = None
+screensaver_v2: ScreensaverV2 | None = None
 
 # OTA manager instance
 ota_manager: OTAManager | None = None
@@ -1606,6 +1612,174 @@ def api_get_collection_image(collection_name, filename):
         return jsonify({"error": f"Failed to serve image: {str(e)}"}), 500
 
 
+# =============================================================================
+# Curation Routes (new system)
+# =============================================================================
+
+
+@app.route("/curation")
+def curation_page():
+    """Curation management page."""
+    return render_template("curation.html")
+
+
+@app.route("/api/curation/status")
+def curation_status():
+    """Get curation and screensaver v2 status."""
+    if not curation_manager or not screensaver_v2:
+        return jsonify({"error": "Curation system not initialized"}), 500
+
+    settings = get_settings()
+    staging_info = curation_manager.get_staging_info()
+
+    return jsonify({
+        "screensaver": {
+            "active": screensaver_v2.is_active,
+            "enabled": settings.screensaver_v2.enabled,
+            "interval": settings.screensaver_v2.interval,
+        },
+        "curation": {
+            "active": curation_manager.is_active,
+            "interval": settings.curation.interval,
+            "sources_count": len(settings.curation.sources),
+        },
+        "staging": staging_info,
+    })
+
+
+@app.route("/api/curation/curate", methods=["POST"])
+def run_curation():
+    """Run curation immediately."""
+    if not curation_manager:
+        return jsonify({"error": "Curation manager not initialized"}), 500
+
+    data = request.get_json() or {}
+    dry_run = data.get("dry_run", False)
+
+    try:
+        result = curation_manager.curate(dry_run=dry_run)
+        return jsonify({
+            "success": True,
+            "staged_count": result.staged_count,
+            "filtered_count": result.filtered_count,
+            "total_candidates": result.total_candidates,
+            "sources_summary": result.sources_summary,
+            "dry_run": dry_run,
+        })
+    except Exception as e:
+        logger.error(f"Curation failed: {e}")
+        return jsonify({"error": f"Curation failed: {str(e)}"}), 500
+
+
+@app.route("/api/curation/staging")
+def staging_status():
+    """Get staging directory status."""
+    if not curation_manager:
+        return jsonify({"error": "Curation manager not initialized"}), 500
+
+    info = curation_manager.get_staging_info()
+    playlist = curation_manager.staging.get_playlist()
+
+    return jsonify({
+        "path": info["path"],
+        "count": info["count"],
+        "current_index": info["current_index"],
+        "is_empty": info["is_empty"],
+        "playlist": playlist,
+    })
+
+
+@app.route("/api/curation/staging/image/<filename>")
+def get_staging_image(filename):
+    """Get an image from staging directory."""
+    if not curation_manager:
+        return jsonify({"error": "Curation manager not initialized"}), 500
+
+    # Validate filename
+    if "/" in filename or "\\" in filename or filename in [".", ".."]:
+        return jsonify({"error": "Invalid filename"}), 400
+
+    image_path = curation_manager.staging.staging_path / filename
+    if not image_path.exists():
+        return jsonify({"error": f"Image '{filename}' not found"}), 404
+
+    return send_file(str(image_path), mimetype="image/png")
+
+
+@app.route("/api/screensaver-v2/start", methods=["POST"])
+def start_screensaver_v2():
+    """Start the new curation-based screensaver."""
+    if not screensaver_v2 or not curation_manager:
+        return jsonify({"error": "Screensaver V2 not initialized"}), 500
+
+    if screensaver_v2.is_active:
+        return jsonify({"error": "Screensaver already active"}), 400
+
+    data = request.get_json() or {}
+    interval = data.get("interval", get_settings().screensaver_v2.interval)
+
+    try:
+        # Start curation manager background thread if not running
+        if not curation_manager.is_active:
+            curation_manager.start()
+
+        screensaver_v2.start(interval=interval)
+
+        # Update settings
+        settings = get_settings()
+        settings.screensaver_v2.enabled = True
+        settings.screensaver_v2.interval = interval
+        settings.save_to_file()
+
+        return jsonify({
+            "success": True,
+            "message": f"Screensaver V2 started (interval: {interval}s)",
+        })
+    except Exception as e:
+        logger.error(f"Failed to start screensaver v2: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/screensaver-v2/stop", methods=["POST"])
+def stop_screensaver_v2():
+    """Stop the new curation-based screensaver."""
+    if not screensaver_v2:
+        return jsonify({"error": "Screensaver V2 not initialized"}), 500
+
+    if not screensaver_v2.is_active:
+        return jsonify({"error": "Screensaver not active"}), 400
+
+    try:
+        screensaver_v2.stop()
+
+        # Update settings
+        settings = get_settings()
+        settings.screensaver_v2.enabled = False
+        settings.save_to_file()
+
+        return jsonify({"success": True, "message": "Screensaver V2 stopped"})
+    except Exception as e:
+        logger.error(f"Failed to stop screensaver v2: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/screensaver-v2/next", methods=["POST"])
+def screensaver_v2_next():
+    """Display the next image immediately."""
+    if not screensaver_v2:
+        return jsonify({"error": "Screensaver V2 not initialized"}), 500
+
+    try:
+        success = screensaver_v2.next_image()
+        if success:
+            return jsonify({"success": True, "message": "Next image displayed"})
+        else:
+            return jsonify({"error": "Failed to display next image"}), 400
+    except Exception as e:
+        logger.error(f"Failed to show next image: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/flash/start", methods=["POST"])
 def start_flash():
     """Start the firmware flashing process."""
@@ -1686,21 +1860,38 @@ def create_app(devices_file="devices.yaml"):
     global \
         controller, \
         screensaver_manager, \
+        curation_manager, \
+        screensaver_v2, \
         ota_manager, \
         device_monitor, \
         flash_manager, \
         process_manager
     if controller is None:
         controller = TapestryController.from_config_file(devices_file)
+
+    def send_and_save_image(image):
+        """Send image to displays and save for current-image endpoint."""
+        controller.send_image(image)
+        save_last_image(image)
+        # Don't update cache for screensaver images - they're temporary
+
     if screensaver_manager is None:
-
-        def send_and_save_image(image):
-            """Send image to displays and save for current-image endpoint."""
-            controller.send_image(image)
-            save_last_image(image)
-            # Don't update cache for screensaver images - they're temporary
-
         screensaver_manager = ScreensaverManager(send_and_save_image)
+
+    # Initialize new curation system
+    if curation_manager is None:
+        settings = get_settings()
+        curation_manager = CurationManager(
+            staging_path=settings.curation.staging_path,
+            curation_interval=settings.curation.interval,
+        )
+        # Configure from settings
+        collections_dir = settings.screensaver.gallery.collections_dir
+        config = settings.curation.to_manager_config(collections_dir=collections_dir)
+        curation_manager.configure_from_dict(config)
+
+    if screensaver_v2 is None:
+        screensaver_v2 = ScreensaverV2(curation_manager, send_and_save_image)
     if process_manager is None:
         process_manager = ProcessManager()
     if ota_manager is None:
@@ -1871,9 +2062,20 @@ def main():
 
     settings = get_settings()
 
-    # Auto-start screensaver if enabled in settings
-    if settings.screensaver.enabled:
-        logger.info("Screensaver is enabled in settings, starting automatically...")
+    # Auto-start screensaver v2 if enabled (new curation-based system)
+    if settings.screensaver_v2.enabled:
+        logger.info("Screensaver V2 is enabled, starting with curation system...")
+        try:
+            if curation_manager and not curation_manager.is_active:
+                curation_manager.start()
+            if screensaver_v2:
+                screensaver_v2.start(interval=settings.screensaver_v2.interval)
+                logger.info(f"Screensaver V2 started (interval: {settings.screensaver_v2.interval}s)")
+        except Exception as e:
+            logger.error(f"Failed to auto-start screensaver v2: {e}")
+    # Legacy screensaver auto-start (if v2 not enabled)
+    elif settings.screensaver.enabled:
+        logger.info("Legacy screensaver is enabled in settings, starting automatically...")
         try:
             message = start_screensaver_internal()
             logger.info(f"Screensaver started successfully: {message}")
