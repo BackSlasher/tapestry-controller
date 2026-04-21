@@ -2,7 +2,7 @@
 
 import logging
 import secrets
-from typing import Literal
+from typing import List, Literal, Optional, Union
 
 import toml
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -16,6 +16,129 @@ from pydantic_settings import (
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# Curation Settings
+# =============================================================================
+
+
+class CurationFilterSettings(BaseModel):
+    """Filter settings for curation pipeline."""
+
+    enabled: bool = Field(default=True, description="Master switch for filters")
+    min_width: int = Field(default=1920, ge=0, description="Minimum image width")
+    min_height: int = Field(default=1080, ge=0, description="Minimum image height")
+    min_contrast: int = Field(
+        default=150, ge=0, le=255, description="Minimum contrast (0-255)"
+    )
+    min_histogram_entropy: Optional[float] = Field(
+        default=None, ge=0, le=8, description="Minimum histogram entropy (0-8)"
+    )
+    keywords_exclude: List[str] = Field(
+        default_factory=list, description="Reject if title contains any of these"
+    )
+    keywords_include: List[str] = Field(
+        default_factory=list,
+        description="Require title to contain at least one of these",
+    )
+
+
+class CollectionSourceSettings(BaseModel):
+    """Settings for a collection source."""
+
+    type: Literal["collection"] = "collection"
+    name: str = Field(description="Collection name")
+    shuffle: bool = Field(default=True, description="Shuffle image order")
+    skip_filters: Optional[bool] = Field(
+        default=None, description="Skip filters (default: True for local sources)"
+    )
+
+
+class DirectorySourceSettings(BaseModel):
+    """Settings for a directory source."""
+
+    type: Literal["directory"] = "directory"
+    path: str = Field(description="Path to directory")
+    shuffle: bool = Field(default=True, description="Shuffle image order")
+    recursive: bool = Field(default=False, description="Search subdirectories")
+    skip_filters: Optional[bool] = Field(
+        default=None, description="Skip filters (default: True for local sources)"
+    )
+
+
+class RedditSourceSettings(BaseModel):
+    """Settings for a Reddit source."""
+
+    type: Literal["reddit"] = "reddit"
+    subreddits: List[str] = Field(description="List of subreddit names")
+    sort: Literal["top", "hot", "new", "rising"] = Field(
+        default="top", description="Sort order"
+    )
+    time_period: Literal["hour", "day", "week", "month", "year", "all"] = Field(
+        default="week", description="Time period for top sort"
+    )
+    limit: int = Field(default=30, ge=1, le=100, description="Posts per subreddit")
+    keywords_include: List[str] = Field(
+        default_factory=list, description="Title must contain at least one"
+    )
+    keywords_exclude: List[str] = Field(
+        default_factory=list, description="Title must not contain any"
+    )
+    shuffle: bool = Field(default=True, description="Shuffle results")
+    skip_filters: Optional[bool] = Field(
+        default=None, description="Skip filters (default: False for remote sources)"
+    )
+
+
+# Union type for source settings
+SourceSettings = Union[
+    CollectionSourceSettings, DirectorySourceSettings, RedditSourceSettings
+]
+
+
+class CurationSettings(BaseModel):
+    """Curation pipeline settings."""
+
+    staging_path: str = Field(
+        default=".tapestry-data/staging", description="Path to staging directory"
+    )
+    count: int = Field(default=20, ge=1, le=100, description="Number of images to stage")
+    shuffle: bool = Field(default=True, description="Shuffle final playlist")
+    interval: int = Field(
+        default=86400, ge=60, description="Seconds between auto-curations"
+    )
+    filters: CurationFilterSettings = Field(
+        default_factory=CurationFilterSettings, description="Filter settings"
+    )
+    sources: List[SourceSettings] = Field(
+        default_factory=list, description="List of image sources"
+    )
+
+    def to_manager_config(self, collections_dir: str = ".tapestry-data/collections") -> dict:
+        """Convert to config dict for CurationManager.configure_from_dict()."""
+        return {
+            "staging_path": self.staging_path,
+            "count": self.count,
+            "shuffle": self.shuffle,
+            "interval": self.interval,
+            "collections_dir": collections_dir,
+            "filters": {
+                "enabled": self.filters.enabled,
+                "min_width": self.filters.min_width,
+                "min_height": self.filters.min_height,
+                "min_contrast": self.filters.min_contrast,
+                "min_histogram_entropy": self.filters.min_histogram_entropy,
+                "keywords_exclude": self.filters.keywords_exclude,
+                "keywords_include": self.filters.keywords_include,
+            },
+            "sources": [s.model_dump() for s in self.sources],
+        }
+
+
+# =============================================================================
+# Legacy Screensaver Settings (for backwards compatibility during migration)
+# =============================================================================
+
+
 class GallerySettings(BaseModel):
     """Gallery screensaver settings."""
 
@@ -24,7 +147,7 @@ class GallerySettings(BaseModel):
         description="Legacy: Directory containing wallpaper images (deprecated)",
     )
     collections_dir: str = Field(
-        default="~/.tapestry/collections",
+        default=".tapestry-data/collections",
         description="Root directory for image collections",
     )
     selected_collection: str = Field(
@@ -152,12 +275,34 @@ class WebUISettings(BaseModel):
         return self.secret_key
 
 
+class NewScreensaverSettings(BaseModel):
+    """New simplified screensaver settings (uses staging)."""
+
+    enabled: bool = Field(default=False, description="Whether screensaver is enabled")
+    interval: int = Field(
+        default=300, ge=10, le=3600, description="Seconds between image changes"
+    )
+
+
 class TapestrySettings(BaseSettings):
     """Main Tapestry settings."""
 
-    screensaver: ScreensaverSettings = Field(
-        default_factory=ScreensaverSettings, description="Screensaver configuration"
+    # New curation system
+    curation: CurationSettings = Field(
+        default_factory=CurationSettings, description="Curation pipeline configuration"
     )
+
+    # Legacy screensaver settings (for backwards compatibility)
+    screensaver: ScreensaverSettings = Field(
+        default_factory=ScreensaverSettings, description="Legacy screensaver configuration"
+    )
+
+    # New screensaver settings
+    screensaver_v2: NewScreensaverSettings = Field(
+        default_factory=NewScreensaverSettings,
+        description="New screensaver configuration (uses staging)",
+    )
+
     webui: WebUISettings = Field(
         default_factory=WebUISettings, description="Web UI configuration"
     )

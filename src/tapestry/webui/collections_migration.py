@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 def ensure_default_collection(
-    collections_dir: str = "~/.tapestry/collections",
+    collections_dir: str = ".tapestry-data/collections",
     legacy_wallpapers_dir: str = "wallpapers",
 ) -> bool:
     """Ensure the default 'wallpapers' collection exists.

@@ -121,7 +121,7 @@ class ScreensaverManager:
 
             gallery_config = config.get("gallery", {})
             collections_dir = gallery_config.get(
-                "collections_dir", "~/.tapestry/collections"
+                "collections_dir", ".tapestry-data/collections"
             )
             selected_collection = gallery_config.get(
                 "selected_collection", "wallpapers"
@@ -194,7 +194,7 @@ class ScreensaverManager:
 
         # Get collection info from config
         collections_dir = gallery_config.get(
-            "collections_dir", "~/.tapestry/collections"
+            "collections_dir", ".tapestry-data/collections"
         )
         selected_collection = gallery_config.get("selected_collection", "wallpapers")
 

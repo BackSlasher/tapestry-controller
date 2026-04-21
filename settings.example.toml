@@ -1,0 +1,96 @@
+# Tapestry Settings Example
+# Copy this to settings.toml and customize
+
+# =============================================================================
+# Curation Settings
+# =============================================================================
+# The curation system fetches images from various sources, filters them for
+# quality, and stages them for the screensaver to display.
+
+[curation]
+staging_path = ".tapestry-data/staging"  # Where curated images are stored
+count = 20                             # Number of images to keep staged
+shuffle = true                         # Shuffle playlist order
+interval = 86400                       # Seconds between auto-curations (24h)
+
+# Filters - applied to remote sources by default
+[curation.filters]
+enabled = true
+min_width = 1920                       # Minimum image width
+min_height = 1080                      # Minimum image height
+min_contrast = 150                     # Minimum contrast for e-ink (0-255)
+keywords_exclude = ["car", "sports", "nfl", "nba", "soccer", "football"]
+
+# =============================================================================
+# Sources
+# =============================================================================
+# Sources are processed in order. Local sources (collections, directories)
+# are processed first and skip filters by default. Remote sources (reddit)
+# apply filters by default.
+
+# Collection source - reads from .tapestry-data/collections/<name>
+[[curation.sources]]
+type = "collection"
+name = "favorites"
+
+# Directory source - reads from any path
+[[curation.sources]]
+type = "directory"
+path = "~/wallpapers"
+
+# Reddit source - fetches from subreddits
+[[curation.sources]]
+type = "reddit"
+subreddits = ["ImaginaryFallout", "RetroFuturism", "ImaginaryWastelands"]
+sort = "top"
+time_period = "week"
+limit = 30
+
+# Another Reddit source with keyword filtering
+[[curation.sources]]
+type = "reddit"
+subreddits = ["wallpapers", "wallpaper"]
+sort = "top"
+time_period = "day"
+limit = 50
+keywords_include = ["fallout", "post-apocalyptic", "wasteland", "nuclear"]
+
+# =============================================================================
+# Screensaver V2 (new staging-based screensaver)
+# =============================================================================
+
+[screensaver_v2]
+enabled = true
+interval = 300  # Seconds between image changes (5 minutes)
+
+# =============================================================================
+# Legacy Screensaver Settings (kept for backwards compatibility)
+# =============================================================================
+
+[screensaver]
+enabled = false
+type = "gallery"
+interval = 60
+
+[screensaver.gallery]
+wallpapers_dir = "wallpapers"
+collections_dir = ".tapestry-data/collections"
+selected_collection = "wallpapers"
+
+[screensaver.reddit]
+subreddit = "aiwallpapers"
+time_period = "all"
+sort = "top"
+limit = 30
+
+[screensaver.pixabay]
+api_key = ""
+keywords = "wallpaper"
+per_page = 20
+
+# =============================================================================
+# Web UI Settings
+# =============================================================================
+
+[webui]
+secret_key = ""  # Auto-generated if empty

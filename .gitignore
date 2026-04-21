@@ -1,2 +1,5 @@
 __pycache__/
 .claude/
+.tapestry-data/
+.venv/
+settings.toml

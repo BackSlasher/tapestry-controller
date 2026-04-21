@@ -44,7 +44,7 @@ def validate_collection_name(name: str) -> tuple[bool, str]:
     return True, ""
 
 
-def get_collections_root(collections_dir: str = "~/.tapestry/collections") -> Path:
+def get_collections_root(collections_dir: str = ".tapestry-data/collections") -> Path:
     """Get the collections root directory, creating it if needed.
 
     Args:
@@ -58,7 +58,7 @@ def get_collections_root(collections_dir: str = "~/.tapestry/collections") -> Pa
     return path
 
 
-def list_collections(collections_dir: str = "~/.tapestry/collections") -> list[dict]:
+def list_collections(collections_dir: str = ".tapestry-data/collections") -> list[dict]:
     """List all available collections.
 
     Args:
@@ -88,7 +88,7 @@ def list_collections(collections_dir: str = "~/.tapestry/collections") -> list[d
 
 
 def create_collection(
-    name: str, collections_dir: str = "~/.tapestry/collections"
+    name: str, collections_dir: str = ".tapestry-data/collections"
 ) -> tuple[bool, str]:
     """Create a new collection.
 
@@ -123,7 +123,7 @@ def create_collection(
 
 
 def delete_collection(
-    name: str, collections_dir: str = "~/.tapestry/collections"
+    name: str, collections_dir: str = ".tapestry-data/collections"
 ) -> tuple[bool, str]:
     """Delete a collection and all its images.
 
@@ -158,7 +158,7 @@ def delete_collection(
 
 
 def rename_collection(
-    old_name: str, new_name: str, collections_dir: str = "~/.tapestry/collections"
+    old_name: str, new_name: str, collections_dir: str = ".tapestry-data/collections"
 ) -> tuple[bool, str]:
     """Rename a collection.
 
@@ -203,7 +203,7 @@ def rename_collection(
 
 
 def get_collection_path(
-    collection_name: str, collections_dir: str = "~/.tapestry/collections"
+    collection_name: str, collections_dir: str = ".tapestry-data/collections"
 ) -> Optional[Path]:
     """Get the path to a collection.
 
@@ -241,7 +241,7 @@ def get_collection_images(collection_path: Path) -> list[str]:
 
 
 def list_collection_images(
-    collection_name: str, collections_dir: str = "~/.tapestry/collections"
+    collection_name: str, collections_dir: str = ".tapestry-data/collections"
 ) -> Optional[list[dict]]:
     """List all images in a collection.
 
@@ -275,7 +275,7 @@ def list_collection_images(
 def delete_collection_image(
     collection_name: str,
     filename: str,
-    collections_dir: str = "~/.tapestry/collections",
+    collections_dir: str = ".tapestry-data/collections",
 ) -> tuple[bool, str]:
     """Delete an image from a collection.
 
@@ -324,7 +324,7 @@ def save_uploaded_image(
     collection_name: str,
     file,
     filename: str,
-    collections_dir: str = "~/.tapestry/collections",
+    collections_dir: str = ".tapestry-data/collections",
 ) -> tuple[bool, str]:
     """Save an uploaded image to a collection.
 

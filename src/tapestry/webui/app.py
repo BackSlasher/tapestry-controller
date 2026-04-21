@@ -262,7 +262,7 @@ def load_persisted_image():
     try:
         import os
 
-        persist_dir = os.path.expanduser("~/.tapestry")
+        persist_dir = ".tapestry-data"
         persist_path = os.path.join(persist_dir, "last_image.png")
 
         if os.path.exists(persist_path):
@@ -310,7 +310,7 @@ def save_last_image(image):
     try:
         import os
 
-        persist_dir = os.path.expanduser("~/.tapestry")
+        persist_dir = ".tapestry-data"
         os.makedirs(persist_dir, exist_ok=True)
         persist_path = os.path.join(persist_dir, "last_image.png")
         image.save(persist_path, "PNG")
