@@ -331,12 +331,6 @@ def index():
     return render_template("index.html", device_count=device_count)
 
 
-@app.route("/screensaver")
-def screensaver_config():
-    """Screensaver configuration page."""
-    return render_template("screensaver.html")
-
-
 @app.route("/flash")
 def flash_firmware():
     """Flash firmware page."""
@@ -1199,163 +1193,7 @@ def screensaver_status():
     return jsonify(status)
 
 
-@app.route("/screensaver/wallpaper-dirs")
-def get_wallpaper_directories():
-    """Get available wallpaper directories."""
-    return jsonify(
-        {
-            "directories": [
-                "~/wallpapers",
-                "~/xp-wallpapers",
-                "~/my-photos",
-            ]
-        }
-    )
-
-
-@app.route("/screensaver/config/reddit")
-def get_reddit_config():
-    """Get Reddit screensaver configuration."""
-    settings = get_settings()
-    return jsonify(settings.screensaver.reddit.model_dump())
-
-
-@app.route("/screensaver/config/pixabay")
-def get_pixabay_config():
-    """Get Pixabay screensaver configuration."""
-    settings = get_settings()
-    return jsonify(settings.screensaver.pixabay.model_dump())
-
-
-@app.route("/screensaver/config", methods=["POST"])
-def update_screensaver_config():
-    """Update screensaver configuration."""
-    # Handle both form data and JSON data
-    if request.content_type and "application/json" in request.content_type:
-        data = request.get_json()
-    else:
-        data = request.form.to_dict()
-
-    if not data:
-        return jsonify({"error": "No data provided"}), 400
-
-    try:
-        settings = get_settings()
-        was_active = screensaver_manager.is_active if screensaver_manager else False
-
-        if not screensaver_manager:
-            return jsonify({"error": "Screensaver manager not initialized"}), 400
-
-        # Stop screensaver if active (we'll restart if needed)
-        if was_active:
-            screensaver_manager.stop()
-
-        # Create updated screensaver settings
-        current = settings.screensaver
-
-        # Update basic settings
-        new_interval = int(data["interval"]) if "interval" in data else current.interval
-        new_type = data["type"] if "type" in data else current.type
-
-        # Update gallery settings
-        new_gallery_data = {}
-        if "wallpapers_dir" in data:
-            new_gallery_data["wallpapers_dir"] = data["wallpapers_dir"].strip()
-        if "selected_collection" in data:
-            new_gallery_data["selected_collection"] = data[
-                "selected_collection"
-            ].strip()
-
-        if new_gallery_data:
-            # Merge with current gallery settings
-            current_gallery = current.gallery.model_dump()
-            current_gallery.update(new_gallery_data)
-            new_gallery = GallerySettings(**current_gallery)
-        else:
-            new_gallery = current.gallery
-
-        # Update reddit settings
-        new_reddit_data = {}
-        if "reddit_limit" in data:
-            new_reddit_data["limit"] = int(data["reddit_limit"])
-        if "reddit_subreddit" in data:
-            new_reddit_data["subreddit"] = data["reddit_subreddit"].strip()
-
-        if new_reddit_data:
-            # Merge with current reddit settings
-            current_reddit = current.reddit.model_dump()
-            current_reddit.update(new_reddit_data)
-            new_reddit = RedditSettings(**current_reddit)
-        else:
-            new_reddit = current.reddit
-
-        # Update pixabay settings
-        new_pixabay_data = {}
-        if "pixabay_api_key" in data:
-            new_pixabay_data["api_key"] = data["pixabay_api_key"].strip()
-        if "pixabay_keywords" in data:
-            new_pixabay_data["keywords"] = data["pixabay_keywords"].strip()
-        if "pixabay_per_page" in data:
-            new_pixabay_data["per_page"] = int(data["pixabay_per_page"])
-
-        if new_pixabay_data:
-            # Merge with current pixabay settings
-            current_pixabay = current.pixabay.model_dump()
-            current_pixabay.update(new_pixabay_data)
-            new_pixabay = PixabaySettings(**current_pixabay)
-        else:
-            new_pixabay = current.pixabay
-
-        # Create new screensaver settings
-        settings.screensaver = ScreensaverSettings(
-            enabled=current.enabled,
-            type=new_type,
-            interval=new_interval,
-            gallery=new_gallery,
-            reddit=new_reddit,
-            pixabay=new_pixabay,
-        )
-        settings.save_to_file()
-
-        # Restart screensaver if it was active
-        if was_active:
-            config = get_screensaver_config()
-            screensaver_manager.start(config)
-
-        # Build response config info
-        config_info = {
-            "type": settings.screensaver.type,
-            "interval": settings.screensaver.interval,
-        }
-
-        if settings.screensaver.type == "gallery":
-            config_info["wallpapers_dir"] = settings.screensaver.gallery.wallpapers_dir
-        elif settings.screensaver.type == "reddit":
-            config_info["reddit_limit"] = settings.screensaver.reddit.limit
-            config_info["reddit_subreddit"] = settings.screensaver.reddit.subreddit
-
-        return jsonify(
-            {
-                "success": True,
-                "message": "Screensaver configuration updated successfully",
-                "config": config_info,
-                "restarted": was_active,
-            }
-        )
-
-    except ValueError as e:
-        return jsonify({"error": f"Invalid configuration value: {str(e)}"}), 400
-    except Exception as e:
-        return jsonify({"error": f"Failed to update configuration: {str(e)}"}), 500
-
-
-# Collections management routes
-
-
-@app.route("/collections")
-def collections_page():
-    """Collections management page."""
-    return render_template("collections.html")
+# Collections management routes (API only - used by curation system)
 
 
 @app.route("/api/collections", methods=["GET"])
@@ -1777,6 +1615,165 @@ def screensaver_v2_next():
             return jsonify({"error": "Failed to display next image"}), 400
     except Exception as e:
         logger.error(f"Failed to show next image: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/curation/config")
+def get_curation_config():
+    """Get current curation configuration."""
+    settings = get_settings()
+    curation = settings.curation
+
+    return jsonify({
+        "staging_path": curation.staging_path,
+        "count": curation.count,
+        "shuffle": curation.shuffle,
+        "interval": curation.interval,
+        "filters": {
+            "enabled": curation.filters.enabled,
+            "min_width": curation.filters.min_width,
+            "min_height": curation.filters.min_height,
+            "min_contrast": curation.filters.min_contrast,
+            "keywords_exclude": curation.filters.keywords_exclude,
+        },
+        "sources": [s.model_dump() for s in curation.sources],
+    })
+
+
+@app.route("/api/curation/config", methods=["POST"])
+def update_curation_config():
+    """Update curation configuration."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    try:
+        settings = get_settings()
+
+        # Update basic settings
+        if "count" in data:
+            settings.curation.count = int(data["count"])
+        if "shuffle" in data:
+            settings.curation.shuffle = bool(data["shuffle"])
+        if "interval" in data:
+            settings.curation.interval = int(data["interval"])
+
+        # Update filters
+        if "filters" in data:
+            f = data["filters"]
+            if "enabled" in f:
+                settings.curation.filters.enabled = bool(f["enabled"])
+            if "min_width" in f:
+                settings.curation.filters.min_width = int(f["min_width"])
+            if "min_height" in f:
+                settings.curation.filters.min_height = int(f["min_height"])
+            if "min_contrast" in f:
+                settings.curation.filters.min_contrast = int(f["min_contrast"])
+            if "keywords_exclude" in f:
+                settings.curation.filters.keywords_exclude = f["keywords_exclude"]
+
+        # Update sources (replace entirely)
+        if "sources" in data:
+            from ..settings import (
+                CollectionSourceSettings,
+                DirectorySourceSettings,
+                RedditSourceSettings,
+            )
+
+            new_sources = []
+            for s in data["sources"]:
+                if s["type"] == "collection":
+                    new_sources.append(CollectionSourceSettings(**s))
+                elif s["type"] == "directory":
+                    new_sources.append(DirectorySourceSettings(**s))
+                elif s["type"] == "reddit":
+                    new_sources.append(RedditSourceSettings(**s))
+            settings.curation.sources = new_sources
+
+        settings.save_to_file()
+
+        # Reconfigure curation manager
+        if curation_manager:
+            collections_dir = settings.screensaver.gallery.collections_dir
+            config = settings.curation.to_manager_config(collections_dir=collections_dir)
+            curation_manager.configure_from_dict(config)
+
+        return jsonify({"success": True, "message": "Configuration updated"})
+    except Exception as e:
+        logger.error(f"Failed to update config: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/curation/sources", methods=["POST"])
+def add_curation_source():
+    """Add a new source."""
+    data = request.get_json()
+    if not data or "type" not in data:
+        return jsonify({"error": "Source type required"}), 400
+
+    try:
+        settings = get_settings()
+
+        from ..settings import (
+            CollectionSourceSettings,
+            DirectorySourceSettings,
+            RedditSourceSettings,
+        )
+
+        if data["type"] == "collection":
+            source = CollectionSourceSettings(
+                name=data.get("name", "wallpapers"),
+            )
+        elif data["type"] == "directory":
+            source = DirectorySourceSettings(
+                path=data.get("path", "~/wallpapers"),
+            )
+        elif data["type"] == "reddit":
+            source = RedditSourceSettings(
+                subreddits=data.get("subreddits", ["wallpapers"]),
+                sort=data.get("sort", "top"),
+                time_period=data.get("time_period", "week"),
+                limit=data.get("limit", 30),
+            )
+        else:
+            return jsonify({"error": f"Unknown source type: {data['type']}"}), 400
+
+        settings.curation.sources.append(source)
+        settings.save_to_file()
+
+        # Reconfigure curation manager
+        if curation_manager:
+            collections_dir = settings.screensaver.gallery.collections_dir
+            config = settings.curation.to_manager_config(collections_dir=collections_dir)
+            curation_manager.configure_from_dict(config)
+
+        return jsonify({"success": True, "message": "Source added"})
+    except Exception as e:
+        logger.error(f"Failed to add source: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/curation/sources/<int:index>", methods=["DELETE"])
+def delete_curation_source(index):
+    """Delete a source by index."""
+    try:
+        settings = get_settings()
+
+        if index < 0 or index >= len(settings.curation.sources):
+            return jsonify({"error": "Invalid source index"}), 400
+
+        settings.curation.sources.pop(index)
+        settings.save_to_file()
+
+        # Reconfigure curation manager
+        if curation_manager:
+            collections_dir = settings.screensaver.gallery.collections_dir
+            config = settings.curation.to_manager_config(collections_dir=collections_dir)
+            curation_manager.configure_from_dict(config)
+
+        return jsonify({"success": True, "message": "Source deleted"})
+    except Exception as e:
+        logger.error(f"Failed to delete source: {e}")
         return jsonify({"error": str(e)}), 500
 
 
