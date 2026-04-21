@@ -1676,7 +1676,6 @@ def update_curation_config():
         if "sources" in data:
             from ..settings import (
                 CollectionSourceSettings,
-                DirectorySourceSettings,
                 RedditSourceSettings,
             )
 
@@ -1684,8 +1683,6 @@ def update_curation_config():
             for s in data["sources"]:
                 if s["type"] == "collection":
                     new_sources.append(CollectionSourceSettings(**s))
-                elif s["type"] == "directory":
-                    new_sources.append(DirectorySourceSettings(**s))
                 elif s["type"] == "reddit":
                     new_sources.append(RedditSourceSettings(**s))
             settings.curation.sources = new_sources
@@ -1716,17 +1713,12 @@ def add_curation_source():
 
         from ..settings import (
             CollectionSourceSettings,
-            DirectorySourceSettings,
             RedditSourceSettings,
         )
 
         if data["type"] == "collection":
             source = CollectionSourceSettings(
                 name=data.get("name", "wallpapers"),
-            )
-        elif data["type"] == "directory":
-            source = DirectorySourceSettings(
-                path=data.get("path", "~/wallpapers"),
             )
         elif data["type"] == "reddit":
             source = RedditSourceSettings(

@@ -53,18 +53,6 @@ class CollectionSourceSettings(BaseModel):
     )
 
 
-class DirectorySourceSettings(BaseModel):
-    """Settings for a directory source."""
-
-    type: Literal["directory"] = "directory"
-    path: str = Field(description="Path to directory")
-    shuffle: bool = Field(default=True, description="Shuffle image order")
-    recursive: bool = Field(default=False, description="Search subdirectories")
-    skip_filters: Optional[bool] = Field(
-        default=None, description="Skip filters (default: True for local sources)"
-    )
-
-
 class RedditSourceSettings(BaseModel):
     """Settings for a Reddit source."""
 
@@ -90,9 +78,7 @@ class RedditSourceSettings(BaseModel):
 
 
 # Union type for source settings
-SourceSettings = Union[
-    CollectionSourceSettings, DirectorySourceSettings, RedditSourceSettings
-]
+SourceSettings = Union[CollectionSourceSettings, RedditSourceSettings]
 
 
 class CurationSettings(BaseModel):

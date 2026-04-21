@@ -7,7 +7,7 @@ from typing import Callable, List, Optional
 from .filters import ContrastFilter, Filter, KeywordsFilter, ResolutionFilter
 from .filters.contrast import HistogramFilter
 from .pipeline import CurationPipeline, CurationResult
-from .sources import CollectionSource, DirectorySource, RedditSource, Source
+from .sources import CollectionSource, RedditSource, Source
 from .staging import StagingManager
 
 logger = logging.getLogger(__name__)
@@ -107,7 +107,6 @@ class CurationManager:
             },
             "sources": [
                 {"type": "collection", "name": "favorites"},
-                {"type": "directory", "path": "~/wallpapers"},
                 {"type": "reddit", "subreddits": ["ImaginaryFallout"], ...},
             ]
         }
@@ -153,16 +152,6 @@ class CurationManager:
                     collection_name=source_config["name"],
                     collections_dir=collections_dir,
                     shuffle=source_config.get("shuffle", True),
-                )
-                if "skip_filters" in source_config:
-                    source.set_skip_filters(source_config["skip_filters"])
-                local_sources.append(source)
-
-            elif source_type == "directory":
-                source = DirectorySource(
-                    path=source_config["path"],
-                    shuffle=source_config.get("shuffle", True),
-                    recursive=source_config.get("recursive", False),
                 )
                 if "skip_filters" in source_config:
                     source.set_skip_filters(source_config["skip_filters"])

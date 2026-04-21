@@ -70,7 +70,6 @@
                             </button>
                             <ul class="dropdown-menu">
                                 <li><a class="dropdown-item" href="#" onclick="addSource('reddit')">Reddit</a></li>
-                                <li><a class="dropdown-item" href="#" onclick="addSource('directory')">Directory</a></li>
                                 <li><a class="dropdown-item" href="#" onclick="addSource('collection')">Collection</a></li>
                             </ul>
                         </div>
@@ -121,6 +120,23 @@
                             <i class="bi bi-check"></i> Save Filters
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Collections Management -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-collection"></i> Collections
+                </h5>
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="showCreateCollection()">
+                    <i class="bi bi-plus"></i> New
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="collections-list" class="row g-2">
+                    <div class="text-muted">Loading...</div>
                 </div>
             </div>
         </div>
@@ -187,14 +203,6 @@
                     </div>
                 </div>
 
-                <!-- Directory fields -->
-                <div id="directory-fields" style="display: none;">
-                    <div class="mb-3">
-                        <label class="form-label">Path</label>
-                        <input type="text" class="form-control" id="directory-path" placeholder="~/wallpapers">
-                    </div>
-                </div>
-
                 <!-- Collection fields -->
                 <div id="collection-fields" style="display: none;">
                     <div class="mb-3">
@@ -211,15 +219,65 @@
     </div>
 </div>
 
+<!-- Create Collection Modal -->
+<div class="modal fade" id="createCollectionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create Collection</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Collection Name</label>
+                    <input type="text" class="form-control" id="new-collection-name" placeholder="my-wallpapers">
+                    <div class="form-text">Letters, numbers, hyphens, underscores only</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="createCollection()">Create</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Collection Images Modal -->
+<div class="modal fade" id="collectionImagesModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Collection: <span id="collection-modal-name"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Upload Images</label>
+                    <input type="file" class="form-control" id="collection-upload" multiple accept="image/*">
+                </div>
+                <hr>
+                <div id="collection-images-grid" class="row g-2"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
-let addSourceModal;
+let addSourceModal, createCollectionModal, collectionImagesModal;
+let currentCollectionName = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     addSourceModal = new bootstrap.Modal(document.getElementById('addSourceModal'));
+    createCollectionModal = new bootstrap.Modal(document.getElementById('createCollectionModal'));
+    collectionImagesModal = new bootstrap.Modal(document.getElementById('collectionImagesModal'));
 
     loadStatus();
     loadConfig();
     loadStaging();
+    loadCollections();
 
     document.getElementById('start-screensaver').addEventListener('click', startScreensaver);
     document.getElementById('stop-screensaver').addEventListener('click', stopScreensaver);
@@ -227,6 +285,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('run-curation').addEventListener('click', runCuration);
     document.getElementById('save-filters').addEventListener('click', saveFilters);
     document.getElementById('confirm-add-source').addEventListener('click', confirmAddSource);
+    document.getElementById('collection-upload').addEventListener('change', uploadCollectionImages);
 
     setInterval(loadStatus, 10000);
 });
@@ -301,10 +360,6 @@ function renderSources(sources) {
             icon = 'bi-reddit';
             title = 'Reddit';
             detail = source.subreddits.join(', ');
-        } else if (source.type === 'directory') {
-            icon = 'bi-folder';
-            title = 'Directory';
-            detail = source.path;
         } else if (source.type === 'collection') {
             icon = 'bi-collection';
             title = 'Collection';
@@ -453,7 +508,6 @@ function addSource(type) {
 
     // Hide all fields
     document.getElementById('reddit-fields').style.display = 'none';
-    document.getElementById('directory-fields').style.display = 'none';
     document.getElementById('collection-fields').style.display = 'none';
 
     // Show relevant fields
@@ -476,8 +530,6 @@ function confirmAddSource() {
         data.sort = document.getElementById('reddit-sort').value;
         data.time_period = document.getElementById('reddit-time').value;
         data.limit = parseInt(document.getElementById('reddit-limit').value);
-    } else if (type === 'directory') {
-        data.path = document.getElementById('directory-path').value;
     } else if (type === 'collection') {
         data.name = document.getElementById('collection-name').value;
     }
@@ -520,6 +572,171 @@ function showResult(message, success) {
     div.textContent = message;
     div.style.display = 'block';
     setTimeout(() => { div.style.display = 'none'; }, 5000);
+}
+
+// ============= Collections Management =============
+
+function loadCollections() {
+    fetch('/api/collections')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('collections-list');
+
+            if (!data.collections || data.collections.length === 0) {
+                container.innerHTML = '<div class="col-12 text-muted">No collections. Click "New" to create one.</div>';
+                return;
+            }
+
+            container.innerHTML = data.collections.map(col => `
+                <div class="col-6 col-md-4 col-lg-3">
+                    <div class="card h-100">
+                        <div class="card-body p-2">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="text-truncate" style="cursor: pointer;" onclick="openCollection('${col.name}')">
+                                    <i class="bi bi-collection me-1"></i>
+                                    <strong>${col.name}</strong>
+                                    <small class="text-muted d-block">${col.image_count} images</small>
+                                </div>
+                                <button class="btn btn-sm btn-outline-danger p-1" onclick="deleteCollection('${col.name}')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        })
+        .catch(error => {
+            console.error('Error loading collections:', error);
+        });
+}
+
+function showCreateCollection() {
+    document.getElementById('new-collection-name').value = '';
+    createCollectionModal.show();
+}
+
+function createCollection() {
+    const name = document.getElementById('new-collection-name').value.trim();
+    if (!name) {
+        showResult('Collection name required', false);
+        return;
+    }
+
+    fetch('/api/collections', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: name})
+    })
+    .then(response => response.json())
+    .then(data => {
+        createCollectionModal.hide();
+        if (data.success) {
+            loadCollections();
+            showResult('Collection created', true);
+        } else {
+            showResult(data.error, false);
+        }
+    });
+}
+
+function deleteCollection(name) {
+    if (!confirm(`Delete collection "${name}" and all its images?`)) return;
+
+    fetch('/api/collections/' + encodeURIComponent(name), {method: 'DELETE'})
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            loadCollections();
+            showResult('Collection deleted', true);
+        } else {
+            showResult(data.error, false);
+        }
+    });
+}
+
+function openCollection(name) {
+    currentCollectionName = name;
+    document.getElementById('collection-modal-name').textContent = name;
+    document.getElementById('collection-upload').value = '';
+    loadCollectionImages(name);
+    collectionImagesModal.show();
+}
+
+function loadCollectionImages(name) {
+    fetch('/api/collections/' + encodeURIComponent(name) + '/images')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('collection-images-grid');
+
+            if (!data.images || data.images.length === 0) {
+                container.innerHTML = '<div class="col-12 text-muted">No images in this collection. Upload some above.</div>';
+                return;
+            }
+
+            container.innerHTML = data.images.map(img => `
+                <div class="col-4 col-md-3">
+                    <div class="card h-100">
+                        <img src="/api/collections/${encodeURIComponent(name)}/images/${encodeURIComponent(img.filename)}"
+                             class="card-img-top" style="height: 80px; object-fit: cover;">
+                        <div class="card-body p-1 text-center">
+                            <button class="btn btn-sm btn-outline-danger p-0 px-1"
+                                    onclick="deleteCollectionImage('${name}', '${img.filename}')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        });
+}
+
+function uploadCollectionImages() {
+    const input = document.getElementById('collection-upload');
+    const files = input.files;
+    if (!files.length || !currentCollectionName) return;
+
+    let uploaded = 0;
+    const total = files.length;
+
+    for (const file of files) {
+        const formData = new FormData();
+        formData.append('image', file);
+
+        fetch('/api/collections/' + encodeURIComponent(currentCollectionName) + '/images', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            uploaded++;
+            if (uploaded === total) {
+                loadCollectionImages(currentCollectionName);
+                loadCollections();
+                showResult(`Uploaded ${total} image(s)`, true);
+            }
+        })
+        .catch(error => {
+            console.error('Upload error:', error);
+        });
+    }
+
+    input.value = '';
+}
+
+function deleteCollectionImage(collectionName, filename) {
+    fetch('/api/collections/' + encodeURIComponent(collectionName) + '/images/' + encodeURIComponent(filename), {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            loadCollectionImages(collectionName);
+            loadCollections();
+        } else {
+            showResult(data.error, false);
+        }
+    });
 }
 </script>
 {% endblock %}
