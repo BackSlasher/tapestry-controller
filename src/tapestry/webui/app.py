@@ -1589,6 +1589,7 @@ def staging_status():
 
     info = curation_manager.get_staging_info()
     playlist = curation_manager.staging.get_playlist()
+    liked_ids = set(curation_manager.staging.db.get_liked_ids())
 
     return jsonify({
         "path": info["path"],
@@ -1596,6 +1597,7 @@ def staging_status():
         "current_index": info["current_index"],
         "is_empty": info["is_empty"],
         "playlist": playlist,
+        "liked": list(liked_ids & set(playlist)),  # Only liked ones in current playlist
     })
 
 
