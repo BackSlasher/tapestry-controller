@@ -659,9 +659,18 @@ function runCuration() {
             details += `<i class="bi bi-funnel text-warning"></i> Filtered out: ${data.filtered_count}<br>`;
             details += `<i class="bi bi-search"></i> Total candidates: ${data.total_candidates}`;
 
-            resultDiv.className = 'alert alert-success';
+            const hasErrors = data.errors && data.errors.length > 0;
+            if (hasErrors) {
+                details += `<br><i class="bi bi-exclamation-triangle text-danger"></i> Failed: ${data.errors.length}`;
+                details += `<small class="d-block text-muted mt-1" style="max-height: 60px; overflow-y: auto;">`;
+                details += data.errors.slice(0, 5).join('<br>');
+                if (data.errors.length > 5) details += `<br>...and ${data.errors.length - 5} more`;
+                details += `</small>`;
+            }
+
+            resultDiv.className = hasErrors ? 'alert alert-warning' : 'alert alert-success';
             resultDiv.innerHTML = details;
-            setTimeout(() => { resultDiv.style.display = 'none'; }, 8000);
+            setTimeout(() => { resultDiv.style.display = 'none'; }, hasErrors ? 12000 : 8000);
 
             loadStaging();
             loadStatus();

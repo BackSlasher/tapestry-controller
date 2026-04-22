@@ -1588,6 +1588,7 @@ def run_curation_stream():
                 "staged_count": result.staged_count,
                 "filtered_count": result.filtered_count,
                 "total_candidates": result.total_candidates,
+                "errors": result.errors,
             })
         except Exception as e:
             progress_queue.put({"type": "error", "message": str(e)})
