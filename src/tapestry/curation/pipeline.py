@@ -60,6 +60,28 @@ class CurationResult:
     filtered_count: int
     sources_summary: dict = field(default_factory=dict)
     errors: List[str] = field(default_factory=list)
+    timestamp: Optional[str] = None  # ISO format
+
+    def to_dict(self) -> dict:
+        return {
+            "staged_count": self.staged_count,
+            "total_candidates": self.total_candidates,
+            "filtered_count": self.filtered_count,
+            "sources_summary": self.sources_summary,
+            "errors": self.errors,
+            "timestamp": self.timestamp,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "CurationResult":
+        return cls(
+            staged_count=data.get("staged_count", 0),
+            total_candidates=data.get("total_candidates", 0),
+            filtered_count=data.get("filtered_count", 0),
+            sources_summary=data.get("sources_summary", {}),
+            errors=data.get("errors", []),
+            timestamp=data.get("timestamp"),
+        )
 
 
 class CurationPipeline:

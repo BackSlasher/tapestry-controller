@@ -280,6 +280,10 @@ class CurationManager:
                 self._curation_progress = None
                 self._cancel_requested = False
 
+        # Save result to file for persistence
+        if not dry_run:
+            self.staging.save_last_result(result.to_dict())
+
         if self._on_curation_complete and not dry_run:
             self._on_curation_complete(result)
 
@@ -377,3 +381,7 @@ class CurationManager:
         Convenience method that delegates to staging manager.
         """
         return self.staging.get_next_image()
+
+    def get_last_result(self) -> Optional[dict]:
+        """Get the last curation result, or None if not available."""
+        return self.staging.get_last_result()

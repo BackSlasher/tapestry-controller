@@ -1517,6 +1517,7 @@ def curation_status():
             "sources_count": len(settings.curation.sources),
             "in_progress": curation_progress is not None,
             "progress": curation_progress,
+            "last_result": curation_manager.get_last_result(),
         },
         "staging": staging_info,
     })

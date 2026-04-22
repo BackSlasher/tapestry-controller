@@ -82,6 +82,28 @@ class StagingManager:
     def rejected_file(self) -> Path:
         return self.staging_path / "rejected.json"
 
+    @property
+    def last_result_file(self) -> Path:
+        return self.staging_path / "last_curation.json"
+
+    def save_last_result(self, result_dict: dict) -> None:
+        """Save the last curation result to JSON."""
+        from datetime import datetime
+        result_dict["timestamp"] = datetime.now().isoformat()
+        with open(self.last_result_file, "w") as f:
+            json.dump(result_dict, f, indent=2)
+
+    def get_last_result(self) -> Optional[dict]:
+        """Load the last curation result, or None if not available."""
+        if not self.last_result_file.exists():
+            return None
+        try:
+            with open(self.last_result_file) as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to read last result: {e}")
+            return None
+
     def clear(self) -> None:
         """Clear all staged images and reset state."""
         # Remove all image files

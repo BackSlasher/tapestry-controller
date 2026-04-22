@@ -416,6 +416,25 @@ function loadStatus() {
                     resultDiv.style.display = 'none';
                     loadStaging();
                 }
+
+                // Show last result errors on initial load (not during polling)
+                if (!curationPolling && resultDiv.style.display === 'none' && data.curation.last_result) {
+                    const last = data.curation.last_result;
+                    if (last.errors && last.errors.length > 0) {
+                        const when = last.timestamp ? new Date(last.timestamp).toLocaleString() : 'recently';
+                        resultDiv.className = 'alert alert-warning alert-dismissible';
+                        resultDiv.innerHTML = `
+                            <button type="button" class="btn-close" onclick="this.parentElement.style.display='none'"></button>
+                            <small class="text-muted">Last curation (${when}):</small><br>
+                            <i class="bi bi-exclamation-triangle"></i> ${last.errors.length} error(s)
+                            <small class="d-block text-muted mt-1" style="max-height: 40px; overflow-y: auto;">
+                                ${last.errors.slice(0, 3).join('<br>')}
+                                ${last.errors.length > 3 ? '<br>...' : ''}
+                            </small>
+                        `;
+                        resultDiv.style.display = 'block';
+                    }
+                }
             }
 
             if (data.screensaver.active) {
