@@ -303,6 +303,9 @@
                 <img id="viewer-image" src="" class="img-fluid" style="max-height: 75vh;">
             </div>
             <div class="modal-footer justify-content-center py-2">
+                <button type="button" class="btn btn-primary" id="viewer-show">
+                    <i class="bi bi-display"></i> Show Now
+                </button>
                 <button type="button" class="btn btn-success" id="viewer-like">
                     <i class="bi bi-hand-thumbs-up"></i> Like
                 </button>
@@ -326,6 +329,7 @@ document.addEventListener('DOMContentLoaded', function() {
     collectionImagesModal = new bootstrap.Modal(document.getElementById('collectionImagesModal'));
     imageViewerModal = new bootstrap.Modal(document.getElementById('imageViewerModal'));
 
+    document.getElementById('viewer-show').addEventListener('click', showCurrentImage);
     document.getElementById('viewer-like').addEventListener('click', likeCurrentImage);
     document.getElementById('viewer-dislike').addEventListener('click', dislikeCurrentImage);
 
@@ -1028,6 +1032,32 @@ function openImageViewer(filename) {
         });
 
     imageViewerModal.show();
+}
+
+function showCurrentImage() {
+    if (!currentViewerImage) return;
+
+    const btn = document.getElementById('viewer-show');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    fetch('/api/curation/show', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({filename: currentViewerImage})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showResult('Sent to displays!', true);
+        } else {
+            showResult(data.error, false);
+        }
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-display"></i> Show Now';
+    });
 }
 
 function likeCurrentImage() {

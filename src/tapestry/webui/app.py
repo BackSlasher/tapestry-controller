@@ -1721,6 +1721,35 @@ def reject_current_image():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/curation/show", methods=["POST"])
+def show_staged_image():
+    """Show a specific staged image on displays now."""
+    if not curation_manager or not controller:
+        return jsonify({"error": "Not initialized"}), 500
+
+    data = request.get_json()
+    if not data or "filename" not in data:
+        return jsonify({"error": "Filename required"}), 400
+
+    try:
+        filename = data["filename"]
+        image_path = curation_manager.staging.staging_path / filename
+
+        if not image_path.exists():
+            return jsonify({"error": f"Image not found: {filename}"}), 404
+
+        # Load and send to displays
+        img = PIL.Image.open(image_path)
+        img.load()
+        controller.send_image(img)
+        save_last_image(img)
+
+        return jsonify({"success": True, "message": "Image sent to displays"})
+    except Exception as e:
+        logger.error(f"Failed to show image: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/curation/reject", methods=["POST"])
 def reject_image_by_filename():
     """Reject a specific image by filename."""
