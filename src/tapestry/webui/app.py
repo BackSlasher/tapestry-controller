@@ -1469,6 +1469,7 @@ def curation_status():
 
     settings = get_settings()
     staging_info = curation_manager.get_staging_info()
+    curation_progress = curation_manager.get_curation_progress()
 
     return jsonify({
         "screensaver": {
@@ -1480,6 +1481,8 @@ def curation_status():
             "active": curation_manager.is_active,
             "interval": settings.curation.interval,
             "sources_count": len(settings.curation.sources),
+            "in_progress": curation_progress is not None,
+            "progress": curation_progress,
         },
         "staging": staging_info,
     })

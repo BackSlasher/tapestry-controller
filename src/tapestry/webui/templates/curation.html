@@ -317,6 +317,8 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(loadStatus, 10000);
 });
 
+let curationPolling = false;
+
 function loadStatus() {
     fetch('/api/curation/status')
         .then(response => response.json())
@@ -324,6 +326,30 @@ function loadStatus() {
             const statusDiv = document.getElementById('curation-status');
             const startBtn = document.getElementById('start-screensaver');
             const activeControls = document.getElementById('active-controls');
+            const resultDiv = document.getElementById('curation-result');
+
+            // Handle curation in progress (survives page refresh)
+            if (data.curation.in_progress && data.curation.progress) {
+                const p = data.curation.progress;
+                resultDiv.className = 'alert alert-info';
+                resultDiv.innerHTML = `
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                    <strong>Source ${p.source_index}/${p.source_count}</strong>: ${p.source_name}<br>
+                    <small>${p.message} | Staged: ${p.staged} | Filtered: ${p.filtered}</small>
+                `;
+                resultDiv.style.display = 'block';
+
+                // Poll faster while curation is running
+                if (!curationPolling) {
+                    curationPolling = true;
+                    setTimeout(() => { curationPolling = false; loadStatus(); }, 1000);
+                }
+            } else if (curationPolling) {
+                // Curation just finished
+                curationPolling = false;
+                resultDiv.style.display = 'none';
+                loadStaging();
+            }
 
             if (data.screensaver.active) {
                 statusDiv.innerHTML = `

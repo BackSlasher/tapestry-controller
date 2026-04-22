@@ -52,6 +52,10 @@ class CurationManager:
         # Callback for when curation completes
         self._on_curation_complete: Optional[Callable[[CurationResult], None]] = None
 
+        # Progress tracking for UI
+        self._curation_progress: Optional[dict] = None
+        self._curation_lock = threading.Lock()
+
     @property
     def is_active(self) -> bool:
         """Check if background curation is running."""
@@ -208,6 +212,35 @@ class CurationManager:
         """
         logger.info("Starting curation...")
 
+        # Initialize progress tracking
+        with self._curation_lock:
+            self._curation_progress = {
+                "running": True,
+                "phase": "starting",
+                "source_name": "",
+                "source_index": 0,
+                "source_count": 0,
+                "staged": 0,
+                "filtered": 0,
+                "message": "Starting curation...",
+            }
+
+        def track_progress(update):
+            with self._curation_lock:
+                self._curation_progress = {
+                    "running": True,
+                    "phase": update.phase,
+                    "source_name": update.source_name,
+                    "source_index": update.source_index,
+                    "source_count": update.source_count,
+                    "staged": update.staged_count,
+                    "filtered": update.filtered_count,
+                    "message": update.message,
+                }
+            # Also call external callback if provided
+            if progress_callback:
+                progress_callback(update)
+
         pipeline = CurationPipeline(
             staging=self.staging,
             filters=self._filters,
@@ -216,17 +249,27 @@ class CurationManager:
             shuffle=self._shuffle,
         )
 
-        result = pipeline.run(
-            local_sources=self._local_sources,
-            remote_sources=self._remote_sources,
-            dry_run=dry_run,
-            progress_callback=progress_callback,
-        )
+        try:
+            result = pipeline.run(
+                local_sources=self._local_sources,
+                remote_sources=self._remote_sources,
+                dry_run=dry_run,
+                progress_callback=track_progress,
+            )
+        finally:
+            # Clear progress when done
+            with self._curation_lock:
+                self._curation_progress = None
 
         if self._on_curation_complete and not dry_run:
             self._on_curation_complete(result)
 
         return result
+
+    def get_curation_progress(self) -> Optional[dict]:
+        """Get current curation progress, or None if not running."""
+        with self._curation_lock:
+            return self._curation_progress.copy() if self._curation_progress else None
 
     def curate_if_empty(self) -> Optional[CurationResult]:
         """Run curation only if staging is empty.
