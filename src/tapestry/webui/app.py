@@ -1444,7 +1444,17 @@ def api_get_collection_image(collection_name, filename):
         if not image_path.exists():
             return jsonify({"error": f"Image '{filename}' not found"}), 404
 
-        return send_file(str(image_path), mimetype=f"image/{image_path.suffix[1:]}")
+        # ETag based on filename + mtime
+        stat = image_path.stat()
+        etag = f'"{filename}-{int(stat.st_mtime)}"'
+
+        if request.headers.get("If-None-Match") == etag:
+            return "", 304
+
+        response = send_file(str(image_path), mimetype=f"image/{image_path.suffix[1:]}")
+        response.headers["ETag"] = etag
+        response.headers["Cache-Control"] = "private, max-age=86400"
+        return response
     except Exception as e:
         logger.error(f"Error serving image: {e}")
         return jsonify({"error": f"Failed to serve image: {str(e)}"}), 500
@@ -1615,7 +1625,18 @@ def get_staging_image(filename):
     if not image_path.exists():
         return jsonify({"error": f"Image '{filename}' not found"}), 404
 
-    return send_file(str(image_path), mimetype="image/png")
+    # ETag based on filename (UUIDs are unique) + mtime
+    stat = image_path.stat()
+    etag = f'"{filename}-{int(stat.st_mtime)}"'
+
+    # Check If-None-Match
+    if request.headers.get("If-None-Match") == etag:
+        return "", 304
+
+    response = send_file(str(image_path), mimetype="image/png")
+    response.headers["ETag"] = etag
+    response.headers["Cache-Control"] = "private, max-age=86400"
+    return response
 
 
 @app.route("/api/screensaver-v2/start", methods=["POST"])
