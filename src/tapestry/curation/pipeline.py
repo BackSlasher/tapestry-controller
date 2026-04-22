@@ -186,6 +186,8 @@ class CurationPipeline:
                 if not dry_run:
                     filename = self.staging.add_image(candidate)
                     staged_filenames.append(filename)
+                    # Write playlist incrementally so interrupted curation is still usable
+                    self.staging.append_to_playlist(filename)
 
                 staged_count += 1
                 source_stats["staged"] += 1

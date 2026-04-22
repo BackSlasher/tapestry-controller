@@ -143,6 +143,17 @@ class StagingManager:
         if shuffle:
             random.shuffle(filenames)
 
+        self._write_playlist_raw(filenames, reset_state=True)
+
+        logger.info(f"Wrote playlist with {len(filenames)} images (shuffled={shuffle})")
+
+    def _write_playlist_raw(self, filenames: List[str], reset_state: bool = False) -> None:
+        """Write playlist file without shuffling.
+
+        Args:
+            filenames: List of image filenames
+            reset_state: Whether to reset playback state
+        """
         playlist_data = {
             "images": filenames,
             "count": len(filenames),
@@ -151,11 +162,19 @@ class StagingManager:
         with open(self.playlist_file, "w") as f:
             json.dump(playlist_data, f, indent=2)
 
-        # Reset state since playlist changed
-        playlist_hash = hashlib.md5(json.dumps(filenames).encode()).hexdigest()[:8]
-        self._save_state(StagingState(current_index=0, playlist_hash=playlist_hash))
+        if reset_state:
+            playlist_hash = hashlib.md5(json.dumps(filenames).encode()).hexdigest()[:8]
+            self._save_state(StagingState(current_index=0, playlist_hash=playlist_hash))
 
-        logger.info(f"Wrote playlist with {len(filenames)} images (shuffled={shuffle})")
+    def append_to_playlist(self, filename: str) -> None:
+        """Append a single image to the playlist.
+
+        Args:
+            filename: Image filename to append
+        """
+        playlist = self.get_playlist()
+        playlist.append(filename)
+        self._write_playlist_raw(playlist, reset_state=False)
 
     def get_playlist(self) -> List[str]:
         """Get current playlist.
