@@ -69,6 +69,10 @@ class StagingManager:
     def state_file(self) -> Path:
         return self.staging_path / "state.json"
 
+    @property
+    def rejected_file(self) -> Path:
+        return self.staging_path / "rejected.json"
+
     def clear(self) -> None:
         """Clear all staged images and reset state."""
         # Remove all image files
@@ -264,3 +268,74 @@ class StagingManager:
             "current_index": state.current_index,
             "is_empty": len(playlist) == 0,
         }
+
+    def get_current_image_filename(self) -> Optional[str]:
+        """Get the filename of the current image (last shown).
+
+        Returns:
+            Filename string or None if no images
+        """
+        playlist = self.get_playlist()
+        if not playlist:
+            return None
+
+        state = self._load_state()
+        # current_index points to NEXT image, so current is index-1
+        current_idx = (state.current_index - 1) % len(playlist)
+        return playlist[current_idx]
+
+    def get_rejected_list(self) -> List[str]:
+        """Get list of rejected image filenames."""
+        if not self.rejected_file.exists():
+            return []
+
+        try:
+            with open(self.rejected_file) as f:
+                data = json.load(f)
+            return data.get("rejected", [])
+        except Exception as e:
+            logger.warning(f"Failed to read rejected list: {e}")
+            return []
+
+    def _save_rejected_list(self, rejected: List[str]) -> None:
+        """Save rejected list."""
+        with open(self.rejected_file, "w") as f:
+            json.dump({"rejected": rejected}, f, indent=2)
+
+    def reject_image(self, filename: str) -> None:
+        """Reject an image, removing it from playlist and staging.
+
+        Args:
+            filename: Image filename to reject
+        """
+        # Add to rejected list
+        rejected = self.get_rejected_list()
+        if filename not in rejected:
+            rejected.append(filename)
+            self._save_rejected_list(rejected)
+
+        # Remove from playlist
+        playlist = self.get_playlist()
+        if filename in playlist:
+            playlist.remove(filename)
+            # Rewrite playlist without shuffling
+            playlist_data = {"images": playlist, "count": len(playlist)}
+            with open(self.playlist_file, "w") as f:
+                json.dump(playlist_data, f, indent=2)
+
+            # Adjust current index if needed
+            state = self._load_state()
+            if state.current_index > 0:
+                state.current_index -= 1
+            state.playlist_hash = hashlib.md5(json.dumps(playlist).encode()).hexdigest()[:8]
+            self._save_state(state)
+
+        # Delete the actual file
+        filepath = self.staging_path / filename
+        if filepath.exists():
+            filepath.unlink()
+            logger.info(f"Rejected and removed: {filename}")
+
+    def is_rejected(self, filename: str) -> bool:
+        """Check if a filename is in the rejected list."""
+        return filename in self.get_rejected_list()

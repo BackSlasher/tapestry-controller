@@ -1618,6 +1618,35 @@ def screensaver_v2_next():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/curation/reject-current", methods=["POST"])
+def reject_current_image():
+    """Reject the current image and skip to next."""
+    if not curation_manager:
+        return jsonify({"error": "Curation manager not initialized"}), 500
+
+    try:
+        # Get current image filename
+        current = curation_manager.staging.get_current_image_filename()
+        if not current:
+            return jsonify({"error": "No current image to reject"}), 400
+
+        # Add to rejected list
+        curation_manager.staging.reject_image(current)
+
+        # If screensaver is active, advance to next image
+        if screensaver_v2 and screensaver_v2.is_active:
+            screensaver_v2.next_image()
+
+        return jsonify({
+            "success": True,
+            "message": f"Rejected {current}",
+            "rejected_count": len(curation_manager.staging.get_rejected_list()),
+        })
+    except Exception as e:
+        logger.error(f"Failed to reject image: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/curation/config")
 def get_curation_config():
     """Get current curation configuration."""
@@ -1634,6 +1663,7 @@ def get_curation_config():
             "min_width": curation.filters.min_width,
             "min_height": curation.filters.min_height,
             "min_contrast": curation.filters.min_contrast,
+            "min_entropy": curation.filters.min_histogram_entropy,
             "keywords_exclude": curation.filters.keywords_exclude,
         },
         "sources": [s.model_dump() for s in curation.sources],
@@ -1669,6 +1699,8 @@ def update_curation_config():
                 settings.curation.filters.min_height = int(f["min_height"])
             if "min_contrast" in f:
                 settings.curation.filters.min_contrast = int(f["min_contrast"])
+            if "min_entropy" in f:
+                settings.curation.filters.min_histogram_entropy = f["min_entropy"]
             if "keywords_exclude" in f:
                 settings.curation.filters.keywords_exclude = f["keywords_exclude"]
 

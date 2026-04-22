@@ -28,13 +28,18 @@
                             <button type="button" class="btn btn-success" id="start-screensaver">
                                 <i class="bi bi-play-fill"></i> Start Screensaver
                             </button>
-                            <div class="row" id="active-controls" style="display: none;">
-                                <div class="col-6">
+                            <div class="row g-2" id="active-controls" style="display: none;">
+                                <div class="col-4">
                                     <button type="button" class="btn btn-info w-100" id="next-image">
                                         <i class="bi bi-skip-forward-fill"></i> Next
                                     </button>
                                 </div>
-                                <div class="col-6">
+                                <div class="col-4">
+                                    <button type="button" class="btn btn-warning w-100" id="reject-image" title="Remove current image from rotation">
+                                        <i class="bi bi-hand-thumbs-down"></i> Reject
+                                    </button>
+                                </div>
+                                <div class="col-4">
                                     <button type="button" class="btn btn-danger w-100" id="stop-screensaver">
                                         <i class="bi bi-stop-fill"></i> Stop
                                     </button>
@@ -109,6 +114,11 @@
                             <div class="mb-2">
                                 <label class="form-label small">Min Contrast (0-255)</label>
                                 <input type="number" class="form-control form-control-sm" id="min-contrast" value="150" min="0" max="255">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small">Min Histogram Entropy (0-8)</label>
+                                <input type="number" class="form-control form-control-sm" id="min-entropy" value="" min="0" max="8" step="0.5" placeholder="disabled">
+                                <div class="form-text">Rejects images mostly one tone (e.g. white bg). Try 4.0</div>
                             </div>
                             <div class="mb-2">
                                 <label class="form-label small">Exclude Keywords</label>
@@ -282,6 +292,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('start-screensaver').addEventListener('click', startScreensaver);
     document.getElementById('stop-screensaver').addEventListener('click', stopScreensaver);
     document.getElementById('next-image').addEventListener('click', nextImage);
+    document.getElementById('reject-image').addEventListener('click', rejectImage);
     document.getElementById('run-curation').addEventListener('click', runCuration);
     document.getElementById('save-filters').addEventListener('click', saveFilters);
     document.getElementById('confirm-add-source').addEventListener('click', confirmAddSource);
@@ -334,6 +345,7 @@ function loadConfig() {
             document.getElementById('min-width').value = data.filters.min_width;
             document.getElementById('min-height').value = data.filters.min_height;
             document.getElementById('min-contrast').value = data.filters.min_contrast;
+            document.getElementById('min-entropy').value = data.filters.min_entropy || '';
             document.getElementById('keywords-exclude').value = (data.filters.keywords_exclude || []).join(', ');
 
             // Sources
@@ -444,11 +456,41 @@ function stopScreensaver() {
 }
 
 function nextImage() {
+    const btn = document.getElementById('next-image');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+
     fetch('/api/screensaver-v2/next', {method: 'POST'})
     .then(response => response.json())
     .then(data => {
         if (data.success) loadStaging();
         else showResult(data.error, false);
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-skip-forward-fill"></i> Next';
+    });
+}
+
+function rejectImage() {
+    const btn = document.getElementById('reject-image');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+
+    fetch('/api/curation/reject-current', {method: 'POST'})
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showResult('Image rejected and skipped', true);
+            loadStaging();
+            loadStatus();
+        } else {
+            showResult(data.error, false);
+        }
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-hand-thumbs-down"></i> Reject';
     });
 }
 
@@ -510,6 +552,9 @@ function saveFilters() {
         .map(k => k.trim())
         .filter(k => k);
 
+    const entropyVal = document.getElementById('min-entropy').value;
+    const minEntropy = entropyVal ? parseFloat(entropyVal) : null;
+
     fetch('/api/curation/config', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -519,6 +564,7 @@ function saveFilters() {
                 min_width: parseInt(document.getElementById('min-width').value),
                 min_height: parseInt(document.getElementById('min-height').value),
                 min_contrast: parseInt(document.getElementById('min-contrast').value),
+                min_entropy: minEntropy,
                 keywords_exclude: keywords
             }
         })
