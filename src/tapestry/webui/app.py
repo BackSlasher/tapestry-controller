@@ -99,6 +99,30 @@ flash_manager: FlashManager | None = None
 process_manager: ProcessManager | None = None
 
 
+def get_layout_aspect_ratio() -> float | None:
+    """Calculate the target aspect ratio from device layout.
+
+    Returns:
+        Aspect ratio (width/height) of the bounding rectangle, or None if no devices.
+    """
+    if not controller or not controller.config.devices:
+        return None
+
+    from .collections_manager import get_collection_path
+
+    device_rectangles = {}
+    for device in controller.config.devices:
+        start = Point(x=device.coordinates.x, y=device.coordinates.y)
+        dimensions = Dimensions(
+            width=device.detected_dimensions.width,
+            height=device.detected_dimensions.height,
+        )
+        device_rectangles[device] = Rectangle(start=start, dimensions=dimensions)
+
+    bounding = Rectangle.bounding_rectangle(list(device_rectangles.values()))
+    return bounding.dimensions.width / bounding.dimensions.height
+
+
 def get_screensaver_config():
     """Get screensaver configuration from settings."""
     settings = get_settings()
@@ -1917,6 +1941,7 @@ def get_curation_config():
     """Get current curation configuration."""
     settings = get_settings()
     curation = settings.curation
+    target_ratio = get_layout_aspect_ratio()
 
     return jsonify({
         "staging_path": curation.staging_path,
@@ -1929,8 +1954,10 @@ def get_curation_config():
             "min_height": curation.filters.min_height,
             "min_contrast": curation.filters.min_contrast,
             "min_entropy": curation.filters.min_histogram_entropy,
+            "min_coverage": curation.filters.min_coverage,
             "keywords_exclude": curation.filters.keywords_exclude,
         },
+        "target_aspect_ratio": round(target_ratio, 2) if target_ratio else None,
         "sources": [s.model_dump() for s in curation.sources],
     })
 
@@ -1966,6 +1993,8 @@ def update_curation_config():
                 settings.curation.filters.min_contrast = int(f["min_contrast"])
             if "min_entropy" in f:
                 settings.curation.filters.min_histogram_entropy = f["min_entropy"]
+            if "min_coverage" in f:
+                settings.curation.filters.min_coverage = f["min_coverage"]
             if "keywords_exclude" in f:
                 settings.curation.filters.keywords_exclude = f["keywords_exclude"]
 
@@ -1989,7 +2018,10 @@ def update_curation_config():
         # Reconfigure curation manager
         if curation_manager:
             collections_dir = settings.screensaver.gallery.collections_dir
-            config = settings.curation.to_manager_config(collections_dir=collections_dir)
+            config = settings.curation.to_manager_config(
+                collections_dir=collections_dir,
+                target_aspect_ratio=get_layout_aspect_ratio(),
+            )
             curation_manager.configure_from_dict(config)
 
         return jsonify({"success": True, "message": "Configuration updated"})
@@ -2033,7 +2065,10 @@ def add_curation_source():
         # Reconfigure curation manager
         if curation_manager:
             collections_dir = settings.screensaver.gallery.collections_dir
-            config = settings.curation.to_manager_config(collections_dir=collections_dir)
+            config = settings.curation.to_manager_config(
+                collections_dir=collections_dir,
+                target_aspect_ratio=get_layout_aspect_ratio(),
+            )
             curation_manager.configure_from_dict(config)
 
         return jsonify({"success": True, "message": "Source added"})
@@ -2057,7 +2092,10 @@ def delete_curation_source(index):
         # Reconfigure curation manager
         if curation_manager:
             collections_dir = settings.screensaver.gallery.collections_dir
-            config = settings.curation.to_manager_config(collections_dir=collections_dir)
+            config = settings.curation.to_manager_config(
+                collections_dir=collections_dir,
+                target_aspect_ratio=get_layout_aspect_ratio(),
+            )
             curation_manager.configure_from_dict(config)
 
         return jsonify({"success": True, "message": "Source deleted"})
@@ -2173,7 +2211,10 @@ def create_app(devices_file="devices.yaml"):
         )
         # Configure from settings
         collections_dir = settings.screensaver.gallery.collections_dir
-        config = settings.curation.to_manager_config(collections_dir=collections_dir)
+        config = settings.curation.to_manager_config(
+                collections_dir=collections_dir,
+                target_aspect_ratio=get_layout_aspect_ratio(),
+            )
         curation_manager.configure_from_dict(config)
 
     if screensaver_v2 is None:

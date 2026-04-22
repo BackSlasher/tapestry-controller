@@ -131,6 +131,13 @@
                                 </div>
                             </div>
                             <div class="mb-2">
+                                <label class="form-label small mb-0">
+                                    Min Coverage <span id="target-ratio-display" class="text-muted"></span>
+                                </label>
+                                <input type="number" class="form-control form-control-sm" id="min-coverage" value="" min="0" max="1" step="0.1" placeholder="off (e.g. 0.6 = 60%)">
+                                <div class="form-text">Fit to display layout. Rejects poor aspect ratios.</div>
+                            </div>
+                            <div class="mb-2">
                                 <label class="form-label small mb-0">Exclude Keywords</label>
                                 <input type="text" class="form-control form-control-sm" id="keywords-exclude" placeholder="car, sports, nfl">
                             </div>
@@ -431,7 +438,13 @@ function loadConfig() {
             document.getElementById('min-height').value = data.filters.min_height;
             document.getElementById('min-contrast').value = data.filters.min_contrast;
             document.getElementById('min-entropy').value = data.filters.min_entropy || '';
+            document.getElementById('min-coverage').value = data.filters.min_coverage || '';
             document.getElementById('keywords-exclude').value = (data.filters.keywords_exclude || []).join(', ');
+
+            // Show target aspect ratio
+            if (data.target_aspect_ratio) {
+                document.getElementById('target-ratio-display').textContent = `(layout: ${data.target_aspect_ratio}:1)`;
+            }
 
             // Sources
             renderSources(data.sources);
@@ -669,6 +682,9 @@ function saveFilters() {
     const entropyVal = document.getElementById('min-entropy').value;
     const minEntropy = entropyVal ? parseFloat(entropyVal) : null;
 
+    const coverageVal = document.getElementById('min-coverage').value;
+    const minCoverage = coverageVal ? parseFloat(coverageVal) : null;
+
     fetch('/api/curation/config', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -679,6 +695,7 @@ function saveFilters() {
                 min_height: parseInt(document.getElementById('min-height').value),
                 min_contrast: parseInt(document.getElementById('min-contrast').value),
                 min_entropy: minEntropy,
+                min_coverage: minCoverage,
                 keywords_exclude: keywords
             }
         })

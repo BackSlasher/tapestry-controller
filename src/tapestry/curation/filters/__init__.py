@@ -1,7 +1,7 @@
 """Image filters for curation pipeline."""
 
 from .base import Filter, FilterResult
-from .contrast import ContrastFilter
+from .contrast import AspectRatioFilter, ContrastFilter
 from .keywords import KeywordsFilter
 from .resolution import ResolutionFilter
 
@@ -10,5 +10,6 @@ __all__ = [
     "FilterResult",
     "ResolutionFilter",
     "ContrastFilter",
+    "AspectRatioFilter",
     "KeywordsFilter",
 ]

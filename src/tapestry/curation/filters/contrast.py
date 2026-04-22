@@ -98,3 +98,45 @@ class HistogramFilter(Filter):
         return FilterResult.reject(
             f"Histogram entropy {entropy:.2f} below minimum {self.min_entropy}"
         )
+
+
+class AspectRatioFilter(Filter):
+    """Filter that rejects images with poor aspect ratio fit.
+
+    When an image's aspect ratio differs significantly from the target
+    display layout, much of the image will be cropped. This filter
+    calculates "coverage" - what percentage of the source image will
+    actually be displayed.
+    """
+
+    def __init__(self, target_ratio: float, min_coverage: float = 0.6):
+        """Initialize aspect ratio filter.
+
+        Args:
+            target_ratio: Target aspect ratio (width/height) of the display layout.
+            min_coverage: Minimum coverage (0-1). 0.6 means at least 60% of
+                         the source image must be visible after fitting.
+        """
+        self.target_ratio = target_ratio
+        self.min_coverage = min_coverage
+
+    @property
+    def name(self) -> str:
+        return f"aspect_ratio(target={self.target_ratio:.2f}, min_coverage={self.min_coverage})"
+
+    def check(self, candidate: ImageCandidate) -> FilterResult:
+        """Check if image aspect ratio fits the target layout."""
+        img = candidate.image
+        src_ratio = img.width / img.height
+
+        # Coverage is how much of the source image will be visible
+        # after fitting to the target aspect ratio
+        coverage = min(src_ratio, self.target_ratio) / max(src_ratio, self.target_ratio)
+
+        if coverage >= self.min_coverage:
+            return FilterResult.accept()
+
+        return FilterResult.reject(
+            f"Aspect ratio {src_ratio:.2f} gives {coverage:.0%} coverage "
+            f"(target ratio {self.target_ratio:.2f}, min coverage {self.min_coverage:.0%})"
+        )

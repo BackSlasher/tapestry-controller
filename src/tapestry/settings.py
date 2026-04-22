@@ -40,6 +40,12 @@ class CurationFilterSettings(BaseModel):
         default_factory=list,
         description="Require title to contain at least one of these",
     )
+    min_coverage: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description="Minimum image coverage when fit to display (0-1). Rejects images with poor aspect ratio fit.",
+    )
 
 
 class CollectionSourceSettings(BaseModel):
@@ -99,8 +105,17 @@ class CurationSettings(BaseModel):
         default_factory=list, description="List of image sources"
     )
 
-    def to_manager_config(self, collections_dir: str = ".tapestry-data/collections") -> dict:
-        """Convert to config dict for CurationManager.configure_from_dict()."""
+    def to_manager_config(
+        self,
+        collections_dir: str = ".tapestry-data/collections",
+        target_aspect_ratio: Optional[float] = None,
+    ) -> dict:
+        """Convert to config dict for CurationManager.configure_from_dict().
+
+        Args:
+            collections_dir: Path to collections directory
+            target_aspect_ratio: Display layout aspect ratio (width/height) for coverage filter
+        """
         return {
             "staging_path": self.staging_path,
             "count": self.count,
@@ -115,6 +130,8 @@ class CurationSettings(BaseModel):
                 "min_histogram_entropy": self.filters.min_histogram_entropy,
                 "keywords_exclude": self.filters.keywords_exclude,
                 "keywords_include": self.filters.keywords_include,
+                "min_coverage": self.filters.min_coverage,
+                "target_aspect_ratio": target_aspect_ratio,
             },
             "sources": [s.model_dump() for s in self.sources],
         }

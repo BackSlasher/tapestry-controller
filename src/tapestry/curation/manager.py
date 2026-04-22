@@ -4,7 +4,7 @@ import logging
 import threading
 from typing import Callable, List, Optional
 
-from .filters import ContrastFilter, Filter, KeywordsFilter, ResolutionFilter
+from .filters import AspectRatioFilter, ContrastFilter, Filter, KeywordsFilter, ResolutionFilter
 from .filters.contrast import HistogramFilter
 from .pipeline import CurationPipeline, CurationResult
 from .sources import CollectionSource, RedditSource, Source
@@ -142,6 +142,14 @@ class CurationManager:
                 filters.append(KeywordsFilter(
                     keywords_exclude=filter_config.get("keywords_exclude", []),
                     keywords_include=filter_config.get("keywords_include", []),
+                ))
+            # Aspect ratio filter (optional, requires target_ratio)
+            min_coverage = filter_config.get("min_coverage")
+            target_ratio = filter_config.get("target_aspect_ratio")
+            if min_coverage is not None and target_ratio is not None:
+                filters.append(AspectRatioFilter(
+                    target_ratio=target_ratio,
+                    min_coverage=min_coverage,
                 ))
 
         # Build sources
