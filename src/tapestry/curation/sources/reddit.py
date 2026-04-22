@@ -2,6 +2,7 @@
 
 import logging
 import random
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 from typing import Iterator, List, Literal, Optional
 from urllib.parse import urlparse
@@ -155,11 +156,20 @@ class RedditSource(Source):
         """Yield image candidates from Reddit."""
         all_posts = []
 
-        for subreddit in self.subreddits:
-            logger.info(f"Fetching from r/{subreddit}...")
-            posts = self._fetch_subreddit_posts(subreddit)
-            all_posts.extend(posts)
-            logger.info(f"Found {len(posts)} image posts in r/{subreddit}")
+        # Fetch subreddit listings in parallel
+        with ThreadPoolExecutor(max_workers=min(4, len(self.subreddits))) as executor:
+            futures = {
+                executor.submit(self._fetch_subreddit_posts, sub): sub
+                for sub in self.subreddits
+            }
+            for future in as_completed(futures):
+                sub = futures[future]
+                try:
+                    posts = future.result()
+                    all_posts.extend(posts)
+                    logger.info(f"Found {len(posts)} image posts in r/{sub}")
+                except Exception as e:
+                    logger.error(f"Failed to fetch r/{sub}: {e}")
 
         if not all_posts:
             logger.warning(f"No image posts found in {self.subreddits}")
@@ -168,18 +178,30 @@ class RedditSource(Source):
         if self.shuffle:
             random.shuffle(all_posts)
 
-        for post in all_posts:
-            img = self._download_image(post["url"])
-            if img is None:
-                continue
+        # Download images in parallel, yield as they complete
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            # Submit all downloads
+            futures = {
+                executor.submit(self._download_image, post["url"]): post
+                for post in all_posts
+            }
 
-            yield ImageCandidate(
-                image=img,
-                metadata={
-                    "source_type": "reddit",
-                    "source_name": f"r/{post['subreddit']}",
-                    "url": post["url"],
-                    "title": post["title"],
-                    "filename": f"{post['title'][:50]}.png",  # Will be renamed on save
-                },
-            )
+            for future in as_completed(futures):
+                post = futures[future]
+                try:
+                    img = future.result()
+                    if img is None:
+                        continue
+
+                    yield ImageCandidate(
+                        image=img,
+                        metadata={
+                            "source_type": "reddit",
+                            "source_name": f"r/{post['subreddit']}",
+                            "url": post["url"],
+                            "title": post["title"],
+                            "filename": f"{post['title'][:50]}.png",
+                        },
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to process {post['url']}: {e}")
