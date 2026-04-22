@@ -6,6 +6,7 @@ import logging
 import os
 import random
 import shutil
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
@@ -89,17 +90,16 @@ class StagingManager:
 
         logger.info(f"Cleared staging directory: {self.staging_path}")
 
-    def add_image(self, candidate: ImageCandidate, index: int) -> str:
+    def add_image(self, candidate: ImageCandidate) -> str:
         """Add an image to staging.
 
         Args:
             candidate: Image candidate to add
-            index: Index number for filename
 
         Returns:
-            Filename of saved image
+            Filename of saved image (UUID-based)
         """
-        filename = f"{index:03d}.png"
+        filename = f"{uuid.uuid4().hex[:12]}.png"
         filepath = self.staging_path / filename
 
         # Convert to RGB if necessary and save

@@ -174,7 +174,7 @@ class CurationPipeline:
 
                 # Stage the image
                 if not dry_run:
-                    filename = self.staging.add_image(candidate, staged_count)
+                    filename = self.staging.add_image(candidate)
                     staged_filenames.append(filename)
 
                 staged_count += 1
