@@ -2,13 +2,32 @@
 
 import logging
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from .filters.base import Filter
 from .sources.base import ImageCandidate, Source
 from .staging import StagingManager
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ProgressUpdate:
+    """Progress update during curation."""
+
+    phase: str  # "local" or "remote"
+    source_index: int
+    source_count: int
+    source_name: str
+    image_index: int
+    image_total: int  # May be estimated
+    staged_count: int
+    filtered_count: int
+    message: str
+
+
+# Type alias for progress callback
+ProgressCallback = Callable[[ProgressUpdate], None]
 
 
 @dataclass
@@ -73,6 +92,7 @@ class CurationPipeline:
         local_sources: List[Source],
         remote_sources: List[Source],
         dry_run: bool = False,
+        progress_callback: Optional[ProgressCallback] = None,
     ) -> CurationResult:
         """Run the curation pipeline.
 
@@ -80,6 +100,7 @@ class CurationPipeline:
             local_sources: Local sources (directories, collections)
             remote_sources: Remote sources (reddit, etc.)
             dry_run: If True, don't actually stage images
+            progress_callback: Optional callback for progress updates
 
         Returns:
             CurationResult with statistics
@@ -96,31 +117,58 @@ class CurationPipeline:
 
         staged_filenames = []
         staged_count = 0
+        filtered_count = 0
 
-        # Phase 1: Process local sources (skip filters by default)
-        logger.info("Phase 1: Processing local sources...")
-        for source in local_sources:
+        def send_progress(phase: str, source_idx: int, source_count: int,
+                          source_name: str, img_idx: int, img_total: int, msg: str):
+            if progress_callback:
+                progress_callback(ProgressUpdate(
+                    phase=phase,
+                    source_index=source_idx,
+                    source_count=source_count,
+                    source_name=source_name,
+                    image_index=img_idx,
+                    image_total=img_total,
+                    staged_count=staged_count,
+                    filtered_count=filtered_count,
+                    message=msg,
+                ))
+
+        all_sources = [(s, "local") for s in local_sources] + [(s, "remote") for s in remote_sources]
+        total_sources = len(all_sources)
+
+        for source_idx, (source, phase) in enumerate(all_sources):
             if staged_count >= self.target_count:
                 break
 
             source_stats = {"candidates": 0, "staged": 0, "filtered": 0}
             skip_filters = source.should_skip_filters()
 
+            send_progress(phase, source_idx + 1, total_sources, source.name, 0, 0,
+                          f"Fetching from {source.name}...")
+
             logger.info(f"Processing source: {source.name} (skip_filters={skip_filters})")
 
+            img_idx = 0
             for candidate in source.fetch():
                 if staged_count >= self.target_count:
                     break
 
+                img_idx += 1
                 result.total_candidates += 1
                 source_stats["candidates"] += 1
 
-                # Apply filters if not skipped
-                if self.filters_enabled and not skip_filters:
+                send_progress(phase, source_idx + 1, total_sources, source.name,
+                              img_idx, self.target_count, f"Processing image {img_idx}...")
+
+                # Apply filters if enabled and not skipped for this source
+                should_filter = self.filters_enabled and not skip_filters
+                if should_filter:
                     passed, reason = self._apply_filters(candidate)
                     if not passed:
                         logger.debug(f"Filtered: {candidate.title} - {reason}")
                         result.filtered_count += 1
+                        filtered_count += 1
                         source_stats["filtered"] += 1
                         continue
 
@@ -135,50 +183,13 @@ class CurationPipeline:
 
             result.sources_summary[source.name] = source_stats
 
-        # Phase 2: Process remote sources (apply filters by default)
-        if staged_count < self.target_count:
-            logger.info("Phase 2: Processing remote sources...")
-            for source in remote_sources:
-                if staged_count >= self.target_count:
-                    break
-
-                source_stats = {"candidates": 0, "staged": 0, "filtered": 0}
-                skip_filters = source.should_skip_filters()
-
-                logger.info(f"Processing source: {source.name} (skip_filters={skip_filters})")
-
-                for candidate in source.fetch():
-                    if staged_count >= self.target_count:
-                        break
-
-                    result.total_candidates += 1
-                    source_stats["candidates"] += 1
-
-                    # Apply filters if not skipped
-                    if self.filters_enabled and not skip_filters:
-                        passed, reason = self._apply_filters(candidate)
-                        if not passed:
-                            logger.debug(f"Filtered: {candidate.title} - {reason}")
-                            result.filtered_count += 1
-                            source_stats["filtered"] += 1
-                            continue
-
-                    # Stage the image
-                    if not dry_run:
-                        filename = self.staging.add_image(candidate, staged_count)
-                        staged_filenames.append(filename)
-
-                    staged_count += 1
-                    source_stats["staged"] += 1
-                    logger.info(f"Staged: {candidate.title} from {source.name}")
-
-                result.sources_summary[source.name] = source_stats
-
         result.staged_count = staged_count
 
         # Write playlist
         if not dry_run and staged_filenames:
             self.staging.write_playlist(staged_filenames, shuffle=self.shuffle)
+            send_progress("done", total_sources, total_sources, "",
+                          staged_count, staged_count, "Complete!")
 
         logger.info(
             f"Curation complete: {result.staged_count} staged, "

@@ -499,30 +499,32 @@ function runCuration() {
     const resultDiv = document.getElementById('curation-result');
     btn.disabled = true;
 
-    // Show progress steps
+    // Show progress
     resultDiv.className = 'alert alert-info';
-    resultDiv.innerHTML = '<i class="bi bi-hourglass-split spinner-border spinner-border-sm me-2"></i> <strong>Curating...</strong><br><small>Fetching images from sources, applying filters, staging...</small>';
+    resultDiv.innerHTML = '<i class="bi bi-hourglass-split spinner-border spinner-border-sm me-2"></i> <strong>Starting...</strong>';
     resultDiv.style.display = 'block';
 
     btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Curating...';
 
-    fetch('/api/curation/curate', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({dry_run: false})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Show detailed results
+    // Use SSE for streaming progress
+    const eventSource = new EventSource('/api/curation/curate-stream');
+
+    eventSource.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+
+        if (data.type === 'progress') {
+            resultDiv.innerHTML = `
+                <i class="bi bi-hourglass-split spinner-border spinner-border-sm me-2"></i>
+                <strong>Source ${data.source}</strong>: ${data.source_name}<br>
+                <small>${data.message} | Staged: ${data.staged} | Filtered: ${data.filtered}</small>
+            `;
+        } else if (data.type === 'complete') {
+            eventSource.close();
+
             let details = `<strong>Curation complete!</strong><br>`;
             details += `<i class="bi bi-check-circle text-success"></i> Staged: ${data.staged_count} images<br>`;
             details += `<i class="bi bi-funnel text-warning"></i> Filtered out: ${data.filtered_count}<br>`;
             details += `<i class="bi bi-search"></i> Total candidates: ${data.total_candidates}`;
-
-            if (data.sources_summary) {
-                details += `<br><small class="text-muted">Sources: ${JSON.stringify(data.sources_summary)}</small>`;
-            }
 
             resultDiv.className = 'alert alert-success';
             resultDiv.innerHTML = details;
@@ -530,20 +532,25 @@ function runCuration() {
 
             loadStaging();
             loadStatus();
-        } else {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Curate Now';
+        } else if (data.type === 'error') {
+            eventSource.close();
             resultDiv.className = 'alert alert-danger';
-            resultDiv.innerHTML = `<i class="bi bi-x-circle"></i> ${data.error}`;
+            resultDiv.innerHTML = `<i class="bi bi-x-circle"></i> ${data.message}`;
             setTimeout(() => { resultDiv.style.display = 'none'; }, 5000);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Curate Now';
         }
-    })
-    .catch(error => {
+    };
+
+    eventSource.onerror = function() {
+        eventSource.close();
         resultDiv.className = 'alert alert-danger';
-        resultDiv.innerHTML = `<i class="bi bi-x-circle"></i> Network error: ${error}`;
-    })
-    .finally(() => {
+        resultDiv.innerHTML = '<i class="bi bi-x-circle"></i> Connection lost';
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Curate Now';
-    });
+    };
 }
 
 function saveFilters() {

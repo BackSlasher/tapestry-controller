@@ -1509,6 +1509,63 @@ def run_curation():
         return jsonify({"error": f"Curation failed: {str(e)}"}), 500
 
 
+@app.route("/api/curation/curate-stream")
+def run_curation_stream():
+    """Run curation with SSE progress streaming."""
+    import json as json_module
+
+    if not curation_manager:
+        return jsonify({"error": "Curation manager not initialized"}), 500
+
+    progress_queue = queue.Queue()
+
+    def progress_callback(update):
+        progress_queue.put({
+            "type": "progress",
+            "phase": update.phase,
+            "source": f"{update.source_index}/{update.source_count}",
+            "source_name": update.source_name,
+            "image": f"{update.image_index}",
+            "staged": update.staged_count,
+            "filtered": update.filtered_count,
+            "message": update.message,
+        })
+
+    def run_curation_with_progress():
+        try:
+            result = curation_manager.curate_with_progress(progress_callback)
+            progress_queue.put({
+                "type": "complete",
+                "staged_count": result.staged_count,
+                "filtered_count": result.filtered_count,
+                "total_candidates": result.total_candidates,
+            })
+        except Exception as e:
+            progress_queue.put({"type": "error", "message": str(e)})
+
+    # Start curation in background thread
+    curation_thread = threading.Thread(target=run_curation_with_progress, daemon=True)
+    curation_thread.start()
+
+    def generate():
+        while True:
+            try:
+                update = progress_queue.get(timeout=30)
+                yield f"data: {json_module.dumps(update)}\n\n"
+
+                if update.get("type") in ("complete", "error"):
+                    break
+            except queue.Empty:
+                # Send heartbeat
+                yield "data: {\"type\": \"heartbeat\"}\n\n"
+
+    return Response(
+        generate(),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )
+
+
 @app.route("/api/curation/staging")
 def staging_status():
     """Get staging directory status."""

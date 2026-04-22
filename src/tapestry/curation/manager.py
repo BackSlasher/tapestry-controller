@@ -190,6 +190,22 @@ class CurationManager:
         Returns:
             CurationResult with statistics
         """
+        return self.curate_with_progress(progress_callback=None, dry_run=dry_run)
+
+    def curate_with_progress(
+        self,
+        progress_callback=None,
+        dry_run: bool = False,
+    ) -> CurationResult:
+        """Run curation with progress callback.
+
+        Args:
+            progress_callback: Callback for progress updates
+            dry_run: If True, don't actually stage images
+
+        Returns:
+            CurationResult with statistics
+        """
         logger.info("Starting curation...")
 
         pipeline = CurationPipeline(
@@ -204,6 +220,7 @@ class CurationManager:
             local_sources=self._local_sources,
             remote_sources=self._remote_sources,
             dry_run=dry_run,
+            progress_callback=progress_callback,
         )
 
         if self._on_curation_complete and not dry_run:
