@@ -228,8 +228,10 @@
                 <!-- Collection fields -->
                 <div id="collection-fields" style="display: none;">
                     <div class="mb-3">
-                        <label class="form-label">Collection Name</label>
-                        <input type="text" class="form-control" id="collection-name" placeholder="favorites">
+                        <label class="form-label">Collection</label>
+                        <select class="form-select" id="collection-name">
+                            <option value="">Loading...</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -687,6 +689,24 @@ function addSource(type) {
 
     // Show relevant fields
     document.getElementById(type + '-fields').style.display = 'block';
+
+    // Populate collection dropdown if needed
+    if (type === 'collection') {
+        const select = document.getElementById('collection-name');
+        select.innerHTML = '<option value="">Loading...</option>';
+
+        fetch('/api/collections')
+            .then(response => response.json())
+            .then(data => {
+                if (data.collections && data.collections.length > 0) {
+                    select.innerHTML = data.collections.map(col =>
+                        `<option value="${col.name}">${col.name} (${col.image_count} images)</option>`
+                    ).join('');
+                } else {
+                    select.innerHTML = '<option value="">No collections available</option>';
+                }
+            });
+    }
 
     // Update modal title
     document.querySelector('#addSourceModal .modal-title').textContent =
