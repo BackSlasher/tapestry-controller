@@ -40,11 +40,19 @@ class CurationFilterSettings(BaseModel):
         default_factory=list,
         description="Require title to contain at least one of these",
     )
-    min_coverage: Optional[float] = Field(
-        default=None,
+    min_coverage_enabled: bool = Field(
+        default=False,
+        description="Enable aspect ratio coverage filter.",
+    )
+    min_coverage: float = Field(
+        default=0.6,
         ge=0,
         le=1,
         description="Minimum image coverage when fit to display (0-1). Rejects images with poor aspect ratio fit.",
+    )
+    avoid_seam: bool = Field(
+        default=False,
+        description="Reject images with complex content at panel seam line.",
     )
 
 
@@ -130,8 +138,10 @@ class CurationSettings(BaseModel):
                 "min_histogram_entropy": self.filters.min_histogram_entropy,
                 "keywords_exclude": self.filters.keywords_exclude,
                 "keywords_include": self.filters.keywords_include,
+                "min_coverage_enabled": self.filters.min_coverage_enabled,
                 "min_coverage": self.filters.min_coverage,
                 "target_aspect_ratio": target_aspect_ratio,
+                "avoid_seam": self.filters.avoid_seam,
             },
             "sources": [s.model_dump() for s in self.sources],
         }

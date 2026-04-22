@@ -140,3 +140,86 @@ class AspectRatioFilter(Filter):
             f"Aspect ratio {src_ratio:.2f} gives {coverage:.0%} coverage "
             f"(target ratio {self.target_ratio:.2f}, min coverage {self.min_coverage:.0%})"
         )
+
+
+class SeamFilter(Filter):
+    """Filter that rejects images with complex content at panel seam lines.
+
+    Multi-panel e-ink displays have visible seams between panels. Images with
+    high-detail content (faces, text, complex edges) crossing the seam look
+    bad. This filter analyzes edge density in a narrow band at the seam line
+    and rejects images where it's too high.
+
+    Uses two metrics:
+    - Mean edge density: catches busy/complex areas
+    - Max row gradient: catches hard horizontal lines (composites, borders)
+    """
+
+    def __init__(
+        self,
+        seam_position: float = 0.5,
+        band_percent: float = 0.05,
+        max_edge_density: float = 0.15,
+        max_hard_edge: float = 0.25,
+    ):
+        """Initialize seam filter.
+
+        Args:
+            seam_position: Vertical position of seam (0-1). 0.5 = middle.
+            band_percent: Height of band to analyze as fraction of image (0.05 = 5%).
+            max_edge_density: Maximum mean edge density (0-1). Lower = stricter.
+            max_hard_edge: Maximum single-row gradient (0-1). Catches hard
+                          horizontal lines like composite boundaries.
+        """
+        self.seam_position = seam_position
+        self.band_percent = band_percent
+        self.max_edge_density = max_edge_density
+        self.max_hard_edge = max_hard_edge
+
+    @property
+    def name(self) -> str:
+        return f"seam(pos={self.seam_position}, max_edges={self.max_edge_density})"
+
+    def check(self, candidate: ImageCandidate) -> FilterResult:
+        """Check if image has low edge density at the seam line."""
+        img = candidate.image
+        height = img.height
+
+        # Calculate band boundaries
+        band_height = int(height * self.band_percent)
+        seam_y = int(height * self.seam_position)
+        y_start = max(0, seam_y - band_height // 2)
+        y_end = min(height, seam_y + band_height // 2)
+
+        if y_end <= y_start:
+            return FilterResult.accept()
+
+        # Convert to grayscale and extract band
+        gray = img.convert("L")
+        band = np.array(gray)[y_start:y_end, :]
+
+        # Calculate vertical gradient (edges crossing the seam)
+        if band.shape[0] < 2:
+            return FilterResult.accept()
+
+        # Simple gradient: difference between adjacent rows
+        gradient = np.abs(np.diff(band.astype(np.float32), axis=0))
+
+        # Mean edge density (catches busy areas)
+        edge_density = np.mean(gradient) / 255.0
+
+        # Max row gradient (catches hard horizontal lines like composites)
+        row_means = np.mean(gradient, axis=1) / 255.0
+        max_row_gradient = np.max(row_means)
+
+        if edge_density > self.max_edge_density:
+            return FilterResult.reject(
+                f"Seam edge density {edge_density:.1%} exceeds maximum {self.max_edge_density:.0%}"
+            )
+
+        if max_row_gradient > self.max_hard_edge:
+            return FilterResult.reject(
+                f"Hard edge at seam {max_row_gradient:.1%} exceeds maximum {self.max_hard_edge:.0%}"
+            )
+
+        return FilterResult.accept()

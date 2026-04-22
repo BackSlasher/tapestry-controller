@@ -4,11 +4,31 @@ import logging
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional
 
+import numpy as np
+from PIL import Image
+
 from .filters.base import Filter
 from .sources.base import ImageCandidate, Source
 from .staging import StagingManager
 
 logger = logging.getLogger(__name__)
+
+
+def compute_dhash(img: Image.Image, hash_size: int = 8) -> str:
+    """Compute difference hash (dHash) for an image.
+
+    Creates a perceptual fingerprint that's robust to resizing and
+    minor compression differences. Returns a hex string.
+    """
+    # Resize to (hash_size + 1) x hash_size for horizontal gradient
+    resized = img.convert("L").resize((hash_size + 1, hash_size), Image.Resampling.LANCZOS)
+    pixels = np.array(resized)
+
+    # Compute horizontal gradient (is left pixel brighter than right?)
+    diff = pixels[:, 1:] > pixels[:, :-1]
+
+    # Convert to hex string
+    return "".join(format(byte, "02x") for byte in np.packbits(diff.flatten()))
 
 
 @dataclass
@@ -120,6 +140,8 @@ class CurationPipeline:
         staged_filenames = []
         staged_count = 0
         filtered_count = 0
+        seen_urls = set()  # Deduplicate URLs within this curation run
+        seen_hashes = set()  # Deduplicate by perceptual hash (cross-source)
 
         def send_progress(phase: str, source_idx: int, source_count: int,
                           source_name: str, img_idx: int, img_total: int, msg: str):
@@ -171,36 +193,61 @@ class CurationPipeline:
                 send_progress(phase, source_idx + 1, total_sources, source.name,
                               img_idx, self.target_count, f"Processing image {img_idx}...")
 
-                # Skip previously rejected URLs
-                url = candidate.metadata.get("url")
-                if url and self.staging.is_url_rejected(url):
-                    logger.debug(f"Skipping previously rejected: {url}")
-                    result.filtered_count += 1
-                    filtered_count += 1
-                    source_stats["filtered"] += 1
-                    continue
+                try:
+                    # Skip duplicates and previously rejected URLs
+                    url = candidate.metadata.get("url")
+                    if url:
+                        if url in seen_urls:
+                            logger.debug(f"Skipping duplicate URL: {url}")
+                            result.filtered_count += 1
+                            filtered_count += 1
+                            source_stats["filtered"] += 1
+                            continue
+                        seen_urls.add(url)
 
-                # Apply filters if enabled and not skipped for this source
-                should_filter = self.filters_enabled and not skip_filters
-                if should_filter:
-                    passed, reason = self._apply_filters(candidate)
-                    if not passed:
-                        logger.debug(f"Filtered: {candidate.title} - {reason}")
+                        if self.staging.is_url_rejected(url):
+                            logger.debug(f"Skipping previously rejected: {url}")
+                            result.filtered_count += 1
+                            filtered_count += 1
+                            source_stats["filtered"] += 1
+                            continue
+
+                    # Skip perceptually identical images (catches cross-source duplicates)
+                    img_hash = compute_dhash(candidate.image)
+                    if img_hash in seen_hashes:
+                        logger.debug(f"Skipping duplicate image (hash): {candidate.title}")
                         result.filtered_count += 1
                         filtered_count += 1
                         source_stats["filtered"] += 1
                         continue
+                    seen_hashes.add(img_hash)
 
-                # Stage the image
-                if not dry_run:
-                    filename = self.staging.add_image(candidate)
-                    staged_filenames.append(filename)
-                    # Write playlist incrementally so interrupted curation is still usable
-                    self.staging.append_to_playlist(filename)
+                    # Apply filters if enabled and not skipped for this source
+                    should_filter = self.filters_enabled and not skip_filters
+                    if should_filter:
+                        passed, reason = self._apply_filters(candidate)
+                        if not passed:
+                            logger.debug(f"Filtered: {candidate.title} - {reason}")
+                            result.filtered_count += 1
+                            filtered_count += 1
+                            source_stats["filtered"] += 1
+                            continue
 
-                staged_count += 1
-                source_stats["staged"] += 1
-                logger.info(f"Staged: {candidate.title} from {source.name}")
+                    # Stage the image
+                    if not dry_run:
+                        filename = self.staging.add_image(candidate)
+                        staged_filenames.append(filename)
+                        # Write playlist incrementally so interrupted curation is still usable
+                        self.staging.append_to_playlist(filename)
+
+                    staged_count += 1
+                    source_stats["staged"] += 1
+                    logger.info(f"Staged: {candidate.title} from {source.name}")
+
+                except Exception as e:
+                    error_msg = f"Error processing {candidate.title}: {e}"
+                    logger.error(error_msg)
+                    result.errors.append(error_msg)
 
             result.sources_summary[source.name] = source_stats
 

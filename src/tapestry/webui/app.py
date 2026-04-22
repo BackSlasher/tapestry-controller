@@ -1628,7 +1628,8 @@ def staging_status():
     return jsonify({
         "path": info["path"],
         "count": info["count"],
-        "current_index": info["current_index"],
+        "current_image_id": info["current_image_id"],
+        "position": info["position"],
         "is_empty": info["is_empty"],
         "playlist": playlist,
         "liked": list(liked_ids & set(playlist)),  # Only liked ones in current playlist
@@ -1954,8 +1955,10 @@ def get_curation_config():
             "min_height": curation.filters.min_height,
             "min_contrast": curation.filters.min_contrast,
             "min_entropy": curation.filters.min_histogram_entropy,
+            "min_coverage_enabled": curation.filters.min_coverage_enabled,
             "min_coverage": curation.filters.min_coverage,
             "keywords_exclude": curation.filters.keywords_exclude,
+            "avoid_seam": curation.filters.avoid_seam,
         },
         "target_aspect_ratio": round(target_ratio, 2) if target_ratio else None,
         "sources": [s.model_dump() for s in curation.sources],
@@ -1993,10 +1996,14 @@ def update_curation_config():
                 settings.curation.filters.min_contrast = int(f["min_contrast"])
             if "min_entropy" in f:
                 settings.curation.filters.min_histogram_entropy = f["min_entropy"]
+            if "min_coverage_enabled" in f:
+                settings.curation.filters.min_coverage_enabled = bool(f["min_coverage_enabled"])
             if "min_coverage" in f:
-                settings.curation.filters.min_coverage = f["min_coverage"]
+                settings.curation.filters.min_coverage = float(f["min_coverage"])
             if "keywords_exclude" in f:
                 settings.curation.filters.keywords_exclude = f["keywords_exclude"]
+            if "avoid_seam" in f:
+                settings.curation.filters.avoid_seam = bool(f["avoid_seam"])
 
         # Update sources (replace entirely)
         if "sources" in data:

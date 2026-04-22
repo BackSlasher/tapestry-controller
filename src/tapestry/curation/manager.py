@@ -4,7 +4,7 @@ import logging
 import threading
 from typing import Callable, List, Optional
 
-from .filters import AspectRatioFilter, ContrastFilter, Filter, KeywordsFilter, ResolutionFilter
+from .filters import AspectRatioFilter, ContrastFilter, Filter, KeywordsFilter, ResolutionFilter, SeamFilter
 from .filters.contrast import HistogramFilter
 from .pipeline import CurationPipeline, CurationResult
 from .sources import CollectionSource, RedditSource, Source
@@ -144,12 +144,18 @@ class CurationManager:
                     keywords_include=filter_config.get("keywords_include", []),
                 ))
             # Aspect ratio filter (optional, requires target_ratio)
-            min_coverage = filter_config.get("min_coverage")
             target_ratio = filter_config.get("target_aspect_ratio")
-            if min_coverage is not None and target_ratio is not None:
+            if filter_config.get("min_coverage_enabled") and target_ratio is not None:
                 filters.append(AspectRatioFilter(
                     target_ratio=target_ratio,
-                    min_coverage=min_coverage,
+                    min_coverage=filter_config.get("min_coverage", 0.6),
+                ))
+            # Seam filter (avoid complex content at panel seam)
+            if filter_config.get("avoid_seam"):
+                filters.append(SeamFilter(
+                    seam_position=0.5,  # Middle for 2-panel vertical layout
+                    band_percent=0.05,
+                    max_edge_density=0.15,
                 ))
 
         # Build sources

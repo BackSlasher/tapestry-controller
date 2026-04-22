@@ -23,19 +23,20 @@ logger = logging.getLogger(__name__)
 class StagingState:
     """Persistent state for staged images playback."""
 
-    current_index: int = 0
+    current_image_id: Optional[str] = None  # Last shown image filename
     playlist_hash: str = ""  # To detect if playlist changed
 
     def to_dict(self) -> dict:
         return {
-            "current_index": self.current_index,
+            "current_image_id": self.current_image_id,
             "playlist_hash": self.playlist_hash,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "StagingState":
+        # Handle migration from old index-based state
         return cls(
-            current_index=data.get("current_index", 0),
+            current_image_id=data.get("current_image_id"),
             playlist_hash=data.get("playlist_hash", ""),
         )
 
@@ -114,7 +115,7 @@ class StagingManager:
 
         # Convert to RGB if necessary and save
         img = candidate.image
-        if img.mode in ("RGBA", "P"):
+        if img.mode != "RGB":
             img = img.convert("RGB")
 
         img.save(filepath, "PNG")
@@ -164,7 +165,7 @@ class StagingManager:
 
         if reset_state:
             playlist_hash = hashlib.md5(json.dumps(filenames).encode()).hexdigest()[:8]
-            self._save_state(StagingState(current_index=0, playlist_hash=playlist_hash))
+            self._save_state(StagingState(current_image_id=None, playlist_hash=playlist_hash))
 
     def append_to_playlist(self, filename: str) -> None:
         """Append a single image to the playlist.
@@ -211,10 +212,30 @@ class StagingManager:
         with open(self.state_file, "w") as f:
             json.dump(state.to_dict(), f)
 
+    def _get_next_index(self, playlist: List[str], current_id: Optional[str]) -> int:
+        """Get the index of the next image to show.
+
+        Args:
+            playlist: Current playlist
+            current_id: Last shown image ID, or None
+
+        Returns:
+            Index of next image to show
+        """
+        if not current_id:
+            return 0
+
+        try:
+            current_idx = playlist.index(current_id)
+            return (current_idx + 1) % len(playlist)
+        except ValueError:
+            # Current image was deleted, start from beginning
+            return 0
+
     def get_next_image(self) -> Optional[PIL.Image.Image]:
         """Get the next image in the playlist.
 
-        Advances the current index and wraps around at the end.
+        Advances based on current_image_id and wraps around at the end.
 
         Returns:
             PIL Image or None if staging is empty
@@ -225,60 +246,49 @@ class StagingManager:
 
         state = self._load_state()
 
-        # Check if playlist changed (hash mismatch)
-        current_hash = hashlib.md5(json.dumps(playlist).encode()).hexdigest()[:8]
-        if state.playlist_hash != current_hash:
-            logger.info("Playlist changed, resetting index")
-            state = StagingState(current_index=0, playlist_hash=current_hash)
+        # Find next image index
+        next_idx = self._get_next_index(playlist, state.current_image_id)
 
-        # Wrap around if needed
-        if state.current_index >= len(playlist):
-            state.current_index = 0
+        # Try to load the image, skip missing ones
+        attempts = 0
+        while attempts < len(playlist):
+            filename = playlist[next_idx]
+            filepath = self.staging_path / filename
 
-        # Get current image
-        filename = playlist[state.current_index]
-        filepath = self.staging_path / filename
+            if filepath.exists():
+                try:
+                    img = PIL.Image.open(filepath)
+                    img.load()
 
-        if not filepath.exists():
-            logger.warning(f"Staged image missing: {filename}")
-            # Try to recover by advancing to next
-            state.current_index = (state.current_index + 1) % len(playlist)
-            self._save_state(state)
-            return self.get_next_image()  # Recursive, but bounded by playlist length
+                    # Update state with this image as current
+                    state.current_image_id = filename
+                    self._save_state(state)
 
-        try:
-            img = PIL.Image.open(filepath)
-            img.load()
-        except Exception as e:
-            logger.error(f"Failed to load staged image {filename}: {e}")
-            state.current_index = (state.current_index + 1) % len(playlist)
-            self._save_state(state)
-            return None
+                    logger.debug(f"Serving staged image: {filename}")
+                    return img
+                except Exception as e:
+                    logger.error(f"Failed to load staged image {filename}: {e}")
+            else:
+                logger.warning(f"Staged image missing: {filename}")
 
-        # Advance index for next call
-        state.current_index = (state.current_index + 1) % len(playlist)
-        self._save_state(state)
+            # Try next image
+            next_idx = (next_idx + 1) % len(playlist)
+            attempts += 1
 
-        logger.debug(f"Serving staged image: {filename} (next index: {state.current_index})")
-        return img
+        logger.error("No valid images found in playlist")
+        return None
 
     def peek_current_image(self) -> Optional[PIL.Image.Image]:
-        """Get the current image without advancing.
+        """Get the current (last shown) image without advancing.
 
         Returns:
-            PIL Image or None if staging is empty
+            PIL Image or None if staging is empty or no image shown yet
         """
-        playlist = self.get_playlist()
-        if not playlist:
+        state = self._load_state()
+        if not state.current_image_id:
             return None
 
-        state = self._load_state()
-
-        # Wrap around if needed
-        index = state.current_index % len(playlist) if playlist else 0
-        filename = playlist[index]
-        filepath = self.staging_path / filename
-
+        filepath = self.staging_path / state.current_image_id
         if not filepath.exists():
             return None
 
@@ -302,10 +312,16 @@ class StagingManager:
         playlist = self.get_playlist()
         state = self._load_state()
 
+        # Calculate position for display (1-based)
+        position = 0
+        if state.current_image_id and state.current_image_id in playlist:
+            position = playlist.index(state.current_image_id) + 1
+
         return {
             "path": str(self.staging_path),
             "count": len(playlist),
-            "current_index": state.current_index,
+            "current_image_id": state.current_image_id,
+            "position": position,
             "is_empty": len(playlist) == 0,
         }
 
@@ -313,16 +329,10 @@ class StagingManager:
         """Get the filename of the current image (last shown).
 
         Returns:
-            Filename string or None if no images
+            Filename string or None if no image shown yet
         """
-        playlist = self.get_playlist()
-        if not playlist:
-            return None
-
         state = self._load_state()
-        # current_index points to NEXT image, so current is index-1
-        current_idx = (state.current_index - 1) % len(playlist)
-        return playlist[current_idx]
+        return state.current_image_id
 
     def get_rejected_list(self) -> List[str]:
         """Get list of rejected image filenames."""
@@ -340,18 +350,25 @@ class StagingManager:
         # Remove from playlist
         playlist = self.get_playlist()
         if filename in playlist:
+            # Find a nearby image to set as current if we're removing current
+            state = self._load_state()
+            if state.current_image_id == filename:
+                idx = playlist.index(filename)
+                if len(playlist) > 1:
+                    # Move to previous image (or wrap to last)
+                    new_idx = (idx - 1) % len(playlist)
+                    # Skip the one we're about to remove
+                    if new_idx >= idx:
+                        new_idx = (new_idx - 1) % (len(playlist) - 1) if len(playlist) > 1 else 0
+                    remaining = [p for p in playlist if p != filename]
+                    state.current_image_id = remaining[min(new_idx, len(remaining) - 1)] if remaining else None
+                else:
+                    state.current_image_id = None
+                self._save_state(state)
+
             playlist.remove(filename)
             # Rewrite playlist without shuffling
-            playlist_data = {"images": playlist, "count": len(playlist)}
-            with open(self.playlist_file, "w") as f:
-                json.dump(playlist_data, f, indent=2)
-
-            # Adjust current index if needed
-            state = self._load_state()
-            if state.current_index > 0:
-                state.current_index -= 1
-            state.playlist_hash = hashlib.md5(json.dumps(playlist).encode()).hexdigest()[:8]
-            self._save_state(state)
+            self._write_playlist_raw(playlist, reset_state=False)
 
         # Delete the actual file
         filepath = self.staging_path / filename

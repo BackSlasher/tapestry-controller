@@ -134,12 +134,23 @@
                                 <label class="form-label small mb-0">
                                     Min Coverage <span id="target-ratio-display" class="text-muted"></span>
                                 </label>
-                                <input type="number" class="form-control form-control-sm" id="min-coverage" value="" min="0" max="1" step="0.1" placeholder="off (e.g. 0.6 = 60%)">
+                                <div class="input-group input-group-sm">
+                                    <div class="input-group-text">
+                                        <input class="form-check-input mt-0" type="checkbox" id="min-coverage-enabled">
+                                    </div>
+                                    <input type="number" class="form-control" id="min-coverage" value="0.6" min="0" max="1" step="0.05">
+                                    <span class="input-group-text">%</span>
+                                </div>
                                 <div class="form-text">Fit to display layout. Rejects poor aspect ratios.</div>
                             </div>
                             <div class="mb-2">
                                 <label class="form-label small mb-0">Exclude Keywords</label>
                                 <input type="text" class="form-control form-control-sm" id="keywords-exclude" placeholder="car, sports, nfl">
+                            </div>
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="avoid-seam">
+                                <label class="form-check-label" for="avoid-seam">Avoid panel seam</label>
+                                <div class="form-text">Reject images with busy content at display seam line.</div>
                             </div>
                         </div>
                         <button type="button" class="btn btn-sm btn-outline-primary mt-1" id="save-filters">
@@ -410,7 +421,7 @@ function loadStatus() {
             if (data.screensaver.active) {
                 statusDiv.innerHTML = `
                     <span class="badge bg-success me-2"><i class="bi bi-play-fill"></i> Active</span>
-                    <span class="text-muted small">${data.staging.current_index + 1}/${data.staging.count}</span>`;
+                    <span class="text-muted small">${data.staging.position}/${data.staging.count}</span>`;
                 startBtn.style.display = 'none';
                 activeControls.style.display = 'block';
             } else {
@@ -438,8 +449,10 @@ function loadConfig() {
             document.getElementById('min-height').value = data.filters.min_height;
             document.getElementById('min-contrast').value = data.filters.min_contrast;
             document.getElementById('min-entropy').value = data.filters.min_entropy || '';
-            document.getElementById('min-coverage').value = data.filters.min_coverage || '';
+            document.getElementById('min-coverage-enabled').checked = data.filters.min_coverage_enabled || false;
+            document.getElementById('min-coverage').value = data.filters.min_coverage || 0.6;
             document.getElementById('keywords-exclude').value = (data.filters.keywords_exclude || []).join(', ');
+            document.getElementById('avoid-seam').checked = data.filters.avoid_seam || false;
 
             // Show target aspect ratio
             if (data.target_aspect_ratio) {
@@ -508,7 +521,7 @@ function loadStaging() {
 
             const likedSet = new Set(data.liked || []);
             container.innerHTML = data.playlist.map((filename, index) => {
-                const isCurrent = index === data.current_index;
+                const isCurrent = filename === data.current_image_id;
                 const isLiked = likedSet.has(filename);
                 return `
                     <div class="col-4 col-md-2">
@@ -682,9 +695,6 @@ function saveFilters() {
     const entropyVal = document.getElementById('min-entropy').value;
     const minEntropy = entropyVal ? parseFloat(entropyVal) : null;
 
-    const coverageVal = document.getElementById('min-coverage').value;
-    const minCoverage = coverageVal ? parseFloat(coverageVal) : null;
-
     fetch('/api/curation/config', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -695,8 +705,10 @@ function saveFilters() {
                 min_height: parseInt(document.getElementById('min-height').value),
                 min_contrast: parseInt(document.getElementById('min-contrast').value),
                 min_entropy: minEntropy,
-                min_coverage: minCoverage,
-                keywords_exclude: keywords
+                min_coverage_enabled: document.getElementById('min-coverage-enabled').checked,
+                min_coverage: parseFloat(document.getElementById('min-coverage').value) || 0.6,
+                keywords_exclude: keywords,
+                avoid_seam: document.getElementById('avoid-seam').checked
             }
         })
     })
