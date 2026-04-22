@@ -50,19 +50,25 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Screensaver overlay buttons
-    const disableScreensaverBtn = document.getElementById('disable-screensaver');
-    if (disableScreensaverBtn) {
-        disableScreensaverBtn.addEventListener('click', function() {
-            stopScreensaverFromOverlay();
-        });
+    // Screensaver buttons
+    const startScreensaverBtn = document.getElementById('start-screensaver-home');
+    if (startScreensaverBtn) {
+        startScreensaverBtn.addEventListener('click', startScreensaver);
+    }
+
+    const stopScreensaverBtn = document.getElementById('stop-screensaver-home');
+    if (stopScreensaverBtn) {
+        stopScreensaverBtn.addEventListener('click', stopScreensaver);
     }
 
     const nextImageBtn = document.getElementById('next-image-home');
     if (nextImageBtn) {
-        nextImageBtn.addEventListener('click', function() {
-            nextScreensaverImageFromHome();
-        });
+        nextImageBtn.addEventListener('click', nextScreensaverImage);
+    }
+
+    const dislikeImageBtn = document.getElementById('dislike-image-home');
+    if (dislikeImageBtn) {
+        dislikeImageBtn.addEventListener('click', dislikeCurrentImage);
     }
 
     // Handle window resize to redraw canvas with new dimensions
@@ -503,108 +509,146 @@ async function restoreLastImage() {
 }
 
 async function checkScreensaverStatus() {
-    const screensaverMessage = document.getElementById('screensaver-message');
+    const screensaverOff = document.getElementById('screensaver-off');
+    const screensaverOn = document.getElementById('screensaver-on');
+    const statusBadge = document.getElementById('screensaver-status-badge');
+    const positionText = document.getElementById('screensaver-position');
     const uploadForm = document.getElementById('upload-form');
-    if (!screensaverMessage || !uploadForm) return; // Not on main page
+
+    if (!screensaverOff || !screensaverOn) return; // Not on main page
 
     try {
-        const response = await fetch('/screensaver/status');
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
+        const response = await fetch('/api/curation/status');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
         const data = await response.json();
+        const isActive = data.screensaver?.active;
 
-        if (data.active) {
-            screensaverMessage.classList.remove('d-none');
-            uploadForm.classList.add('d-none');
+        if (isActive) {
+            screensaverOff.classList.add('d-none');
+            screensaverOn.classList.remove('d-none');
+            statusBadge.innerHTML = '<span class="badge bg-success">Active</span>';
+            if (positionText && data.staging) {
+                positionText.textContent = `Image ${data.staging.position} of ${data.staging.count}`;
+            }
+            if (uploadForm) uploadForm.classList.add('d-none');
         } else {
-            screensaverMessage.classList.add('d-none');
-            uploadForm.classList.remove('d-none');
+            screensaverOff.classList.remove('d-none');
+            screensaverOn.classList.add('d-none');
+            statusBadge.innerHTML = '<span class="badge bg-secondary">Off</span>';
+            if (uploadForm) uploadForm.classList.remove('d-none');
         }
     } catch (error) {
         console.error('Error checking screensaver status:', error);
-        // On error, hide screensaver message and show upload form
-        screensaverMessage.classList.add('d-none');
-        uploadForm.classList.remove('d-none');
+        screensaverOff.classList.remove('d-none');
+        screensaverOn.classList.add('d-none');
+        if (uploadForm) uploadForm.classList.remove('d-none');
     }
 }
 
-async function stopScreensaverFromOverlay() {
-    const disableBtn = document.getElementById('disable-screensaver');
-    if (!disableBtn) return;
+async function startScreensaver() {
+    const btn = document.getElementById('start-screensaver-home');
+    if (!btn) return;
 
-    // Show loading state
-    const originalText = disableBtn.innerHTML;
-    disableBtn.disabled = true;
-    disableBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Stopping...';
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
 
     try {
-        const response = await fetch('/screensaver/stop', {
+        const response = await fetch('/api/screensaver-v2/start', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ interval: 300 })
         });
+        const data = await response.json();
 
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        if (data.success) {
+            showAlert('Screensaver started', 'success');
+            checkScreensaverStatus();
+            refreshLayout();
+        } else {
+            showAlert(data.error || 'Failed to start', 'danger');
         }
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-play-fill"></i> Start';
+    }
+}
 
+async function stopScreensaver() {
+    const btn = document.getElementById('stop-screensaver-home');
+    if (!btn) return;
+
+    btn.disabled = true;
+
+    try {
+        const response = await fetch('/api/screensaver-v2/stop', { method: 'POST' });
         const data = await response.json();
 
         if (data.success) {
             showAlert('Screensaver stopped', 'success');
-            checkScreensaverStatus(); // Update UI
+            checkScreensaverStatus();
         } else {
-            showAlert('Error stopping screensaver: ' + (data.error || 'Unknown error'), 'danger');
+            showAlert(data.error || 'Failed to stop', 'danger');
         }
     } catch (error) {
-        console.error('Error stopping screensaver:', error);
-        showAlert('Failed to stop screensaver: ' + error.message, 'danger');
+        showAlert('Error: ' + error.message, 'danger');
     } finally {
-        // Reset button state
-        disableBtn.disabled = false;
-        disableBtn.innerHTML = originalText;
+        btn.disabled = false;
     }
 }
 
-async function nextScreensaverImageFromHome() {
-    const nextBtn = document.getElementById('next-image-home');
-    if (!nextBtn) return;
+async function nextScreensaverImage() {
+    const btn = document.getElementById('next-image-home');
+    if (!btn) return;
 
-    // Show loading state
-    const originalText = nextBtn.innerHTML;
-    nextBtn.disabled = true;
-    nextBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Loading...';
+    btn.disabled = true;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
 
     try {
-        const response = await fetch('/screensaver/next', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
+        const response = await fetch('/api/screensaver-v2/next', { method: 'POST' });
         const data = await response.json();
 
         if (data.success) {
-            showAlert('Next image displayed successfully', 'success');
+            checkScreensaverStatus();
+            refreshLayout();
         } else {
-            showAlert('Error displaying next image: ' + (data.error || 'Unknown error'), 'danger');
+            showAlert(data.error || 'Failed', 'danger');
         }
     } catch (error) {
-        console.error('Error displaying next image:', error);
-        showAlert('Failed to display next image: ' + error.message, 'danger');
+        showAlert('Error: ' + error.message, 'danger');
     } finally {
-        // Reset button state
-        nextBtn.disabled = false;
-        nextBtn.innerHTML = originalText;
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
+async function dislikeCurrentImage() {
+    const btn = document.getElementById('dislike-image-home');
+    if (!btn) return;
+
+    btn.disabled = true;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    try {
+        const response = await fetch('/api/curation/reject-current', { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+            showAlert('Image rejected', 'success');
+            checkScreensaverStatus();
+            refreshLayout();
+        } else {
+            showAlert(data.error || 'Failed', 'danger');
+        }
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
     }
 }
 

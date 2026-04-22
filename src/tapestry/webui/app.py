@@ -38,7 +38,6 @@ from .flash_manager import FlashManager
 from .image_cache import ImageCache
 from .ota_manager import OTAManager
 from .process_manager import ProcessManager
-from .screensaver import ScreensaverManager
 from .screensaver_v2 import ScreensaverV2
 
 app = Flask(__name__)
@@ -79,10 +78,7 @@ def reload_device_config(devices_file: str = "devices.yaml"):
     logger.info(f"Reloaded configuration from {devices_file}")
 
 
-# Screensaver manager instance (legacy)
-screensaver_manager: ScreensaverManager | None = None
-
-# New curation-based screensaver
+# Curation-based screensaver
 curation_manager: CurationManager | None = None
 screensaver_v2: ScreensaverV2 | None = None
 
@@ -1086,135 +1082,7 @@ def get_wallpaper_images(wallpapers_dir):
 # Pixabay wallpaper fetching moved to ScreensaverManager class
 
 
-# Screensaver worker moved to ScreensaverManager class
-
-
-def start_screensaver_internal():
-    """Start the screensaver (internal version for startup)."""
-    if not controller or not screensaver_manager:
-        raise Exception("Controller or screensaver manager not initialized")
-
-    if screensaver_manager.is_active:
-        raise Exception("Screensaver already active")
-
-    # Starting screensaver automatically enables it
-    settings = get_settings()
-    settings.screensaver.enabled = True
-    settings.save_to_file()
-
-    config = get_screensaver_config()
-    screensaver_manager.start(config)
-
-    return f"Screensaver started with {config['type']} type"
-
-
-@app.route("/screensaver/start", methods=["POST"])
-def start_screensaver():
-    """Start the screensaver."""
-    if not controller or not screensaver_manager:
-        return (
-            jsonify({"error": "Controller or screensaver manager not initialized"}),
-            500,
-        )
-
-    if screensaver_manager.is_active:
-        return jsonify({"error": "Screensaver already active"}), 400
-
-    try:
-        message = start_screensaver_internal()
-        return jsonify({"success": True, "message": message})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/screensaver/stop", methods=["POST"])
-def stop_screensaver():
-    """Stop the screensaver."""
-    if not screensaver_manager or not screensaver_manager.is_active:
-        return jsonify({"error": "Screensaver not active"}), 400
-
-    try:
-        screensaver_manager.stop()
-
-        # Stopping screensaver automatically disables it
-        settings = get_settings()
-        settings.screensaver.enabled = False
-        settings.save_to_file()
-
-        return jsonify({"success": True, "message": "Screensaver stopped"})
-
-    except Exception as e:
-        return jsonify({"error": f"Failed to stop screensaver: {str(e)}"}), 500
-
-
-@app.route("/screensaver/next", methods=["POST"])
-def screensaver_next_image():
-    """Display the next screensaver image immediately."""
-    if not screensaver_manager:
-        return jsonify({"error": "Screensaver manager not initialized"}), 500
-
-    try:
-        success = screensaver_manager.next_image()
-        if success:
-            return jsonify({"success": True, "message": "Next image displayed"})
-        else:
-            return jsonify({"error": "Failed to display next image"}), 400
-    except Exception as e:
-        return jsonify({"error": f"Failed to display next image: {str(e)}"}), 500
-
-
-@app.route("/screensaver/status")
-def screensaver_status():
-    """Get screensaver status."""
-    config = get_screensaver_config()
-    status = {
-        "active": screensaver_manager.is_active if screensaver_manager else False,
-        "enabled": config["enabled"],
-        "type": config["type"],
-        "interval": config["interval"],
-    }
-
-    if config["type"] == "gallery":
-        from .collections_manager import get_collection_path, get_collection_images
-
-        selected_collection = config["gallery"]["selected_collection"]
-        collections_dir = config["gallery"]["collections_dir"]
-
-        # Try to get images from collection
-        collection_path = get_collection_path(selected_collection, collections_dir)
-        if collection_path:
-            images = get_collection_images(collection_path)
-        else:
-            # Fallback to legacy wallpapers_dir
-            images = get_wallpaper_images(config["gallery"]["wallpapers_dir"])
-
-        status.update(
-            {
-                "wallpapers_dir": selected_collection,  # Use collection name for display
-                "selected_collection": selected_collection,
-                "image_count": len(images),
-                "has_images": len(images) > 0,
-            }
-        )
-    elif config["type"] == "reddit":
-        status.update(
-            {
-                "wallpapers_dir": f"r/{config['reddit']['subreddit']}",
-                "image_count": config["reddit"]["limit"],
-                "has_images": True,  # Assume Reddit is available
-            }
-        )
-    elif config["type"] == "pixabay":
-        status.update(
-            {
-                "wallpapers_dir": f"Pixabay: {config['pixabay']['keywords']}",
-                "image_count": config["pixabay"]["per_page"],
-                "has_images": bool(config["pixabay"]["api_key"]),
-                "has_api_key": bool(config["pixabay"]["api_key"]),
-            }
-        )
-
-    return jsonify(status)
+# Legacy v1 screensaver endpoints removed - use /api/screensaver-v2/* instead
 
 
 # Collections management routes (API only - used by curation system)
@@ -1342,12 +1210,6 @@ def api_select_collection(collection_name):
         # Update selected collection
         settings.screensaver.gallery.selected_collection = collection_name
         settings.save_to_file()
-
-        # Restart screensaver if active
-        if screensaver_manager and screensaver_manager.is_active:
-            screensaver_manager.stop()
-            config = get_screensaver_config()
-            screensaver_manager.start(config)
 
         return jsonify(
             {
@@ -2198,7 +2060,6 @@ def create_app(devices_file="devices.yaml"):
     """Create Flask app with configuration."""
     global \
         controller, \
-        screensaver_manager, \
         curation_manager, \
         screensaver_v2, \
         ota_manager, \
@@ -2212,12 +2073,8 @@ def create_app(devices_file="devices.yaml"):
         """Send image to displays and save for current-image endpoint."""
         controller.send_image(image)
         save_last_image(image)
-        # Don't update cache for screensaver images - they're temporary
 
-    if screensaver_manager is None:
-        screensaver_manager = ScreensaverManager(send_and_save_image)
-
-    # Initialize new curation system
+    # Initialize curation system
     if curation_manager is None:
         settings = get_settings()
         curation_manager = CurationManager(
