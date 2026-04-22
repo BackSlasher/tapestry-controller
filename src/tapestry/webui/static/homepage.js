@@ -71,6 +71,11 @@ document.addEventListener('DOMContentLoaded', function() {
         dislikeImageBtn.addEventListener('click', dislikeCurrentImage);
     }
 
+    const likeImageBtn = document.getElementById('like-image-home');
+    if (likeImageBtn) {
+        likeImageBtn.addEventListener('click', likeCurrentImage);
+    }
+
     // Handle window resize to redraw canvas with new dimensions
     let resizeTimeout;
     window.addEventListener('resize', function() {
@@ -514,6 +519,7 @@ async function checkScreensaverStatus() {
     const statusBadge = document.getElementById('screensaver-status-badge');
     const positionText = document.getElementById('screensaver-position');
     const uploadOverlay = document.getElementById('upload-disabled-overlay');
+    const likeBtn = document.getElementById('like-image-home');
 
     if (!screensaverOff || !screensaverOn) return; // Not on main page
 
@@ -532,6 +538,22 @@ async function checkScreensaverStatus() {
                 positionText.textContent = `Image ${data.staging.position} of ${data.staging.count}`;
             }
             if (uploadOverlay) uploadOverlay.classList.remove('d-none');
+
+            // Update like button state
+            if (likeBtn) {
+                const isLiked = data.staging?.current_liked;
+                if (isLiked) {
+                    likeBtn.classList.remove('btn-outline-success');
+                    likeBtn.classList.add('btn-success');
+                    likeBtn.innerHTML = '<i class="bi bi-star-fill"></i>';
+                    likeBtn.title = 'In favorites';
+                } else {
+                    likeBtn.classList.remove('btn-success');
+                    likeBtn.classList.add('btn-outline-success');
+                    likeBtn.innerHTML = '<i class="bi bi-star"></i>';
+                    likeBtn.title = 'Add to favorites';
+                }
+            }
         } else {
             screensaverOff.classList.remove('d-none');
             screensaverOn.classList.add('d-none');
@@ -649,6 +671,52 @@ async function dislikeCurrentImage() {
     } finally {
         btn.disabled = false;
         btn.innerHTML = originalText;
+    }
+}
+
+async function likeCurrentImage() {
+    const btn = document.getElementById('like-image-home');
+    if (!btn) return;
+
+    // Get current image filename from status
+    try {
+        const statusResponse = await fetch('/api/curation/status');
+        const statusData = await statusResponse.json();
+        const filename = statusData.staging?.current_image_id;
+
+        if (!filename) {
+            showAlert('No image to like', 'warning');
+            return;
+        }
+
+        // Already liked - just show message
+        if (statusData.staging?.current_liked) {
+            showAlert('Already in favorites', 'info');
+            return;
+        }
+
+        btn.disabled = true;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+        const response = await fetch('/api/curation/like', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            showAlert('Added to favorites', 'success');
+            checkScreensaverStatus();
+        } else {
+            showAlert(data.error || 'Failed', 'danger');
+        }
+
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    } catch (error) {
+        showAlert('Error: ' + error.message, 'danger');
     }
 }
 

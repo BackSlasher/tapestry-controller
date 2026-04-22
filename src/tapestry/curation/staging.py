@@ -339,10 +339,17 @@ class StagingManager:
         if state.current_image_id and state.current_image_id in playlist:
             position = playlist.index(state.current_image_id) + 1
 
+        # Check if current image is liked
+        current_liked = False
+        if state.current_image_id:
+            img_info = self.db.get_image(state.current_image_id)
+            current_liked = img_info and img_info.status == "liked"
+
         return {
             "path": str(self.staging_path),
             "count": len(playlist),
             "current_image_id": state.current_image_id,
+            "current_liked": current_liked,
             "position": position,
             "is_empty": len(playlist) == 0,
         }
