@@ -513,7 +513,7 @@ async function checkScreensaverStatus() {
     const screensaverOn = document.getElementById('screensaver-on');
     const statusBadge = document.getElementById('screensaver-status-badge');
     const positionText = document.getElementById('screensaver-position');
-    const uploadForm = document.getElementById('upload-form');
+    const uploadOverlay = document.getElementById('upload-disabled-overlay');
 
     if (!screensaverOff || !screensaverOn) return; // Not on main page
 
@@ -531,18 +531,18 @@ async function checkScreensaverStatus() {
             if (positionText && data.staging) {
                 positionText.textContent = `Image ${data.staging.position} of ${data.staging.count}`;
             }
-            if (uploadForm) uploadForm.classList.add('d-none');
+            if (uploadOverlay) uploadOverlay.classList.remove('d-none');
         } else {
             screensaverOff.classList.remove('d-none');
             screensaverOn.classList.add('d-none');
             statusBadge.innerHTML = '<span class="badge bg-secondary">Off</span>';
-            if (uploadForm) uploadForm.classList.remove('d-none');
+            if (uploadOverlay) uploadOverlay.classList.add('d-none');
         }
     } catch (error) {
         console.error('Error checking screensaver status:', error);
         screensaverOff.classList.remove('d-none');
         screensaverOn.classList.add('d-none');
-        if (uploadForm) uploadForm.classList.remove('d-none');
+        if (uploadOverlay) uploadOverlay.classList.add('d-none');
     }
 }
 
