@@ -1744,6 +1744,9 @@ def like_image():
         if not staging_path.exists():
             return jsonify({"error": f"Image not found: {filename}"}), 404
 
+        # Mark as liked in database
+        curation_manager.staging.like_image(filename)
+
         # Ensure favorites collection exists
         from .collections_manager import create_collection, get_collection_path
 
@@ -1766,6 +1769,40 @@ def like_image():
         })
     except Exception as e:
         logger.error(f"Failed to like image: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/curation/stats")
+def get_curation_stats():
+    """Get curation database statistics."""
+    if not curation_manager:
+        return jsonify({"error": "Curation manager not initialized"}), 500
+
+    try:
+        stats = curation_manager.staging.get_stats()
+        return jsonify({
+            "success": True,
+            "stats": stats,
+        })
+    except Exception as e:
+        logger.error(f"Failed to get stats: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/curation/image-info/<filename>")
+def get_image_info(filename):
+    """Get metadata for a specific image."""
+    if not curation_manager:
+        return jsonify({"error": "Curation manager not initialized"}), 500
+
+    try:
+        info = curation_manager.staging.get_image_info(filename)
+        if info:
+            return jsonify({"success": True, "info": info})
+        else:
+            return jsonify({"error": f"Image not found: {filename}"}), 404
+    except Exception as e:
+        logger.error(f"Failed to get image info: {e}")
         return jsonify({"error": str(e)}), 500
 
 

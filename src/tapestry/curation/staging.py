@@ -13,6 +13,7 @@ from typing import List, Optional
 
 import PIL.Image
 
+from .database import CurationDatabase
 from .sources.base import ImageCandidate
 
 logger = logging.getLogger(__name__)
@@ -43,9 +44,11 @@ class StagingManager:
     """Manages the staging directory for curated images.
 
     The staging directory contains:
-    - Image files (numbered: 001.png, 002.png, etc.)
+    - Image files (UUID-named .png files)
     - playlist.json: ordered list of filenames
     - state.json: current playback position
+
+    Image metadata is stored in SQLite database.
     """
 
     def __init__(self, staging_path: str = ".tapestry-data/staging"):
@@ -57,6 +60,10 @@ class StagingManager:
         # Resolve to absolute path immediately to avoid CWD issues
         self.staging_path = Path(os.path.expanduser(staging_path)).resolve()
         self._ensure_directory()
+
+        # Initialize database (in parent .tapestry-data directory)
+        db_path = self.staging_path.parent / "curation.db"
+        self.db = CurationDatabase(str(db_path))
 
     def _ensure_directory(self) -> None:
         """Ensure staging directory exists."""
@@ -88,6 +95,9 @@ class StagingManager:
         if self.state_file.exists():
             self.state_file.unlink()
 
+        # Clear active images from database (keeps rejected/liked history)
+        self.db.clear_staging()
+
         logger.info(f"Cleared staging directory: {self.staging_path}")
 
     def add_image(self, candidate: ImageCandidate) -> str:
@@ -108,7 +118,18 @@ class StagingManager:
             img = img.convert("RGB")
 
         img.save(filepath, "PNG")
-        logger.debug(f"Staged image: {filename} from {candidate.metadata.get('title', 'unknown')}")
+
+        # Store metadata in database
+        metadata = candidate.metadata
+        self.db.add_image(
+            image_id=filename,
+            source_type=metadata.get("source_type", "unknown"),
+            source_name=metadata.get("source_name", "unknown"),
+            original_url=metadata.get("url"),
+            title=metadata.get("title"),
+        )
+
+        logger.debug(f"Staged image: {filename} from {metadata.get('title', 'unknown')}")
 
         return filename
 
@@ -286,21 +307,7 @@ class StagingManager:
 
     def get_rejected_list(self) -> List[str]:
         """Get list of rejected image filenames."""
-        if not self.rejected_file.exists():
-            return []
-
-        try:
-            with open(self.rejected_file) as f:
-                data = json.load(f)
-            return data.get("rejected", [])
-        except Exception as e:
-            logger.warning(f"Failed to read rejected list: {e}")
-            return []
-
-    def _save_rejected_list(self, rejected: List[str]) -> None:
-        """Save rejected list."""
-        with open(self.rejected_file, "w") as f:
-            json.dump({"rejected": rejected}, f, indent=2)
+        return self.db.get_rejected_ids()
 
     def reject_image(self, filename: str) -> None:
         """Reject an image, removing it from playlist and staging.
@@ -308,11 +315,8 @@ class StagingManager:
         Args:
             filename: Image filename to reject
         """
-        # Add to rejected list
-        rejected = self.get_rejected_list()
-        if filename not in rejected:
-            rejected.append(filename)
-            self._save_rejected_list(rejected)
+        # Mark as rejected in database
+        self.db.reject_image(filename)
 
         # Remove from playlist
         playlist = self.get_playlist()
@@ -336,6 +340,34 @@ class StagingManager:
             filepath.unlink()
             logger.info(f"Rejected and removed: {filename}")
 
+    def like_image(self, filename: str) -> None:
+        """Mark an image as liked in the database."""
+        self.db.like_image(filename)
+        logger.info(f"Liked: {filename}")
+
     def is_rejected(self, filename: str) -> bool:
         """Check if a filename is in the rejected list."""
-        return filename in self.get_rejected_list()
+        return filename in self.db.get_rejected_ids()
+
+    def is_url_rejected(self, url: str) -> bool:
+        """Check if an image URL was previously rejected."""
+        return self.db.is_rejected(url)
+
+    def get_image_info(self, filename: str) -> Optional[dict]:
+        """Get metadata for an image."""
+        record = self.db.get_image(filename)
+        if record:
+            return {
+                "id": record.id,
+                "source_type": record.source_type,
+                "source_name": record.source_name,
+                "original_url": record.original_url,
+                "title": record.title,
+                "staged_at": record.staged_at.isoformat() if record.staged_at else None,
+                "status": record.status,
+            }
+        return None
+
+    def get_stats(self) -> dict:
+        """Get database statistics."""
+        return self.db.get_stats()

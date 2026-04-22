@@ -5,7 +5,7 @@
 {% block content %}
 <div class="row">
     <div class="col-lg-10 mx-auto">
-        <!-- Status Card -->
+        <!-- Screensaver Controls -->
         <div class="card mb-4">
             <div class="card-header">
                 <h3 class="card-title mb-0">
@@ -13,59 +13,64 @@
                 </h3>
             </div>
             <div class="card-body">
-                <div id="curation-status">
-                    <div class="d-flex justify-content-center">
-                        <div class="spinner-border spinner-border-sm" role="status">
-                            <span class="visually-hidden">Loading...</span>
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <div id="curation-status">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
                         </div>
                     </div>
-                </div>
-
-                <!-- Controls -->
-                <div class="row mt-3">
-                    <div class="col-md-6">
-                        <div class="d-grid gap-2">
-                            <button type="button" class="btn btn-success" id="start-screensaver">
-                                <i class="bi bi-play-fill"></i> Start Screensaver
+                    <div class="col-md-3">
+                        <label for="interval" class="form-label small mb-1">Interval (sec)</label>
+                        <input type="number" class="form-control form-control-sm" id="interval" value="300" min="10" max="3600">
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-grid gap-1">
+                            <button type="button" class="btn btn-success btn-sm" id="start-screensaver">
+                                <i class="bi bi-play-fill"></i> Start
                             </button>
-                            <div class="row g-2" id="active-controls" style="display: none;">
-                                <div class="col-4">
-                                    <button type="button" class="btn btn-info w-100" id="next-image">
-                                        <i class="bi bi-skip-forward-fill"></i> Next
+                            <div id="active-controls" style="display: none;">
+                                <div class="btn-group btn-group-sm w-100">
+                                    <button type="button" class="btn btn-info" id="next-image" title="Next image">
+                                        <i class="bi bi-skip-forward-fill"></i>
                                     </button>
-                                </div>
-                                <div class="col-4">
-                                    <button type="button" class="btn btn-warning w-100" id="reject-image" title="Remove current image from rotation">
-                                        <i class="bi bi-hand-thumbs-down"></i> Reject
+                                    <button type="button" class="btn btn-warning" id="reject-image" title="Reject current">
+                                        <i class="bi bi-hand-thumbs-down"></i>
                                     </button>
-                                </div>
-                                <div class="col-4">
-                                    <button type="button" class="btn btn-danger w-100" id="stop-screensaver">
-                                        <i class="bi bi-stop-fill"></i> Stop
+                                    <button type="button" class="btn btn-danger" id="stop-screensaver" title="Stop">
+                                        <i class="bi bi-stop-fill"></i>
                                     </button>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <label for="interval" class="form-label">Interval (sec)</label>
-                        <input type="number" class="form-control" id="interval" value="300" min="10" max="3600">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">&nbsp;</label>
-                        <button type="button" class="btn btn-primary w-100" id="run-curation">
-                            <i class="bi bi-arrow-clockwise"></i> Curate Now
-                        </button>
-                    </div>
                 </div>
             </div>
         </div>
+
+        <!-- Staged Images -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center py-2">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-grid-3x3"></i> Staged Images
+                    <span id="staging-count" class="badge bg-primary ms-2">0</span>
+                </h5>
+                <button type="button" class="btn btn-primary btn-sm" id="run-curation">
+                    <i class="bi bi-arrow-clockwise"></i> Curate Now
+                </button>
+            </div>
+            <div class="card-body py-2">
+                <div id="staging-images" class="row g-2" style="max-height: 200px; overflow-y: auto;"></div>
+            </div>
+        </div>
+
+        <!-- Curation Result -->
+        <div id="curation-result" class="alert" style="display: none;"></div>
 
         <div class="row">
             <!-- Sources Configuration -->
             <div class="col-md-6">
                 <div class="card mb-4">
-                    <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="card-header d-flex justify-content-between align-items-center py-2">
                         <h5 class="card-title mb-0">
                             <i class="bi bi-box-arrow-in-down"></i> Sources
                         </h5>
@@ -79,7 +84,7 @@
                             </ul>
                         </div>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body py-2">
                         <div id="sources-list">
                             <div class="text-muted">Loading...</div>
                         </div>
@@ -90,44 +95,45 @@
             <!-- Filters Configuration -->
             <div class="col-md-6">
                 <div class="card mb-4">
-                    <div class="card-header">
+                    <div class="card-header py-2">
                         <h5 class="card-title mb-0">
                             <i class="bi bi-funnel"></i> Filters
+                            <small class="text-muted fw-normal ms-2">(remote sources only)</small>
                         </h5>
                     </div>
-                    <div class="card-body">
-                        <div class="form-check form-switch mb-3">
+                    <div class="card-body py-2">
+                        <div class="form-check form-switch mb-2">
                             <input class="form-check-input" type="checkbox" id="filters-enabled" checked>
                             <label class="form-check-label" for="filters-enabled">Enable filters</label>
                         </div>
                         <div id="filter-settings">
                             <div class="row mb-2">
                                 <div class="col-6">
-                                    <label class="form-label small">Min Width</label>
+                                    <label class="form-label small mb-0">Min Width</label>
                                     <input type="number" class="form-control form-control-sm" id="min-width" value="1920">
                                 </div>
                                 <div class="col-6">
-                                    <label class="form-label small">Min Height</label>
+                                    <label class="form-label small mb-0">Min Height</label>
                                     <input type="number" class="form-control form-control-sm" id="min-height" value="1080">
                                 </div>
                             </div>
-                            <div class="mb-2">
-                                <label class="form-label small">Min Contrast (0-255)</label>
-                                <input type="number" class="form-control form-control-sm" id="min-contrast" value="150" min="0" max="255">
+                            <div class="row mb-2">
+                                <div class="col-6">
+                                    <label class="form-label small mb-0">Min Contrast</label>
+                                    <input type="number" class="form-control form-control-sm" id="min-contrast" value="150" min="0" max="255">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small mb-0">Min Entropy</label>
+                                    <input type="number" class="form-control form-control-sm" id="min-entropy" value="" min="0" max="8" step="0.5" placeholder="off">
+                                </div>
                             </div>
                             <div class="mb-2">
-                                <label class="form-label small">Min Histogram Entropy (0-8)</label>
-                                <input type="number" class="form-control form-control-sm" id="min-entropy" value="" min="0" max="8" step="0.5" placeholder="disabled">
-                                <div class="form-text">Rejects images mostly one tone (e.g. white bg). Try 4.0</div>
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label small">Exclude Keywords</label>
+                                <label class="form-label small mb-0">Exclude Keywords</label>
                                 <input type="text" class="form-control form-control-sm" id="keywords-exclude" placeholder="car, sports, nfl">
-                                <div class="form-text">Comma-separated</div>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-sm btn-primary mt-2" id="save-filters">
-                            <i class="bi bi-check"></i> Save Filters
+                        <button type="button" class="btn btn-sm btn-outline-primary mt-1" id="save-filters">
+                            <i class="bi bi-check"></i> Save
                         </button>
                     </div>
                 </div>
@@ -136,36 +142,21 @@
 
         <!-- Collections Management -->
         <div class="card mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card-header d-flex justify-content-between align-items-center py-2">
                 <h5 class="card-title mb-0">
                     <i class="bi bi-collection"></i> Collections
+                    <small class="text-muted fw-normal ms-2">(add as source above to include)</small>
                 </h5>
                 <button type="button" class="btn btn-sm btn-outline-primary" onclick="showCreateCollection()">
                     <i class="bi bi-plus"></i> New
                 </button>
             </div>
-            <div class="card-body">
+            <div class="card-body py-2">
                 <div id="collections-list" class="row g-2">
                     <div class="text-muted">Loading...</div>
                 </div>
             </div>
         </div>
-
-        <!-- Staging Preview -->
-        <div class="card mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-grid-3x3"></i> Staged Images
-                </h5>
-                <span id="staging-count" class="badge bg-primary">0</span>
-            </div>
-            <div class="card-body">
-                <div id="staging-images" class="row g-2"></div>
-            </div>
-        </div>
-
-        <!-- Curation Result -->
-        <div id="curation-result" class="alert" style="display: none;"></div>
     </div>
 </div>
 
@@ -336,20 +327,14 @@ function loadStatus() {
 
             if (data.screensaver.active) {
                 statusDiv.innerHTML = `
-                    <div class="alert alert-success mb-0 py-2">
-                        <i class="bi bi-play-circle-fill"></i> <strong>Active</strong> -
-                        Interval: ${data.screensaver.interval}s |
-                        Staged: ${data.staging.count} images |
-                        Position: ${data.staging.current_index + 1}/${data.staging.count}
-                    </div>`;
+                    <span class="badge bg-success me-2"><i class="bi bi-play-fill"></i> Active</span>
+                    <span class="text-muted small">${data.staging.current_index + 1}/${data.staging.count}</span>`;
                 startBtn.style.display = 'none';
-                activeControls.style.display = 'flex';
+                activeControls.style.display = 'block';
             } else {
                 statusDiv.innerHTML = `
-                    <div class="alert alert-secondary mb-0 py-2">
-                        <i class="bi bi-stop-circle"></i> <strong>Stopped</strong> -
-                        ${data.staging.count} images staged
-                    </div>`;
+                    <span class="badge bg-secondary me-2"><i class="bi bi-stop-fill"></i> Stopped</span>
+                    <span class="text-muted small">${data.staging.count} staged</span>`;
                 startBtn.style.display = 'block';
                 activeControls.style.display = 'none';
             }
@@ -429,7 +414,7 @@ function loadStaging() {
 
             const container = document.getElementById('staging-images');
             if (!data.playlist || data.playlist.length === 0) {
-                container.innerHTML = '<div class="col-12 text-muted">No images staged. Click "Curate Now" to fetch images.</div>';
+                container.innerHTML = '<div class="col-12 text-muted text-center py-3">No images staged</div>';
                 return;
             }
 
