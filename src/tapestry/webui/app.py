@@ -1787,6 +1787,45 @@ def like_image():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/curation/rejected")
+def get_rejected_images():
+    """Get list of rejected images with metadata."""
+    if not curation_manager:
+        return jsonify({"error": "Curation manager not initialized"}), 500
+
+    try:
+        rejected_ids = curation_manager.staging.get_rejected_list()
+        rejected = []
+        for img_id in rejected_ids:
+            info = curation_manager.staging.get_image_info(img_id)
+            if info:
+                rejected.append(info)
+        return jsonify({"success": True, "rejected": rejected})
+    except Exception as e:
+        logger.error(f"Failed to get rejected: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/curation/unreject", methods=["POST"])
+def unreject_image():
+    """Restore a rejected image (remove from rejection list)."""
+    if not curation_manager:
+        return jsonify({"error": "Curation manager not initialized"}), 500
+
+    data = request.get_json()
+    if not data or "image_id" not in data:
+        return jsonify({"error": "image_id required"}), 400
+
+    try:
+        image_id = data["image_id"]
+        # Set status back to 'active' (or could delete the record)
+        curation_manager.staging.db.set_status(image_id, "active")
+        return jsonify({"success": True, "message": f"Unrejected {image_id}"})
+    except Exception as e:
+        logger.error(f"Failed to unreject: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/curation/stats")
 def get_curation_stats():
     """Get curation database statistics."""

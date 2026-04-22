@@ -160,6 +160,24 @@
                 </div>
             </div>
         </div>
+
+        <!-- Rejected Images -->
+        <div class="card mb-4">
+            <div class="card-header py-2" style="cursor: pointer;" data-bs-toggle="collapse" data-bs-target="#rejected-section">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-hand-thumbs-down"></i> Rejected Images
+                    <span id="rejected-count" class="badge bg-secondary ms-2">0</span>
+                    <i class="bi bi-chevron-down float-end"></i>
+                </h5>
+            </div>
+            <div id="rejected-section" class="collapse">
+                <div class="card-body py-2">
+                    <div id="rejected-list" class="list-group list-group-flush">
+                        <div class="text-muted">Loading...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -313,6 +331,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadConfig();
     loadStaging();
     loadCollections();
+    loadRejected();
 
     document.getElementById('start-screensaver').addEventListener('click', startScreensaver);
     document.getElementById('stop-screensaver').addEventListener('click', stopScreensaver);
@@ -730,6 +749,64 @@ function showResult(message, success) {
     setTimeout(() => { div.style.display = 'none'; }, 5000);
 }
 
+// ============= Rejected Images =============
+
+function loadRejected() {
+    fetch('/api/curation/rejected')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('rejected-list');
+            const countBadge = document.getElementById('rejected-count');
+
+            if (!data.rejected || data.rejected.length === 0) {
+                container.innerHTML = '<div class="text-muted p-2">No rejected images</div>';
+                countBadge.textContent = '0';
+                return;
+            }
+
+            countBadge.textContent = data.rejected.length;
+
+            container.innerHTML = data.rejected.map(img => {
+                let source = img.source_type === 'reddit'
+                    ? `<i class="bi bi-reddit text-danger"></i> ${img.source_name}`
+                    : `<i class="bi bi-collection"></i> ${img.source_name}`;
+                let title = img.title ? ` &mdash; ${img.title.substring(0, 50)}${img.title.length > 50 ? '...' : ''}` : '';
+
+                return `
+                    <div class="list-group-item d-flex justify-content-between align-items-center py-2">
+                        <div class="text-truncate">
+                            ${source}${title}
+                            <small class="text-muted d-block">${img.id}</small>
+                        </div>
+                        <button class="btn btn-sm btn-outline-success" onclick="unrejectImage('${img.id}')">
+                            <i class="bi bi-arrow-counterclockwise"></i> Restore
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        })
+        .catch(error => {
+            console.error('Error loading rejected:', error);
+        });
+}
+
+function unrejectImage(imageId) {
+    fetch('/api/curation/unreject', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({image_id: imageId})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showResult('Image restored - will appear in future curations', true);
+            loadRejected();
+        } else {
+            showResult(data.error, false);
+        }
+    });
+}
+
 // ============= Collections Management =============
 
 function loadCollections() {
@@ -969,6 +1046,7 @@ function dislikeCurrentImage() {
             showResult('Image rejected', true);
             imageViewerModal.hide();
             loadStaging();
+            loadRejected();
         } else {
             showResult(data.error, false);
         }
