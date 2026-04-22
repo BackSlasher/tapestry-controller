@@ -501,7 +501,7 @@ function runCuration() {
 
     // Show progress
     resultDiv.className = 'alert alert-info';
-    resultDiv.innerHTML = '<i class="bi bi-hourglass-split spinner-border spinner-border-sm me-2"></i> <strong>Starting...</strong>';
+    resultDiv.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> <strong>Starting...</strong>';
     resultDiv.style.display = 'block';
 
     btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Curating...';
@@ -514,7 +514,7 @@ function runCuration() {
 
         if (data.type === 'progress') {
             resultDiv.innerHTML = `
-                <i class="bi bi-hourglass-split spinner-border spinner-border-sm me-2"></i>
+                <span class="spinner-border spinner-border-sm me-2"></span>
                 <strong>Source ${data.source}</strong>: ${data.source_name}<br>
                 <small>${data.message} | Staged: ${data.staged} | Filtered: ${data.filtered}</small>
             `;
