@@ -137,6 +137,13 @@ class RedditSource(Source):
         try:
             response = requests.get(url, headers=headers, timeout=30)
             response.raise_for_status()
+
+            # Verify we got an image, not HTML (dead links often redirect to error pages)
+            content_type = response.headers.get("Content-Type", "")
+            if not content_type.startswith("image/"):
+                logger.warning(f"Not an image (content-type: {content_type}): {url}")
+                return None
+
             img = PIL.Image.open(BytesIO(response.content))
             img.load()  # Force load into memory
             return img
