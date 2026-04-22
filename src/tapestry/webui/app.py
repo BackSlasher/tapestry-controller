@@ -1704,6 +1704,71 @@ def reject_current_image():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/curation/reject", methods=["POST"])
+def reject_image_by_filename():
+    """Reject a specific image by filename."""
+    if not curation_manager:
+        return jsonify({"error": "Curation manager not initialized"}), 500
+
+    data = request.get_json()
+    if not data or "filename" not in data:
+        return jsonify({"error": "Filename required"}), 400
+
+    try:
+        filename = data["filename"]
+        curation_manager.staging.reject_image(filename)
+
+        return jsonify({
+            "success": True,
+            "message": f"Rejected {filename}",
+        })
+    except Exception as e:
+        logger.error(f"Failed to reject image: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/curation/like", methods=["POST"])
+def like_image():
+    """Like an image - save to favorites collection."""
+    if not curation_manager:
+        return jsonify({"error": "Curation manager not initialized"}), 500
+
+    data = request.get_json()
+    if not data or "filename" not in data:
+        return jsonify({"error": "Filename required"}), 400
+
+    try:
+        filename = data["filename"]
+        staging_path = curation_manager.staging.staging_path / filename
+
+        if not staging_path.exists():
+            return jsonify({"error": f"Image not found: {filename}"}), 404
+
+        # Ensure favorites collection exists
+        from .collections_manager import create_collection, get_collection_path
+
+        settings = get_settings()
+        collections_dir = settings.screensaver.gallery.collections_dir
+
+        favorites_path = get_collection_path("favorites", collections_dir)
+        if not favorites_path:
+            create_collection("favorites", collections_dir)
+            favorites_path = get_collection_path("favorites", collections_dir)
+
+        # Copy image to favorites
+        import shutil
+        dest_path = favorites_path / filename
+        shutil.copy2(staging_path, dest_path)
+
+        return jsonify({
+            "success": True,
+            "message": f"Saved to favorites",
+        })
+    except Exception as e:
+        logger.error(f"Failed to like image: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/curation/config")
 def get_curation_config():
     """Get current curation configuration."""

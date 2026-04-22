@@ -275,14 +275,39 @@
     </div>
 </div>
 
+<!-- Image Viewer Modal -->
+<div class="modal fade" id="imageViewerModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body p-0 text-center bg-dark">
+                <img id="viewer-image" src="" class="img-fluid" style="max-height: 80vh;">
+            </div>
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="btn btn-success btn-lg" id="viewer-like">
+                    <i class="bi bi-hand-thumbs-up"></i> Like
+                </button>
+                <button type="button" class="btn btn-danger btn-lg" id="viewer-dislike">
+                    <i class="bi bi-hand-thumbs-down"></i> Dislike
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
-let addSourceModal, createCollectionModal, collectionImagesModal;
+let addSourceModal, createCollectionModal, collectionImagesModal, imageViewerModal;
 let currentCollectionName = null;
+let currentViewerImage = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     addSourceModal = new bootstrap.Modal(document.getElementById('addSourceModal'));
     createCollectionModal = new bootstrap.Modal(document.getElementById('createCollectionModal'));
     collectionImagesModal = new bootstrap.Modal(document.getElementById('collectionImagesModal'));
+    imageViewerModal = new bootstrap.Modal(document.getElementById('imageViewerModal'));
+
+    document.getElementById('viewer-like').addEventListener('click', likeCurrentImage);
+    document.getElementById('viewer-dislike').addEventListener('click', dislikeCurrentImage);
 
     loadStatus();
     loadConfig();
@@ -412,7 +437,8 @@ function loadStaging() {
                 const isCurrent = index === data.current_index;
                 return `
                     <div class="col-4 col-md-2">
-                        <div class="card h-100 ${isCurrent ? 'border-primary border-2' : ''}">
+                        <div class="card h-100 ${isCurrent ? 'border-primary border-2' : ''}"
+                             style="cursor: pointer;" onclick="openImageViewer('${filename}')">
                             <img src="/api/curation/staging/image/${filename}"
                                  class="card-img-top" style="height: 60px; object-fit: cover;">
                             <div class="card-body p-1 text-center">
@@ -816,6 +842,62 @@ function deleteCollectionImage(collectionName, filename) {
             showResult(data.error, false);
         }
     });
+}
+
+// ============= Image Viewer =============
+
+function openImageViewer(filename) {
+    currentViewerImage = filename;
+    document.getElementById('viewer-image').src = '/api/curation/staging/image/' + filename;
+    imageViewerModal.show();
+}
+
+function likeCurrentImage() {
+    if (!currentViewerImage) return;
+
+    const btn = document.getElementById('viewer-like');
+    btn.disabled = true;
+
+    fetch('/api/curation/like', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({filename: currentViewerImage})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showResult('Saved to favorites!', true);
+            imageViewerModal.hide();
+            loadCollections();
+        } else {
+            showResult(data.error, false);
+        }
+    })
+    .finally(() => { btn.disabled = false; });
+}
+
+function dislikeCurrentImage() {
+    if (!currentViewerImage) return;
+
+    const btn = document.getElementById('viewer-dislike');
+    btn.disabled = true;
+
+    fetch('/api/curation/reject', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({filename: currentViewerImage})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showResult('Image rejected', true);
+            imageViewerModal.hide();
+            loadStaging();
+        } else {
+            showResult(data.error, false);
+        }
+    })
+    .finally(() => { btn.disabled = false; });
 }
 </script>
 {% endblock %}
