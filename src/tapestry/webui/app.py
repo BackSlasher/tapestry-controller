@@ -119,32 +119,6 @@ def get_layout_aspect_ratio() -> float | None:
     return bounding.dimensions.width / bounding.dimensions.height
 
 
-def get_screensaver_config():
-    """Get screensaver configuration from settings."""
-    settings = get_settings()
-    return {
-        "enabled": settings.screensaver.enabled,
-        "type": settings.screensaver.type,
-        "interval": settings.screensaver.interval,
-        "gallery": {
-            "wallpapers_dir": settings.screensaver.gallery.wallpapers_dir,
-            "collections_dir": settings.screensaver.gallery.collections_dir,
-            "selected_collection": settings.screensaver.gallery.selected_collection,
-        },
-        "reddit": {
-            "subreddit": settings.screensaver.reddit.subreddit,
-            "time_period": settings.screensaver.reddit.time_period,
-            "sort": settings.screensaver.reddit.sort,
-            "limit": settings.screensaver.reddit.limit,
-        },
-        "pixabay": {
-            "api_key": settings.screensaver.pixabay.api_key,
-            "keywords": settings.screensaver.pixabay.keywords,
-            "per_page": settings.screensaver.pixabay.per_page,
-        },
-    }
-
-
 # Last image state
 last_image_state = {
     "image": None,  # PIL Image object
@@ -1065,24 +1039,6 @@ def restore_last_image():
 
     except Exception as e:
         return jsonify({"error": f"Failed to restore image: {str(e)}"}), 500
-
-
-def get_wallpaper_images(wallpapers_dir):
-    """Get list of wallpaper images from wallpapers directory."""
-    patterns = ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tiff", "*.webp"]
-    images = []
-    for pattern in patterns:
-        images.extend(glob.glob(os.path.join(wallpapers_dir, pattern)))
-    return images
-
-
-# Reddit wallpaper fetching moved to ScreensaverManager class
-
-
-# Pixabay wallpaper fetching moved to ScreensaverManager class
-
-
-# Legacy v1 screensaver endpoints removed - use /api/screensaver-v2/* instead
 
 
 # Collections management routes (API only - used by curation system)
