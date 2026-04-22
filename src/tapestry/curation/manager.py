@@ -55,6 +55,7 @@ class CurationManager:
         # Progress tracking for UI
         self._curation_progress: Optional[dict] = None
         self._curation_lock = threading.Lock()
+        self._cancel_requested = False
 
     @property
     def is_active(self) -> bool:
@@ -212,8 +213,9 @@ class CurationManager:
         """
         logger.info("Starting curation...")
 
-        # Initialize progress tracking
+        # Initialize progress tracking and reset cancel flag
         with self._curation_lock:
+            self._cancel_requested = False
             self._curation_progress = {
                 "running": True,
                 "phase": "starting",
@@ -255,11 +257,13 @@ class CurationManager:
                 remote_sources=self._remote_sources,
                 dry_run=dry_run,
                 progress_callback=track_progress,
+                cancel_check=self.is_cancellation_requested,
             )
         finally:
-            # Clear progress when done
+            # Clear progress and cancel flag when done
             with self._curation_lock:
                 self._curation_progress = None
+                self._cancel_requested = False
 
         if self._on_curation_complete and not dry_run:
             self._on_curation_complete(result)
@@ -270,6 +274,21 @@ class CurationManager:
         """Get current curation progress, or None if not running."""
         with self._curation_lock:
             return self._curation_progress.copy() if self._curation_progress else None
+
+    def cancel_curation(self) -> bool:
+        """Request cancellation of running curation.
+
+        Returns True if cancellation was requested, False if nothing was running.
+        """
+        with self._curation_lock:
+            if self._curation_progress is None:
+                return False
+            self._cancel_requested = True
+            return True
+
+    def is_cancellation_requested(self) -> bool:
+        """Check if cancellation has been requested."""
+        return self._cancel_requested
 
     def curate_if_empty(self) -> Optional[CurationResult]:
         """Run curation only if staging is empty.

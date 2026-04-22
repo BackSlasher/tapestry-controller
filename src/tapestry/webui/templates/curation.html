@@ -57,6 +57,9 @@
                 <button type="button" class="btn btn-primary btn-sm" id="run-curation">
                     <i class="bi bi-arrow-clockwise"></i> Curate Now
                 </button>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="cancel-curation" style="display: none;">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </button>
             </div>
             <div class="card-body py-2">
                 <div id="staging-images" class="row g-2" style="max-height: 200px; overflow-y: auto;"></div>
@@ -310,6 +313,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('next-image').addEventListener('click', nextImage);
     document.getElementById('reject-image').addEventListener('click', rejectImage);
     document.getElementById('run-curation').addEventListener('click', runCuration);
+    document.getElementById('cancel-curation').addEventListener('click', cancelCuration);
     document.getElementById('save-filters').addEventListener('click', saveFilters);
     document.getElementById('confirm-add-source').addEventListener('click', confirmAddSource);
     document.getElementById('collection-upload').addEventListener('change', uploadCollectionImages);
@@ -328,6 +332,9 @@ function loadStatus() {
             const activeControls = document.getElementById('active-controls');
             const resultDiv = document.getElementById('curation-result');
 
+            const curateBtn = document.getElementById('run-curation');
+            const cancelBtn = document.getElementById('cancel-curation');
+
             // Handle curation in progress (survives page refresh)
             if (data.curation.in_progress && data.curation.progress) {
                 const p = data.curation.progress;
@@ -338,17 +345,24 @@ function loadStatus() {
                     <small>${p.message} | Staged: ${p.staged} | Filtered: ${p.filtered}</small>
                 `;
                 resultDiv.style.display = 'block';
+                curateBtn.style.display = 'none';
+                cancelBtn.style.display = 'inline-block';
 
                 // Poll faster while curation is running
                 if (!curationPolling) {
                     curationPolling = true;
                     setTimeout(() => { curationPolling = false; loadStatus(); }, 1000);
                 }
-            } else if (curationPolling) {
-                // Curation just finished
-                curationPolling = false;
-                resultDiv.style.display = 'none';
-                loadStaging();
+            } else {
+                curateBtn.style.display = 'inline-block';
+                cancelBtn.style.display = 'none';
+
+                if (curationPolling) {
+                    // Curation just finished
+                    curationPolling = false;
+                    resultDiv.style.display = 'none';
+                    loadStaging();
+                }
             }
 
             if (data.screensaver.active) {
@@ -529,6 +543,22 @@ function rejectImage() {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-hand-thumbs-down"></i> Reject';
     });
+}
+
+function cancelCuration() {
+    const btn = document.getElementById('cancel-curation');
+    btn.disabled = true;
+
+    fetch('/api/curation/cancel', {method: 'POST'})
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showResult('Cancellation requested...', true);
+        } else {
+            showResult(data.error, false);
+        }
+    })
+    .finally(() => { btn.disabled = false; });
 }
 
 function runCuration() {

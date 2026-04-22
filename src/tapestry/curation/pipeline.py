@@ -28,6 +28,7 @@ class ProgressUpdate:
 
 # Type alias for progress callback
 ProgressCallback = Callable[[ProgressUpdate], None]
+CancelCheck = Callable[[], bool]
 
 
 @dataclass
@@ -93,6 +94,7 @@ class CurationPipeline:
         remote_sources: List[Source],
         dry_run: bool = False,
         progress_callback: Optional[ProgressCallback] = None,
+        cancel_check: Optional[CancelCheck] = None,
     ) -> CurationResult:
         """Run the curation pipeline.
 
@@ -141,6 +143,11 @@ class CurationPipeline:
             if staged_count >= self.target_count:
                 break
 
+            # Check for cancellation
+            if cancel_check and cancel_check():
+                logger.info("Curation cancelled by user")
+                break
+
             source_stats = {"candidates": 0, "staged": 0, "filtered": 0}
             skip_filters = source.should_skip_filters()
 
@@ -152,6 +159,9 @@ class CurationPipeline:
             img_idx = 0
             for candidate in source.fetch():
                 if staged_count >= self.target_count:
+                    break
+
+                if cancel_check and cancel_check():
                     break
 
                 img_idx += 1

@@ -1488,6 +1488,18 @@ def curation_status():
     })
 
 
+@app.route("/api/curation/cancel", methods=["POST"])
+def cancel_curation():
+    """Cancel a running curation."""
+    if not curation_manager:
+        return jsonify({"error": "Curation manager not initialized"}), 500
+
+    if curation_manager.cancel_curation():
+        return jsonify({"success": True, "message": "Cancellation requested"})
+    else:
+        return jsonify({"error": "No curation in progress"}), 400
+
+
 @app.route("/api/curation/curate", methods=["POST"])
 def run_curation():
     """Run curation immediately."""
