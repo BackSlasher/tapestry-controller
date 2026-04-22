@@ -351,7 +351,11 @@ function loadStatus() {
                 // Poll faster while curation is running
                 if (!curationPolling) {
                     curationPolling = true;
-                    setTimeout(() => { curationPolling = false; loadStatus(); }, 1000);
+                    setTimeout(() => {
+                        curationPolling = false;
+                        loadStatus();
+                        loadStaging();  // Refresh grid as images come in
+                    }, 1000);
                 }
             } else {
                 curateBtn.style.display = 'inline-block';
