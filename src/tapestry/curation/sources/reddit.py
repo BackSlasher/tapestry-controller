@@ -26,6 +26,7 @@ class RedditSource(Source):
         sort: Literal["top", "hot", "new", "rising"] = "top",
         time_period: Literal["hour", "day", "week", "month", "year", "all"] = "week",
         limit: int = 30,
+        fetch_limit: Optional[int] = None,
         keywords_include: Optional[List[str]] = None,
         keywords_exclude: Optional[List[str]] = None,
         shuffle: bool = True,
@@ -36,7 +37,9 @@ class RedditSource(Source):
             subreddits: List of subreddit names (without r/)
             sort: Sort order for posts
             time_period: Time period for "top" sort
-            limit: Number of posts to fetch per subreddit
+            limit: Number of posts to use (after sampling)
+            fetch_limit: Number of posts to fetch before sampling (default: limit * 3)
+                        Set higher for more diversity when using "top all"
             keywords_include: If set, title must contain at least one of these
             keywords_exclude: If set, title must not contain any of these
             shuffle: Whether to shuffle results
@@ -45,6 +48,7 @@ class RedditSource(Source):
         self.sort = sort
         self.time_period = time_period
         self.limit = limit
+        self.fetch_limit = fetch_limit if fetch_limit is not None else limit * 3
         self.keywords_include = [k.lower() for k in (keywords_include or [])]
         self.keywords_exclude = [k.lower() for k in (keywords_exclude or [])]
         self.shuffle = shuffle
@@ -66,7 +70,7 @@ class RedditSource(Source):
         Returns list of post data dicts with 'url' and 'title' keys.
         """
         url = f"https://www.reddit.com/r/{subreddit}/{self.sort}/.json"
-        params = {"t": self.time_period, "limit": self.limit}
+        params = {"t": self.time_period, "limit": self.fetch_limit}
         headers = {"User-Agent": "Tapestry:v1.0 (by /u/tapestry_user)"}
 
         try:
@@ -175,7 +179,11 @@ class RedditSource(Source):
             logger.warning(f"No image posts found in {self.subreddits}")
             return
 
-        if self.shuffle:
+        # Sample down to limit for diversity (especially useful for "top all")
+        if len(all_posts) > self.limit:
+            all_posts = random.sample(all_posts, self.limit)
+            logger.info(f"Sampled {self.limit} posts from {len(all_posts) + self.limit} fetched")
+        elif self.shuffle:
             random.shuffle(all_posts)
 
         # Download images in parallel, yield as they complete

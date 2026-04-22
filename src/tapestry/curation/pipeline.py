@@ -171,6 +171,15 @@ class CurationPipeline:
                 send_progress(phase, source_idx + 1, total_sources, source.name,
                               img_idx, self.target_count, f"Processing image {img_idx}...")
 
+                # Skip previously rejected URLs
+                url = candidate.metadata.get("url")
+                if url and self.staging.is_url_rejected(url):
+                    logger.debug(f"Skipping previously rejected: {url}")
+                    result.filtered_count += 1
+                    filtered_count += 1
+                    source_stats["filtered"] += 1
+                    continue
+
                 # Apply filters if enabled and not skipped for this source
                 should_filter = self.filters_enabled and not skip_filters
                 if should_filter:

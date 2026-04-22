@@ -168,6 +168,7 @@ class CurationManager:
                     sort=source_config.get("sort", "top"),
                     time_period=source_config.get("time_period", "week"),
                     limit=source_config.get("limit", 30),
+                    fetch_limit=source_config.get("fetch_limit"),  # None = auto (limit * 3)
                     keywords_include=source_config.get("keywords_include"),
                     keywords_exclude=source_config.get("keywords_exclude"),
                     shuffle=source_config.get("shuffle", True),
