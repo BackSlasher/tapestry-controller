@@ -1625,7 +1625,13 @@ def staging_status():
 
     info = curation_manager.get_staging_info()
     playlist = curation_manager.staging.get_playlist()
-    liked_ids = set(curation_manager.staging.db.get_liked_ids())
+
+    # Get images from favorites collection (for badge display)
+    favorites = []
+    for img_id in playlist:
+        img_info = curation_manager.staging.db.get_image(img_id)
+        if img_info and img_info.source_name == "favorites":
+            favorites.append(img_id)
 
     return jsonify({
         "path": info["path"],
@@ -1634,7 +1640,7 @@ def staging_status():
         "position": info["position"],
         "is_empty": info["is_empty"],
         "playlist": playlist,
-        "liked": list(liked_ids & set(playlist)),  # Only liked ones in current playlist
+        "favorites": favorites,  # Images from favorites collection
     })
 
 

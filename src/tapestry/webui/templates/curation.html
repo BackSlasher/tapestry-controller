@@ -538,10 +538,10 @@ function loadStaging() {
                 return;
             }
 
-            const likedSet = new Set(data.liked || []);
+            const favoritesSet = new Set(data.favorites || []);
             container.innerHTML = data.playlist.map((filename, index) => {
                 const isCurrent = filename === data.current_image_id;
-                const isLiked = likedSet.has(filename);
+                const isFavorite = favoritesSet.has(filename);
                 return `
                     <div class="col-4 col-md-2">
                         <div class="card h-100 ${isCurrent ? 'border-primary border-2' : ''}"
@@ -549,7 +549,7 @@ function loadStaging() {
                             <div class="position-relative">
                                 <img src="/api/curation/staging/image/${filename}"
                                      class="card-img-top" style="height: 60px; object-fit: cover;">
-                                ${isLiked ? '<span class="position-absolute top-0 end-0 badge bg-success m-1"><i class="bi bi-heart-fill"></i></span>' : ''}
+                                ${isFavorite ? '<span class="position-absolute top-0 end-0 badge bg-warning m-1"><i class="bi bi-star-fill"></i></span>' : ''}
                             </div>
                             <div class="card-body p-1 text-center">
                                 <small class="${isCurrent ? 'text-primary fw-bold' : 'text-muted'}">${index + 1}</small>

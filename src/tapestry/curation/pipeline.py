@@ -180,7 +180,12 @@ class CurationPipeline:
                     message=msg,
                 ))
 
-        all_sources = [(s, "local") for s in local_sources] + [(s, "remote") for s in remote_sources]
+        # Ensure favorites collection is processed first (for proper badging after dedup)
+        def source_priority(s: Source) -> int:
+            return 0 if s.name == "favorites" else 1
+
+        sorted_local = sorted(local_sources, key=source_priority)
+        all_sources = [(s, "local") for s in sorted_local] + [(s, "remote") for s in remote_sources]
         total_sources = len(all_sources)
 
         for source_idx, (source, phase) in enumerate(all_sources):
